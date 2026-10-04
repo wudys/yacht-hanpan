@@ -209,6 +209,7 @@ test('rest torque follows the current lean after movement restarts the stationar
   }
 });
 
+// The 100 fully observed rolls need more than Bun's default 5 seconds on CI runners.
 test('classic rolls do not mostly glide flat across the tray into the opposite wall', () => {
   let flatTravel = 0;
   let wallDice = 0;
@@ -254,7 +255,7 @@ test('classic rolls do not mostly glide flat across the tray into the opposite w
   } finally {
     observer.mockRestore();
   }
-});
+}, 30_000);
 
 test.each([
   { seed: 't7-tuning-5-44', pourStyle: 'oblique' as const },

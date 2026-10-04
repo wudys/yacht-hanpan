@@ -24,7 +24,7 @@ export function readDeploymentConfig(environment) {
   } = environment;
   if (!apiKey) throw new Error('Set the RENDER_API_KEY secret.');
   if (!/^srv-[a-zA-Z0-9]+$/u.test(serviceId ?? '')) {
-    throw new Error('Set a valid RENDER_SERVICE_ID variable.');
+    throw new Error('Set a valid RENDER_SERVICE_ID.');
   }
   if (!/^[a-f0-9]{40}$/u.test(commitId ?? '')) {
     throw new Error('GITHUB_SHA must be a full commit SHA.');

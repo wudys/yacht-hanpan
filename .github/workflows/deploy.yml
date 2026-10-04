@@ -26,12 +26,12 @@ jobs:
     timeout-minutes: 40
     environment: production
     env:
-      VITE_GAME_SERVER_URL: ${{ vars.VITE_GAME_SERVER_URL }}
-      VITE_SITE_ORIGIN: ${{ vars.VITE_SITE_ORIGIN }}
+      VITE_GAME_SERVER_URL: ${{ secrets.VITE_GAME_SERVER_URL }}
+      VITE_SITE_ORIGIN: ${{ secrets.VITE_SITE_ORIGIN }}
       VITE_DEPLOYMENT_ENV: production
-      RENDER_SERVICE_ID: ${{ vars.RENDER_SERVICE_ID }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-      CLOUDFLARE_PAGES_PROJECT: ${{ vars.CLOUDFLARE_PAGES_PROJECT }}
+      RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_PAGES_PROJECT: ${{ secrets.CLOUDFLARE_PAGES_PROJECT }}
     steps:
       - name: Check out the verified commit
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -57,8 +57,8 @@ jobs:
         run: |
           bun scripts/deploy-render.mjs --check
           : "${CLOUDFLARE_API_TOKEN:?Set the CLOUDFLARE_API_TOKEN secret}"
-          [[ "$CLOUDFLARE_ACCOUNT_ID" =~ ^[a-f0-9]{32}$ ]] || { echo 'Set a valid CLOUDFLARE_ACCOUNT_ID variable'; exit 1; }
-          [[ "$CLOUDFLARE_PAGES_PROJECT" =~ ^[a-z0-9][a-z0-9-]*$ ]] || { echo 'Set a valid CLOUDFLARE_PAGES_PROJECT variable'; exit 1; }
+          [[ "$CLOUDFLARE_ACCOUNT_ID" =~ ^[a-f0-9]{32}$ ]] || { echo 'Set a valid CLOUDFLARE_ACCOUNT_ID secret'; exit 1; }
+          [[ "$CLOUDFLARE_PAGES_PROJECT" =~ ^[a-z0-9][a-z0-9-]*$ ]] || { echo 'Set a valid CLOUDFLARE_PAGES_PROJECT secret'; exit 1; }
           curl --fail --silent --show-error --max-time 30 \
             -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
             "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$CLOUDFLARE_PAGES_PROJECT" \

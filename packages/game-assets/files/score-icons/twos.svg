@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-labelledby="title">
+  <title id="title">Twos</title>
+  <rect x="3" y="3" width="42" height="42" rx="8" fill="#fffaf0"/>
+  <circle cx="15.5" cy="15.5" r="4.6" fill="#0b0f0d"/>
+  <circle cx="32.5" cy="32.5" r="4.6" fill="#0b0f0d"/>
+</svg>

@@ -1,0 +1,219 @@
+.score-table__players {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 16px;
+  padding-inline: 4px;
+  border-bottom: 1px solid #414d42;
+}
+
+.score-table__players::after {
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  left: 50%;
+  width: 1px;
+  background: #414d42;
+  pointer-events: none;
+  content: '';
+}
+
+.score-table-player {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  grid-template-rows: 18px 30px auto;
+  gap: 2px 6px;
+  min-width: 0;
+  padding-block: 12px;
+}
+
+.score-table-player__avatar {
+  position: relative;
+  grid-row: 1 / 3;
+  align-self: center;
+}
+
+.score-table-player .player-avatar {
+  --player-avatar-radius: 8px;
+
+  width: 40px;
+  height: 40px;
+}
+
+.score-table-player__heading {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  color: var(--product-muted);
+  font-size: 11px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.score-table-player__label {
+  font-weight: 500;
+}
+
+.score-table-player__heading strong {
+  color: var(--product-ivory);
+  font-size: inherit;
+}
+
+.score-table-player[data-winner='true'] .score-table-player__heading,
+.score-table-player[data-winner='true'] .score-table-player__heading strong {
+  color: var(--product-gold-strong);
+}
+
+.score-table-player__crown {
+  position: absolute;
+  top: -11px;
+  right: -3px;
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+  transform: rotate(12deg);
+}
+
+.score-table-player__separator {
+  flex: 0 0 2px;
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.score-table-player__total {
+  color: var(--product-ivory);
+  font-size: 28px;
+  font-variant-numeric: tabular-nums;
+  line-height: 30px;
+}
+
+.score-table-player[data-winner='true'] .score-table-player__total {
+  color: var(--product-gold-strong);
+}
+
+.score-table-player__summary {
+  display: flex;
+  align-items: center;
+  grid-column: 1 / -1;
+  grid-row: 3;
+  gap: 4px;
+  margin-top: 6px;
+  color: var(--product-muted);
+  font-size: 11px;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+.score-table-player__summary > span {
+  white-space: nowrap;
+}
+
+.score-table table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+}
+
+.score-table th,
+.score-table td {
+  height: 36px;
+  padding: 6px 10px;
+  border-bottom: 1px solid #354c45;
+}
+
+.score-table thead {
+  position: sticky;
+  /* Cover the fractional-pixel seam at the scaled scrollport edge. */
+  top: -1px;
+  z-index: 1;
+  background: #203e35;
+}
+
+.score-table thead th {
+  background: #203e35;
+  font-weight: 500;
+  font-size: 12px;
+}
+
+.score-table thead th:not(:first-child) {
+  padding-inline: 6px;
+}
+
+.score-table thead th:first-child {
+  width: 50%;
+  text-align: left;
+}
+
+.score-table tbody th {
+  color: var(--product-ivory);
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 500;
+  text-align: left;
+}
+
+.score-table__category {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.score-table__category img {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+
+.score-table tbody td {
+  color: #e0ddd5;
+  font-size: 16px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.score-table tbody td:nth-child(2) {
+  color: #edf0e6;
+  background: #2b3533;
+}
+
+.score-table tbody tr:nth-child(odd) th,
+.score-table tbody tr:nth-child(odd) td:not(:nth-child(2)) {
+  background: #132320;
+}
+
+.score-table tbody tr:nth-child(even) th,
+.score-table tbody tr:nth-child(even) td:not(:nth-child(2)) {
+  background: #162825;
+}
+
+.score-layer-frame {
+  display: grid;
+  width: 360px;
+  height: 500px;
+  padding: 16px 12px;
+  background: #020f0d;
+}
+
+.score-layer-frame > .scrollable-panel {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+.score-layer-frame .scrollable-panel__body {
+  margin-inline: 16px;
+}
+
+.score-layer-frame .scrollable-panel__footer {
+  padding-top: 12px;
+}
+
+.score-table tbody td[data-score-state='empty'] {
+  color: #837f76;
+}

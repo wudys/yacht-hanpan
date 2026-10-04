@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-labelledby="title">
+  <title id="title">Ones</title>
+  <rect x="3" y="3" width="42" height="42" rx="8" fill="#fffaf0"/>
+  <circle cx="24" cy="24" r="4.8" fill="#0b0f0d"/>
+</svg>

@@ -1,0 +1,48 @@
+{
+  "name": "@repo/dice-simulation",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./contract": {
+      "types": "./src/contract/index.ts",
+      "default": "./src/contract/index.ts"
+    },
+    "./rapier/bun": {
+      "types": "./src/rapier/bun/index.ts",
+      "default": "./src/rapier/bun/index.ts"
+    },
+    "./rapier/browser": {
+      "types": "./src/rapier/browser/index.ts",
+      "default": "./src/rapier/browser/index.ts"
+    },
+    "./simulate": {
+      "types": "./src/simulate/index.ts",
+      "default": "./src/simulate/index.ts"
+    }
+  },
+  "scripts": {
+    "audit:physics": "bun ./src/quality/audit-physics.ts",
+    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "sync:browser-rapier": "bun ./scripts/sync-browser-rapier.mjs",
+    "test": "bun test",
+    "test:statistical": "bun test ./src/statistics/long.statistical.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@dimforge/rapier3d-deterministic": "0.19.3",
+    "@noble/hashes": "2.4.0"
+  },
+  "devDependencies": {
+    "@repo/eslint-config": "workspace:*",
+    "@repo/tsconfig": "workspace:*",
+    "@types/bun": "^1.4.2",
+    "eslint": "^9.39.5",
+    "typescript": "^6.0.3"
+  }
+}

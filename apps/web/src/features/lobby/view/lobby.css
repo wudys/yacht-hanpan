@@ -1,0 +1,83 @@
+.lobby-view {
+  position: relative;
+  display: grid;
+  grid-template-rows: 92px minmax(0, 1fr) 126px;
+  gap: 10px;
+  width: 360px;
+  height: 500px;
+  padding: 16px;
+  overflow: hidden;
+  color: var(--product-ivory);
+  background:
+    radial-gradient(ellipse 38% 64% at 50% 0%, #c58b3b52 0%, #b7833020 42%, #b7833000 100%),
+    radial-gradient(ellipse at 50% 27%, #173d33 0%, #031a16 100%), #031a18;
+  box-shadow: inset 0 -22px 34px #01110e;
+}
+
+.lobby-view__utility {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.lobby-view__utility > .ui-icon-button {
+  --icon-visual-size: 40px;
+}
+
+.lobby-view__utility > .ui-icon-button .ui-icon-button__surface {
+  padding: 8px;
+  border-color: #b48b47;
+  border-radius: 50%;
+  background: #b98443;
+}
+
+.lobby-view__profile {
+  position: relative;
+  width: var(--product-hit-min);
+  height: var(--product-hit-min);
+}
+
+.lobby-view__profile .ui-icon-button {
+  --icon-visual-size: 40px;
+}
+
+.lobby-view__profile .ui-icon-button__surface {
+  position: relative;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  box-shadow: none;
+}
+
+.lobby-view__profile .player-avatar {
+  --player-avatar-radius: 20px;
+  --player-avatar-border-width: 0px;
+
+  width: 40px;
+  height: 40px;
+}
+
+.lobby-view__brand {
+  display: grid;
+  place-items: center;
+  min-height: 0;
+  padding: 0 28px 22px;
+}
+
+.lobby-view__actions {
+  display: grid;
+  grid-template-rows: repeat(2, var(--product-hit-min));
+  justify-self: center;
+  gap: 16px;
+  width: 252px;
+}
+
+.lobby-view__actions > div,
+.lobby-view__actions .ui-button {
+  height: var(--product-hit-min);
+}
+
+.lobby-view__actions[data-hidden='true'] {
+  visibility: hidden;
+}

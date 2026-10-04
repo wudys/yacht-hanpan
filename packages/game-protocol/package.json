@@ -1,0 +1,47 @@
+{
+  "name": "@repo/game-protocol",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./errors": {
+      "types": "./src/errors/index.ts",
+      "default": "./src/errors/index.ts"
+    },
+    "./http": {
+      "types": "./src/http/index.ts",
+      "default": "./src/http/index.ts"
+    },
+    "./socket": {
+      "types": "./src/socket/index.ts",
+      "default": "./src/socket/index.ts"
+    },
+    "./version": {
+      "types": "./src/version/index.ts",
+      "default": "./src/version/index.ts"
+    }
+  },
+  "scripts": {
+    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@repo/dice-simulation": "workspace:*",
+    "@repo/game-assets": "workspace:*",
+    "@repo/yacht-rules": "workspace:*",
+    "valibot": "1.5.0"
+  },
+  "devDependencies": {
+    "@repo/eslint-config": "workspace:*",
+    "@repo/tsconfig": "workspace:*",
+    "@types/bun": "^1.4.2",
+    "eslint": "^9.39.5",
+    "typescript": "^6.0.3"
+  }
+}

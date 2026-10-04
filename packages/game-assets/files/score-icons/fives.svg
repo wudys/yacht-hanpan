@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-labelledby="title">
+  <title id="title">Fives</title>
+  <rect x="3" y="3" width="42" height="42" rx="8" fill="#fffaf0"/>
+  <circle cx="15" cy="15" r="4.1" fill="#0b0f0d"/>
+  <circle cx="33" cy="15" r="4.1" fill="#0b0f0d"/>
+  <circle cx="24" cy="24" r="4.1" fill="#0b0f0d"/>
+  <circle cx="15" cy="33" r="4.1" fill="#0b0f0d"/>
+  <circle cx="33" cy="33" r="4.1" fill="#0b0f0d"/>
+</svg>

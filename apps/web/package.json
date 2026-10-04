@@ -1,0 +1,50 @@
+{
+  "name": "@repo/web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "assets:sync": "bun ../../packages/game-assets/scripts/sync-public.mjs --target ../../packages/game-assets/public && bun ../../packages/dice-simulation/scripts/sync-browser-rapier.mjs --target ../../packages/game-assets/public/runtime",
+    "build": "bun run assets:sync && vite build && bun scripts/check-public-build.mjs",
+    "dev": "bun run assets:sync && vite --port 3001 --strictPort",
+    "dev:anchors": "bun run assets:sync && vite --host 127.0.0.1 --port 49330 --strictPort",
+    "preview": "vite preview --port 4173 --strictPort",
+    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@react-three/fiber": "9.8.1",
+    "@repo/dice-simulation": "workspace:*",
+    "@repo/game-assets": "workspace:*",
+    "@repo/game-client-sdk": "workspace:*",
+    "@repo/game-protocol": "workspace:*",
+    "@repo/product-release": "workspace:*",
+    "@repo/yacht-rules": "workspace:*",
+    "@sentry/react": "11.0.0",
+    "@tanstack/react-router": "^1.170.40",
+    "@xstate/react": "^6.1.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "three": "0.186.1",
+    "tone": "15.1.22",
+    "uuid": "14.0.2",
+    "xstate": "5.33.2"
+  },
+  "devDependencies": {
+    "@repo/eslint-config": "workspace:*",
+    "@repo/tsconfig": "workspace:*",
+    "@sentry/vite-plugin": "5.4.0",
+    "@testing-library/react": "^16.3.3",
+    "@types/node": "^25.9.8",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@types/three": "0.186.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "eslint": "^9.39.5",
+    "jsdom": "^30.1.1",
+    "typescript": "^6.0.3",
+    "vite": "8.3.1",
+    "vitest": "^4.1.11"
+  }
+}

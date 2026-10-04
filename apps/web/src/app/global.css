@@ -1,0 +1,45 @@
+.web-global-layer-host {
+  position: absolute;
+  z-index: 20;
+  inset: 0;
+  pointer-events: none;
+}
+
+.web-global-layer-host > * {
+  pointer-events: auto;
+}
+
+.web-global-interaction-surface {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.web-global-interaction-surface[inert] {
+  pointer-events: none;
+  user-select: none;
+}
+
+.web-global-failure {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: #00000099;
+}
+
+.web-global-layer-host > .web-session-storage-notice {
+  position: absolute;
+  top: 4px;
+  left: 54px;
+  right: 54px;
+  margin: 0;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--product-base-deep);
+  color: #fffaf0;
+  font-size: 12px;
+  text-align: center;
+  pointer-events: none;
+}

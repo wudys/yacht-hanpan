@@ -1,0 +1,39 @@
+{
+  "name": "@repo/server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "bun build --target=bun --format=esm --outdir=dist --entry-naming='[name].[ext]' --sourcemap=external src/main.ts src/roll/roll-simulation.worker.ts",
+    "dev": "bun --watch src/main.ts",
+    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "load:server": "bun run test/compatibility/server-load.ts",
+    "smoke:build": "bun run test/compatibility/build-smoke.ts",
+    "soak:compatibility": "bun run test/compatibility/soak.ts",
+    "start": "bun dist/main.js",
+    "test": "bun test src",
+    "test:compatibility": "bun test test/compatibility",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@dimforge/rapier3d-deterministic": "0.19.3",
+    "@repo/dice-simulation": "workspace:*",
+    "@repo/game-assets": "workspace:*",
+    "@repo/game-protocol": "workspace:*",
+    "@repo/product-release": "workspace:*",
+    "@repo/yacht-rules": "workspace:*",
+    "@sentry/bun": "11.0.0",
+    "socket.io": "4.8.4",
+    "uuid": "14.0.2"
+  },
+  "devDependencies": {
+    "@repo/eslint-config": "workspace:*",
+    "@repo/game-client-sdk": "workspace:*",
+    "@repo/tsconfig": "workspace:*",
+    "@types/bun": "^1.4.2",
+    "@types/node": "^25.9.8",
+    "eslint": "^9.39.5",
+    "socket.io-client": "4.8.4",
+    "typescript": "^6.0.3"
+  }
+}

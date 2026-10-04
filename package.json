@@ -1,0 +1,45 @@
+{
+  "name": "hanpan",
+  "private": true,
+  "author": "wudy",
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "tests/*"
+  ],
+  "scripts": {
+    "build": "turbo run build",
+    "check": "bun run check:scripts && turbo run lint typecheck test build",
+    "check:core": "bun run check:scripts && turbo run lint typecheck test build --filter=!@repo/web",
+    "check:product": "bun run check --filter='!@repo/e2e'",
+    "check:product:core": "bun run check:core --filter='!@repo/e2e'",
+    "check:scripts": "eslint scripts --ext mjs --max-warnings 0 && bun test ./scripts",
+    "ci:core": "bun install --frozen-lockfile && bun run format:check && bun run check:product:core",
+    "ci:quality": "bun run test:statistical && bun run test:browser-parity",
+    "dev": "turbo run dev",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "turbo run lint",
+    "sortjson": "bunx sort-package-json '**/package.json' --ignore '**/node_modules/**'",
+    "test": "turbo run test",
+    "test:browser-parity": "bun --filter @repo/e2e test -- specs/browser-parity.spec.ts --project=chromium --project=firefox --project=webkit",
+    "test:compatibility": "bun --filter @repo/server build && bun --filter @repo/server test:compatibility && bun --filter @repo/server soak:compatibility && bun --filter @repo/server smoke:build",
+    "test:server-load": "bun --filter @repo/server load:server",
+    "test:statistical": "bun --filter @repo/dice-simulation test:statistical",
+    "typecheck": "turbo run typecheck",
+    "version:set": "bun scripts/release.mjs version"
+  },
+  "devDependencies": {
+    "@repo/eslint-config": "workspace:*",
+    "@repo/tsconfig": "workspace:*",
+    "eslint": "^9.39.5",
+    "prettier": "^3.9.9",
+    "sort-package-json": "^3.7.1",
+    "turbo": "^2.11.5",
+    "typescript": "^6.0.3"
+  },
+  "packageManager": "bun@1.4.2",
+  "engines": {
+    "bun": ">=1.4.2"
+  }
+}

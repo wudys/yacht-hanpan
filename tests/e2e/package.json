@@ -1,0 +1,23 @@
+{
+  "name": "@repo/e2e",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "lint": "eslint . --ext ts --report-unused-disable-directives --max-warnings 0",
+    "test": "playwright test",
+    "test:all-browsers": "playwright test --project=chromium --project=firefox --project=webkit",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@repo/eslint-config": "workspace:*",
+    "@repo/game-protocol": "workspace:*",
+    "@repo/server": "workspace:*",
+    "@repo/tsconfig": "workspace:*",
+    "@repo/web": "workspace:*",
+    "@types/bun": "^1.4.2",
+    "eslint": "^9.39.5",
+    "typescript": "^6.0.3"
+  }
+}

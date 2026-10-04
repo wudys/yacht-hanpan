@@ -1,0 +1,14 @@
+coverage
+public
+dist
+playwright-report
+test-results
+
+# Local work products; only canonical product docs are formatting inputs
+/.scratch/
+/docs/*
+!/docs/project-context.md
+!/docs/architecture.md
+!/docs/game-rules.md
+!/docs/product-policy.md
+!/docs/screen.md

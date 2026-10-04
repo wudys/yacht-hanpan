@@ -1,0 +1,18 @@
+{
+  "extends": "@repo/tsconfig/react.json",
+  "compilerOptions": {
+    "lib": ["ES2024", "DOM", "DOM.Iterable"],
+    "incremental": true,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "noEmit": true,
+    "paths": {
+      "@/*": ["./src/*"]
+    },
+    "rootDir": ".",
+    "types": ["vite/client", "vitest/globals"],
+    "allowImportingTsExtensions": true
+  },
+  "include": ["src", "build", "vite.config.ts"],
+  "exclude": ["node_modules"]
+}

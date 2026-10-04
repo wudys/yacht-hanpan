@@ -1,0 +1,44 @@
+[data-startup-failure] {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 20px;
+  box-sizing: border-box;
+  padding: 24px;
+  overflow: auto;
+  color: #fff4de;
+  background: #031a18;
+  font:
+    16px / 1.6 'Noto Sans KR',
+    sans-serif;
+  text-align: center;
+}
+
+[data-startup-failure] h1,
+[data-startup-failure] p {
+  margin: 0;
+}
+
+[data-startup-failure] h1 {
+  font-size: 24px;
+  line-height: 1.3;
+}
+
+[data-startup-failure] button {
+  min-height: 48px;
+  padding: 10px 24px;
+  border: 1px solid #806b46;
+  border-radius: 8px;
+  color: #031a18;
+  background: #fff4de;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+[data-startup-failure] button:focus-visible {
+  outline: 3px solid #fff0b3;
+  outline-offset: 4px;
+}

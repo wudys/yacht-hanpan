@@ -1,0 +1,8 @@
+.web-app-shell {
+  width: 100%;
+  height: 100%;
+}
+
+.web-app-shell .game-logical-canvas:has([data-score-table='true']) {
+  background: var(--product-base-deep);
+}

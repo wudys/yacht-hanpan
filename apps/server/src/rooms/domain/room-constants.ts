@@ -1,0 +1,32 @@
+export const ROOM_STATUS = {
+  WAITING: 'waiting',
+  PLAYING: 'playing',
+  FINISHED: 'finished',
+} as const;
+
+export const PRESENCE_STATUS = {
+  CONNECTED: 'connected',
+  DISCONNECTED: 'disconnected',
+} as const;
+
+export const ROOM_CLEANUP_REASON = {
+  WAITING_EXPIRED: 'waitingExpired',
+  GAME_FINISHED: 'gameFinished',
+} as const;
+
+export const ROOM_REJECTION_CODE = {
+  INVALID_ROOM_CODE: 'INVALID_ROOM_CODE',
+  INVALID_PROFILE: 'INVALID_PROFILE',
+  INVALID_TIMESTAMP: 'INVALID_TIMESTAMP',
+  ROOM_NOT_WAITING: 'ROOM_NOT_WAITING',
+  WAITING_ROOM_EXPIRED: 'WAITING_ROOM_EXPIRED',
+  ROOM_NOT_PLAYING: 'ROOM_NOT_PLAYING',
+  ROOM_FINISHED: 'ROOM_FINISHED',
+  SEAT_NOT_FOUND: 'SEAT_NOT_FOUND',
+  RECONNECT_NOT_AVAILABLE: 'RECONNECT_NOT_AVAILABLE',
+} as const;
+
+export const WAITING_ROOM_LIFETIME_MS = 300_000;
+export const RECONNECT_GRACE_MS = 90_000;
+
+export type RoomRejectionCode = (typeof ROOM_REJECTION_CODE)[keyof typeof ROOM_REJECTION_CODE];

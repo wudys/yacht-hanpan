@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-labelledby="title">
+  <title id="title">Yacht</title>
+  <rect x="3" y="3" width="42" height="42" rx="8" fill="#fffaf0"/>
+  <path d="M22.69 11.76A1.4 1.4 0 0 1 25.31 11.76L28.01 18.98L35.71 19.32A1.4 1.4 0 0 1 36.52 21.81L30.49 26.61L32.55 34.04A1.4 1.4 0 0 1 30.43 35.58L24.00 31.32L17.57 35.58A1.4 1.4 0 0 1 15.45 34.04L17.51 26.61L11.48 21.81A1.4 1.4 0 0 1 12.29 19.32L19.99 18.98z" fill="#0b0f0d"/>
+</svg>

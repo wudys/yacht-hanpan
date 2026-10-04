@@ -1,0 +1,175 @@
+.achievement-sequence {
+  position: absolute;
+  z-index: 4;
+  inset: 0;
+  isolation: isolate;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.achievement-sequence__content {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  animation: achievement-sequence-title var(--achievement-duration) cubic-bezier(0.22, 1, 0.36, 1)
+    both;
+  text-align: center;
+}
+
+.achievement-sequence__content::before {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 96%;
+  height: min(84px, 52%);
+  background: radial-gradient(ellipse at center, #06120fe6 0%, #06120f99 44%, #06120f00 88%);
+  content: '';
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.achievement-sequence__title {
+  position: relative;
+  z-index: 1;
+  margin: 0;
+  color: var(--product-ivory);
+  font-size: clamp(24px, 7.3cqw, 36px);
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0.025em;
+  text-shadow:
+    0 2px 0 #9d6f26,
+    0 4px 8px #06120f;
+}
+
+.achievement-sequence[data-achievement-kind='yacht'] .achievement-sequence__title {
+  color: #ffd978;
+  font-weight: 600;
+  text-shadow:
+    0 1px 0 var(--product-ivory),
+    0 3px 0 #9d6f26,
+    0 5px 9px #06120f,
+    0 0 14px #e8b958;
+}
+
+.achievement-sequence__flare {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(58%, 240px);
+  height: 72px;
+  background: radial-gradient(ellipse at center, #ffd97885 0%, #e8b9584d 34%, #e8b95800 72%);
+  filter: blur(3px);
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.72);
+}
+
+.achievement-sequence[data-achievement-kind='yacht'] .achievement-sequence__flare {
+  animation: achievement-sequence-flare var(--achievement-duration) ease-out both;
+}
+
+.achievement-sequence__particles {
+  position: absolute;
+  inset: 0;
+}
+
+.achievement-sequence__particle {
+  position: absolute;
+  top: var(--achievement-particle-y);
+  left: var(--achievement-particle-x);
+  width: var(--achievement-particle-size);
+  aspect-ratio: 1;
+  background: #ffd978;
+  filter: drop-shadow(0 0 3px #ffd978) drop-shadow(0 0 6px #e8b958);
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.25) rotate(var(--achievement-particle-rotate));
+  animation: achievement-sequence-particle 720ms cubic-bezier(0.22, 1, 0.36, 1)
+    var(--achievement-particle-delay) both;
+}
+
+.achievement-sequence__particle[data-particle-shape='spark'] {
+  clip-path: polygon(50% 0%, 60% 38%, 100% 50%, 60% 62%, 50% 100%, 40% 62%, 0% 50%, 40% 38%);
+}
+
+.achievement-sequence__particle[data-particle-shape='diamond'] {
+  background: #e8b958;
+  clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+}
+
+@keyframes achievement-sequence-title {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  18%,
+  79% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+}
+
+@keyframes achievement-sequence-flare {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.72);
+  }
+
+  18% {
+    opacity: 0.8;
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+  46% {
+    opacity: 0.26;
+    transform: translate(-50%, -50%) scale(1.08);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.12);
+  }
+}
+
+@keyframes achievement-sequence-particle {
+  0%,
+  12% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.42) rotate(var(--achievement-particle-rotate));
+  }
+
+  34% {
+    opacity: 1;
+    transform: translate(
+        calc(-50% + var(--achievement-particle-drift-x)),
+        calc(-50% + var(--achievement-particle-drift-y))
+      )
+      scale(1.08) rotate(calc(var(--achievement-particle-rotate) + 36deg));
+  }
+
+  68% {
+    opacity: 0.62;
+    transform: translate(
+        calc(-50% + var(--achievement-particle-drift-x)),
+        calc(-50% + var(--achievement-particle-drift-y))
+      )
+      scale(0.78) rotate(calc(var(--achievement-particle-rotate) + 78deg));
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(
+        calc(-50% + var(--achievement-particle-drift-x)),
+        calc(-50% + var(--achievement-particle-drift-y) + 7px)
+      )
+      scale(0.36) rotate(calc(var(--achievement-particle-rotate) + 118deg));
+  }
+}

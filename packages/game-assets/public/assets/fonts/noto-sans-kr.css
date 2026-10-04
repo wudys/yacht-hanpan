@@ -1,0 +1,40 @@
+/*!
+ * Noto Sans Korean
+ * Copyright 2014-2021 Adobe (http://adobe.com), with Reserved Font Name 'Source'.
+ *
+ * This Font Software is licensed under the SIL Open Font License, Version 1.1.
+ * This license is available with a FAQ at: http://sil.org
+ */
+@font-face {
+  font-family: 'Noto Sans KR';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src:
+    url('./noto-sans-kr-400.woff2') format('woff2'),
+    url('./noto-sans-kr-400.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'Noto Sans KR';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src:
+    url('./noto-sans-kr-500.woff2') format('woff2'),
+    url('./noto-sans-kr-500.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'Noto Sans KR';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src:
+    url('./noto-sans-kr-600.woff2') format('woff2'),
+    url('./noto-sans-kr-600.woff') format('woff');
+}
+
+:root {
+  --game-font-family: 'Noto Sans KR', sans-serif;
+}

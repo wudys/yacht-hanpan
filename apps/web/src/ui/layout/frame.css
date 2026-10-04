@@ -1,0 +1,83 @@
+.game-frame-wrapper {
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  height: 100svh;
+  overflow: hidden;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
+    env(safe-area-inset-left);
+  font-family: var(--game-font-family, system-ui, sans-serif);
+  color: #2a2421;
+  background-color: #11180b;
+  background-image: linear-gradient(#11180b66, #11180b66), var(--web-wrapper-pattern-image);
+  background-position: 0 0;
+  background-repeat: repeat;
+  background-size: 420px 420px;
+}
+
+.game-frame-slot {
+  position: absolute;
+  top: var(--game-frame-top);
+  left: var(--game-frame-left);
+  width: var(--game-frame-width);
+  height: var(--game-frame-height);
+  overflow: hidden;
+  visibility: hidden;
+}
+
+.game-frame-wrapper[data-measured='true'] .game-frame-slot {
+  visibility: visible;
+}
+
+.game-logical-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  overflow: hidden;
+  transform: scale(var(--game-frame-scale));
+  transform-origin: top left;
+  background: var(--game-frame-bg);
+}
+
+.game-logical-canvas strong,
+.game-logical-canvas b {
+  font-weight: 600;
+}
+
+.game-wrapper-logo {
+  position: absolute;
+  z-index: 2;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.game-wrapper-logo[data-visible='true'] {
+  visibility: visible;
+}
+
+.game-orientation-blocker {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  color: var(--product-ivory);
+  background: var(--product-base-deep);
+}
+
+.game-orientation-blocker__message {
+  display: grid;
+  place-items: center;
+  width: min(560px, 100%);
+  min-height: 160px;
+  padding: 32px 24px;
+  border: 1px solid var(--product-border);
+  border-radius: 16px;
+  background: #0d302b;
+  box-shadow: 0 12px 28px #00000066;
+  font-size: clamp(1.125rem, 4vw, 1.5rem);
+  font-weight: 600;
+  line-height: 1.4;
+  text-align: center;
+}

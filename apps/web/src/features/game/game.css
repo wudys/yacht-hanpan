@@ -1,0 +1,136 @@
+.web-game-bonus-host {
+  position: relative;
+  width: 360px;
+  height: 500px;
+}
+
+.web-game-bonus-overlay {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  pointer-events: none;
+}
+
+.web-game-achievement-overlay {
+  position: absolute;
+  top: var(--dice-board-top);
+  left: var(--dice-board-left);
+  z-index: 3;
+  width: var(--dice-board-width);
+  height: var(--dice-board-height);
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.web-game-bonus-dismiss {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  pointer-events: auto;
+}
+
+.web-game-recovery-host,
+.web-game-interaction-surface {
+  position: relative;
+  width: 360px;
+  height: 500px;
+}
+
+[data-game-layer='scoreboard'] {
+  position: relative;
+  z-index: 4;
+}
+
+.web-game-interaction-surface[inert] > [data-game-layer='scoreboard'],
+.web-game-interaction-surface[inert] > .web-game-bonus-host > *,
+body:has(.web-game-interaction-surface[inert]) .web-dice-canvas-host {
+  filter: blur(2px);
+}
+
+.web-game-recovery-overlay,
+.web-game-recovery-terminal,
+.web-game-category-notice {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  background: #02120ca8;
+}
+
+.web-game-recovery-overlay {
+  align-content: center;
+  gap: 12px;
+  padding: 24px;
+  color: var(--product-ivory);
+  text-align: center;
+}
+
+.web-game-recovery-overlay p {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.web-game-recovery-terminal {
+  z-index: 11;
+  padding: 18px;
+  background: #00000099;
+}
+
+.web-game-category-notice {
+  z-index: 12;
+  padding: 18px;
+  background: #00000099;
+}
+
+.web-game-category-notice p {
+  margin: 0;
+}
+
+.web-game-bonus-host[data-storage-warning='true'] .game-board__presence {
+  line-height: 13px;
+  white-space: normal;
+}
+
+.web-settings-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: grid;
+  justify-items: center;
+  align-items: start;
+  padding: 82px 18px 18px;
+  background: #00000099;
+}
+
+.dice-stage-slot > .settled-dice-controls {
+  position: absolute;
+  /* Share the board-wide Canvas coordinates beneath the protected held rack. */
+  top: calc(-1 * var(--dice-rack-height));
+  left: 0;
+  height: var(--dice-board-height);
+  pointer-events: none;
+}
+
+.settled-die-control {
+  position: absolute;
+  width: var(--product-hit-min);
+  height: var(--product-hit-min);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  transform: translate(-50%, -50%);
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: manipulation;
+}
+
+.settled-die-control:disabled {
+  cursor: default;
+}

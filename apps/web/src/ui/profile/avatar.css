@@ -1,0 +1,56 @@
+.player-avatar {
+  --player-avatar-radius: 12px;
+  --player-avatar-border-width: 2px;
+
+  position: relative;
+  display: grid;
+  flex: 0 0 auto;
+  place-items: end center;
+  overflow: visible;
+  border: var(--player-avatar-border-width) solid var(--product-avatar-border);
+  border-radius: var(--player-avatar-radius);
+  background: var(--product-avatar-bg);
+}
+
+.player-avatar[data-avatar-size='sm'] {
+  --player-avatar-radius: 9px;
+
+  width: 44px;
+  height: 44px;
+}
+
+.player-avatar[data-avatar-size='md'] {
+  width: 62px;
+  height: 62px;
+}
+
+.player-avatar[data-avatar-size='lg'] {
+  --player-avatar-radius: 38px;
+
+  width: 76px;
+  height: 76px;
+}
+
+.player-avatar[data-winner='true'] {
+  border-color: var(--product-gold-strong);
+}
+
+.player-avatar img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border: 1px solid var(--product-avatar-separator);
+  border-radius: calc(var(--player-avatar-radius) - var(--player-avatar-border-width));
+}
+
+.player-avatar__self {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  width: 12px;
+  height: 12px;
+  border: 2px solid #102c27;
+  border-radius: 50%;
+  background: #69cbb3;
+}

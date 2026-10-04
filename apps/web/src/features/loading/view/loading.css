@@ -1,0 +1,85 @@
+.loading-view {
+  position: relative;
+  grid-template-rows: 18px 36px auto;
+  place-content: center;
+  justify-items: center;
+  gap: 0;
+  overflow: hidden;
+  color: var(--product-ivory);
+  background: radial-gradient(ellipse at 50% 27%, #173d33 0%, #031a16 100%), #031a18;
+}
+
+.loading-view .brand-lockup {
+  position: absolute;
+  top: 128px;
+  width: 190px;
+  margin: 0;
+  gap: 8px;
+}
+
+.loading-view .brand-lockup__ci {
+  width: 112px;
+  max-height: 62px;
+}
+
+.loading-view .brand-lockup__logo {
+  width: 156px;
+  max-height: 56px;
+}
+
+.loading-view > .dice-loader {
+  --dice-loader-size: 32px;
+  --dice-loader-gap: 14px;
+  position: absolute;
+  top: 260px;
+}
+
+.loading-view__label {
+  position: absolute;
+  top: 350px;
+  margin: 0;
+  color: #d8be8c;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.loading-view__percentage {
+  position: absolute;
+  top: 379px;
+  right: 32px;
+  margin: 0;
+  color: var(--product-gold);
+  font-size: 17px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+.loading-view__progress {
+  position: absolute;
+  top: 386px;
+  left: 34px;
+  width: 244px;
+  height: 6px;
+  padding: 0;
+  overflow: hidden;
+  appearance: none;
+  border: 1px solid #987336;
+  border-radius: 999px;
+  background: #071710;
+}
+
+.loading-view__progress::-webkit-progress-bar {
+  border-radius: 999px;
+  background: #071710;
+}
+
+.loading-view__progress::-webkit-progress-value {
+  border-radius: 999px;
+  background: #e8b85e;
+}
+
+.loading-view__progress::-moz-progress-bar {
+  border-radius: 999px;
+  background: #e8b85e;
+}

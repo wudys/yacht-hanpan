@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-labelledby="title">
+  <title id="title">S. Straight</title>
+  <rect x="3" y="3" width="42" height="42" rx="8" fill="#fffaf0"/>
+  <circle cx="13.8" cy="34.2" r="3.3" fill="#0b0f0d"/>
+  <circle cx="20.6" cy="27.4" r="3.3" fill="#0b0f0d"/>
+  <circle cx="27.4" cy="20.6" r="3.3" fill="#0b0f0d"/>
+  <circle cx="34.2" cy="13.8" r="3.3" fill="#0b0f0d"/>
+  <path d="M39 31.5C37.6 29.6 32.6 29.7 32.6 32.6C32.6 35.6 39.3 33.6 39.3 36.9C39.3 40 33.8 40.4 32 38.1" fill="none" stroke="#0b0f0d" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

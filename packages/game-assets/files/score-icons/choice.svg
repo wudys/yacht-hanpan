@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-labelledby="title">
+  <title id="title">Choice</title>
+  <rect x="3" y="3" width="42" height="42" rx="8" fill="#fffaf0"/>
+  <rect x="21.2" y="12" width="5.6" height="24" rx="1.2" fill="#0b0f0d"/>
+  <rect x="12" y="21.2" width="24" height="5.6" rx="1.2" fill="#0b0f0d"/>
+</svg>

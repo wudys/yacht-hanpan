@@ -1,0 +1,19 @@
+:root {
+  --game-frame-bg: #031a18;
+  --product-base-deep: #011613;
+  --product-gold: #e9a72e;
+  --product-gold-strong: #f3b53c;
+  --product-ivory: #fff4de;
+  --product-muted: #b9b4a9;
+  --product-border: #806b46;
+  --product-avatar-bg: #d6cebc;
+  --product-avatar-border: #665b47;
+  --product-avatar-separator: #0b0f0d;
+  --product-danger: #8f3f31;
+  --product-error-text: #eea092;
+  --product-danger-border: #b86a5d;
+  --product-focus: #fff0b3;
+  --product-hit-min: 44px;
+  --product-layer-bg: #081f1c;
+  --product-layer-divider: #3e4940;
+}

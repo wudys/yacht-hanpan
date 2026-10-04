@@ -1,0 +1,82 @@
+.entry-view {
+  position: relative;
+  display: grid;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  color: #fff4d9;
+  background: radial-gradient(ellipse at 50% 27%, #173d33 0%, #031a16 100%), #031a18;
+}
+
+.entry-view__title {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.entry-view .brand-lockup {
+  position: absolute;
+  top: 122px;
+  left: 60px;
+  width: 240px;
+  gap: 10px;
+}
+
+.entry-view .brand-lockup__ci {
+  width: 140px;
+  max-height: 82px;
+}
+
+.entry-view .brand-lockup__logo {
+  width: 210px;
+  max-height: 76px;
+}
+
+.entry-view__action {
+  position: absolute;
+  top: 346px;
+  left: 54px;
+  display: grid;
+  gap: 10px;
+  width: 252px;
+}
+
+.entry-view__activation-failure {
+  margin: 0;
+  color: #ffd197;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.entry-view__start {
+  min-height: 52px;
+  border: 1px solid #ffd06a;
+  border-radius: 14px;
+  color: #14251f;
+  background: var(--product-gold);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.entry-view__start:disabled {
+  color: #14251f;
+  background: #e9a72e;
+}
+
+.entry-view__footer {
+  position: absolute;
+  right: 24px;
+  bottom: 16px;
+  left: 24px;
+  text-align: center;
+}

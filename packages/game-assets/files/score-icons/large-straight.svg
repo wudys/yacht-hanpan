@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-labelledby="title">
+  <title id="title">L. Straight</title>
+  <rect x="3" y="3" width="42" height="42" rx="8" fill="#fffaf0"/>
+  <circle cx="10.4" cy="37.6" r="3.3" fill="#0b0f0d"/>
+  <circle cx="17.2" cy="30.8" r="3.3" fill="#0b0f0d"/>
+  <circle cx="24" cy="24" r="3.3" fill="#0b0f0d"/>
+  <circle cx="30.8" cy="17.2" r="3.3" fill="#0b0f0d"/>
+  <circle cx="37.6" cy="10.4" r="3.3" fill="#0b0f0d"/>
+  <path d="M32.5 30.5v9h7" fill="none" stroke="#0b0f0d" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

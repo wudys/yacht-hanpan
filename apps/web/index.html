@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#15110d" />
+    <script data-hanpan-analytics-init>
+      (() => {
+        const config = __HANPAN_ANALYTICS_CONFIG__;
+        if (!config.enabled || !config.measurementId || window.location.origin !== config.origin) {
+          window['ga-disable-' + config.measurementId] = true;
+          return;
+        }
+        window.hanpanDataLayer = window.hanpanDataLayer || [];
+        window.hanpanGtag = function () {
+          window.hanpanDataLayer.push(arguments);
+        };
+        window.hanpanGtag('consent', 'default', {
+          analytics_storage: 'granted',
+          ad_storage: 'denied',
+          ad_user_data: 'denied',
+          ad_personalization: 'denied',
+        });
+        window.hanpanGtag('js', new Date());
+        window.hanpanGtag('config', config.measurementId, {
+          send_page_view: false,
+          allow_google_signals: false,
+          allow_ad_personalization_signals: false,
+          page_location: config.origin + '/entry',
+          page_referrer: '',
+          page_title: 'Yacht Hanpan',
+          cookie_expires: 60 * 60 * 24 * 60,
+          cookie_update: false,
+          cookie_domain: 'none',
+          cookie_path: '/',
+        });
+      })();
+    </script>
+    <script
+      async
+      data-hanpan-analytics
+      referrerpolicy="no-referrer"
+      src="https://www.googletagmanager.com/gtag/js?id=__HANPAN_MEASUREMENT_ID__&amp;l=hanpanDataLayer"
+    ></script>
+    <link
+      rel="preload"
+      href="/assets/fonts/noto-sans-kr-400.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link
+      rel="preload"
+      href="/assets/fonts/noto-sans-kr-600.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link rel="stylesheet" href="/assets/fonts/noto-sans-kr.css" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,35 @@
+/* Only the development entry imports this file; product view styling lives in game-ui. */
+.game-logical-canvas:has(> .game-board) {
+  background: #7b4b2c;
+}
+
+.anchor-stage-dice {
+  display: flex;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.anchor-stage-dice img {
+  width: 44px;
+  height: 44px;
+  filter: drop-shadow(0 3px 3px #00000080);
+}
+
+.anchor-fixture-label {
+  position: fixed;
+  bottom: 4px;
+  left: 4px;
+  margin: 0;
+  color: #899b91;
+  font: 10px sans-serif;
+  pointer-events: none;
+}
+
+.anchor-replay-control {
+  position: fixed;
+  bottom: 22px;
+  left: 4px;
+  z-index: 2;
+}

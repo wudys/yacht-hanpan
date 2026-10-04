@@ -1,0 +1,58 @@
+.game-logical-canvas button {
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.game-logical-canvas button:where(:disabled, [aria-disabled='true']) {
+  cursor: default;
+}
+
+/* A transient request lock keeps the cursor of the otherwise available action. */
+.game-logical-canvas button[data-interaction-locked='true'] {
+  cursor: pointer;
+}
+
+:is(
+  button.ui-button,
+  .entry-view__start,
+  .ui-icon-button,
+  .score-group-tab,
+  .held-dice-rack__slot,
+  .player-summary__bonus-action,
+  .character-choice-grid__choice,
+  .settings-view__locale-options button,
+  .settings-view__switch
+) {
+  transition: filter 120ms ease-out;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  :is(
+      button.ui-button,
+      .entry-view__start,
+      .ui-icon-button,
+      .score-group-tab,
+      .held-dice-rack__slot,
+      .player-summary__bonus-action,
+      .character-choice-grid__choice,
+      .settings-view__locale-options button,
+      .settings-view__switch
+    ):not(:disabled):not([aria-disabled='true']):hover {
+    filter: brightness(1.08);
+  }
+}
+
+:is(
+    button.ui-button,
+    .entry-view__start,
+    .ui-icon-button,
+    .score-group-tab,
+    .held-dice-rack__slot,
+    .player-summary__bonus-action,
+    .character-choice-grid__choice,
+    .settings-view__locale-options button,
+    .settings-view__switch
+  ):not(:disabled):not([aria-disabled='true']):active {
+  filter: brightness(0.94);
+  transition-duration: 0s;
+}

@@ -1,0 +1,29 @@
+.web-dice-canvas-host {
+  position: absolute;
+  top: var(--dice-board-top);
+  left: var(--dice-board-left);
+  z-index: 1;
+  width: var(--dice-board-width);
+  height: var(--dice-board-height);
+  overflow: hidden;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.web-dice-canvas-host canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.web-dice-canvas-host[data-dice-presentation-phase='rolling'] {
+  clip-path: inset(var(--dice-rack-height) 0 0);
+}
+
+.web-dice-canvas-host[data-dice-presentation-phase='settled'],
+.web-dice-canvas-host[data-dice-presentation-phase='resolving'],
+.web-dice-canvas-host[data-dice-presentation-phase='rolling'],
+.web-dice-canvas-host[data-dice-presentation-phase='revealing'],
+.web-dice-canvas-host[data-dice-presentation-phase='achievement'] {
+  visibility: visible;
+}

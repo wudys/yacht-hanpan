@@ -1,0 +1,108 @@
+.ui-button,
+.ui-icon-button,
+.score-group-tab,
+.score-category-cell,
+.held-dice-rack__slot,
+.player-summary__bonus-action {
+  font: inherit;
+}
+
+.ui-button {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  min-width: var(--product-hit-min);
+  min-height: var(--product-hit-min);
+  padding: 8px 14px;
+  border: 1px solid #ffd06a;
+  border-radius: 12px;
+  color: #12201c;
+  background: var(--product-gold);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.15;
+  cursor: pointer;
+}
+
+.ui-button[data-variant='secondary'] {
+  border-color: #c5aa78;
+  color: #132520;
+  background: var(--product-ivory);
+}
+
+.ui-button[data-variant='danger'] {
+  border-color: #bb6b55;
+  color: var(--product-ivory);
+  background: var(--product-danger);
+}
+
+.ui-button:disabled {
+  color: #706c63;
+  background: #aba596;
+  border-color: #8a8273;
+  box-shadow: none;
+  cursor: default;
+}
+
+.ui-icon-button {
+  display: grid;
+  flex: 0 0 var(--product-hit-min);
+  place-items: center;
+  width: var(--product-hit-min);
+  height: var(--product-hit-min);
+  padding: 0;
+  border: 0;
+  color: var(--product-gold);
+  background: transparent;
+  cursor: pointer;
+}
+
+.ui-icon-button__surface {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: var(--icon-visual-size, 30px);
+  height: var(--icon-visual-size, 30px);
+  padding: 6px;
+  border: 1px solid #615c48;
+  border-radius: 7px;
+  background: #0b1e1d;
+}
+
+.ui-icon-button img,
+.ui-icon-button svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.ui-icon-button:disabled {
+  cursor: default;
+}
+
+.ui-icon-button:disabled .ui-icon-button__surface {
+  color: #777269;
+  background: #263733;
+  cursor: default;
+}
+
+.game-logical-canvas button:focus-visible {
+  outline: 2px solid var(--product-focus);
+  outline-offset: -3px;
+}
+
+.game-logical-canvas .ui-icon-button:focus-visible {
+  outline: none;
+}
+
+.ui-icon-button:focus-visible .ui-icon-button__surface::after {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  border-radius: inherit;
+  outline: 2px solid var(--product-focus);
+  outline-offset: -3px;
+  pointer-events: none;
+  content: '';
+}

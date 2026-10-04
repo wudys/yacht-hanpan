@@ -1,0 +1,34 @@
+.env
+.env.*
+!.env*.template
+.turbo
+coverage/
+dist/
+node_modules
+*.tsbuildinfo
+.worktrees/
+.ignore
+/packages/game-assets/public/assets/game/
+/packages/game-assets/public/runtime/
+
+# vscode
+.lh/
+.vscode/*
+!.vscode/settings.json
+
+# etc
+.DS_Store
+__pycache__/
+
+# Local work state, experiments, captures and reports
+.codegraph
+/.scratch/
+
+# Product documentation only by default; task records belong in .scratch.
+# Ignore rules do not remove files already tracked by Git.
+/docs/*
+!/docs/architecture.md
+!/docs/game-rules.md
+!/docs/product-policy.md
+!/docs/project-context.md
+!/docs/screen.md

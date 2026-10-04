@@ -1,0 +1,36 @@
+{
+  "name": "@repo/game-assets",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "generate": "bun ./scripts/generate-manifest.mjs",
+    "lint": "eslint src scripts eslint.config.mjs --ext js,mjs,ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "sync": "bun ./scripts/sync-public.mjs",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "verify": "bun ./scripts/verify-assets.mjs"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./characters": {
+      "types": "./src/characters.ts",
+      "default": "./src/characters.ts"
+    },
+    "./manifest": {
+      "types": "./src/manifest.generated.ts",
+      "default": "./src/manifest.generated.ts"
+    }
+  },
+  "devDependencies": {
+    "@repo/eslint-config": "workspace:*",
+    "@repo/tsconfig": "workspace:*",
+    "@types/bun": "^1.4.2",
+    "eslint": "^9.39.5",
+    "prettier": "^3.9.9",
+    "typescript": "^6.0.3"
+  }
+}

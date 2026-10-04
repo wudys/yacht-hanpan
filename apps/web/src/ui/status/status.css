@@ -1,0 +1,10 @@
+.game-status-view {
+  display: grid;
+  place-content: center;
+  gap: 12px;
+  width: 360px;
+  height: 500px;
+  padding: 24px;
+  text-align: center;
+  background: var(--game-frame-bg);
+}

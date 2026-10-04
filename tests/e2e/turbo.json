@@ -1,0 +1,8 @@
+{
+  "extends": ["//"],
+  "tasks": {
+    "test": {
+      "dependsOn": ["@repo/web#build", "@repo/server#build"]
+    }
+  }
+}

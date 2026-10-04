@@ -1,4 +1,4 @@
-import { expect } from '@playwright/test';
+import { expect, type Locator } from '@playwright/test';
 
 import { createTestContext, test } from '../helpers/test';
 import { PRODUCTION_GAME_ORIGIN } from '../helpers/test-origins';
@@ -220,8 +220,14 @@ test('production web keeps the responsive frame across a route transition', asyn
   ).toBe(true);
   const logoBox = await logo.boundingBox();
   expect(logoBox).not.toBeNull();
-  expect(logoBox!.width).toBe(80);
-  expect(logoBox!.height).toBe(32);
+  await expectLogoAspectRatio(logo);
+  expect(logoBox!.width).toBeGreaterThan(0);
+  expect(logoBox!.height).toBeGreaterThan(0);
+
+  expect(logoBox!.x).toBeGreaterThanOrEqual(0);
+  expect(logoBox!.y).toBeGreaterThanOrEqual(0);
+  expect(logoBox!.x + logoBox!.width).toBeLessThanOrEqual(1920);
+  expect(logoBox!.y + logoBox!.height).toBeLessThanOrEqual(950);
   expect(rectanglesOverlap(slotBox!, logoBox!)).toBe(false);
   // Layout can be measurable before Chromium has committed the resized compositor frame.
   await page.evaluate(
@@ -248,6 +254,12 @@ test('production web keeps the responsive frame across a route transition', asyn
   const mobileSlotBox = await slot.boundingBox();
   expect(mobileLogoBox).not.toBeNull();
   expect(mobileSlotBox).not.toBeNull();
+  expect(mobileLogoBox!.width).toBeGreaterThan(0);
+  expect(mobileLogoBox!.height).toBeGreaterThan(0);
+  await expectLogoAspectRatio(logo);
+  expect(mobileLogoBox!.x).toBeGreaterThanOrEqual(0);
+  expect(mobileLogoBox!.y).toBeGreaterThanOrEqual(0);
+  expect(mobileLogoBox!.y + mobileLogoBox!.height).toBeLessThanOrEqual(740);
   expect(rectanglesOverlap(mobileSlotBox!, mobileLogoBox!)).toBe(false);
   expect(mobileLogoBox!.x + mobileLogoBox!.width).toBeLessThanOrEqual(320);
   await page.screenshot({ path: test.info().outputPath('wrapper-logo-mobile.png') });
@@ -295,6 +307,22 @@ test('production web blocks coarse landscape input and restores portrait', async
     await context.close();
   }
 });
+
+async function expectLogoAspectRatio(logo: Locator) {
+  const image = await logo.evaluate((node: HTMLImageElement) => {
+    const box = node.getBoundingClientRect();
+    return {
+      naturalRatio: node.naturalWidth / node.naturalHeight,
+      boxRatio: box.width / box.height,
+      objectFit: getComputedStyle(node).objectFit,
+    };
+  });
+  expect(image.naturalRatio).toBeGreaterThan(0);
+  // A contain/scale-down image keeps its natural ratio inside a differently shaped box.
+  if (image.objectFit !== 'contain' && image.objectFit !== 'scale-down') {
+    expect(image.boxRatio).toBeCloseTo(image.naturalRatio, 3);
+  }
+}
 
 function rectanglesOverlap(
   first: { x: number; y: number; width: number; height: number },

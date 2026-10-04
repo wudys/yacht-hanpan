@@ -8,6 +8,7 @@ export { PRODUCT_GAME_ORIGIN } from './test-origins';
 type JoinProductGameOptions = Readonly<{
   locale?: 'ko' | 'en';
   viewport?: Readonly<{ width: number; height: number }>;
+  onGuestPage?: (page: Page) => void | Promise<void>;
 }>;
 
 /** Uses two isolated browser stores and the real HTTP/Socket server, never fixture admission. */
@@ -27,6 +28,7 @@ export async function joinProductGame(
     expect(code).toMatch(/^[0-9]{6}$/u);
 
     const guest = await guestContext.newPage();
+    await options.onGuestPage?.(guest);
     if (options.locale) {
       await guest.addInitScript((locale) => localStorage.setItem('locale', locale), options.locale);
     }

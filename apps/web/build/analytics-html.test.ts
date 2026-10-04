@@ -33,11 +33,21 @@ it('initializes the tag once in the HTML head before app execution without an au
   host.location = { origin };
   runInNewContext(bootstrap.textContent!, { window: host });
   const commands = (host.hanpanDataLayer as IArguments[]).map((args) => Array.from(args));
+  expect(
+    commands.find(([name, action]) => name === 'consent' && action === 'default')?.[2],
+  ).toMatchObject({
+    ad_storage: 'denied',
+    ad_user_data: 'denied',
+    ad_personalization: 'denied',
+  });
   expect(commands.filter(([name]) => name === 'config')).toHaveLength(1);
   expect(commands.find(([name]) => name === 'config')?.[2]).toMatchObject({
     send_page_view: false,
     allow_google_signals: false,
+    allow_ad_personalization_signals: false,
     page_referrer: '',
+    cookie_expires: 5_184_000,
+    cookie_update: false,
   });
   expect(commands.some(([name]) => name === 'event')).toBe(false);
 });

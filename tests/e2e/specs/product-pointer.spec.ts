@@ -1,4 +1,4 @@
-import { expect } from '@playwright/test';
+import { expect, type Locator } from '@playwright/test';
 
 import { PRODUCT_GAME_ORIGIN } from '../helpers/product-game';
 import { createTestContext, test } from '../helpers/test';
@@ -20,22 +20,32 @@ for (const selector of [
     await expect(control).toHaveCSS('cursor', 'pointer');
     const scoreCell = selector.startsWith('.score-category-cell');
     const surface = scoreCell ? control.locator('.score-category-cell__value') : control;
-    const property = scoreCell ? 'background-color' : 'filter';
-    const idle = scoreCell ? 'rgb(233, 236, 229)' : 'none';
-    const hover = scoreCell ? 'rgb(246, 248, 242)' : 'brightness(1.08)';
-    const pressed = scoreCell ? 'rgb(213, 221, 206)' : 'brightness(0.94)';
+    const feedbackProperty = scoreCell ? 'background-color' : 'filter';
+    const idle = await visualFeedback(surface, feedbackProperty);
+    const controlIdle = await visualFeedback(control, 'background-color');
+    const controlFilter = await visualFeedback(control, 'filter');
+    const frame = page.locator('[data-game-logical-canvas]');
+    const frameIdle = await visualFeedback(frame, 'background-color');
     await control.hover();
-    await expect(surface).toHaveCSS(property, hover);
-    await page.mouse.down();
-    await expect(surface).toHaveCSS(property, pressed);
+    await expect.poll(() => visualFeedback(surface, feedbackProperty)).not.toEqual(idle);
+    const hover = await visualFeedback(surface, feedbackProperty);
     if (scoreCell) {
-      await expect(control).toHaveCSS('filter', 'none');
-      await expect(control).toHaveCSS('background-color', 'rgb(11, 39, 29)');
+      expect(await visualFeedback(control, 'background-color')).toBe(controlIdle);
+      expect(await visualFeedback(control, 'filter')).toBe(controlFilter);
     }
+    expect(await visualFeedback(frame, 'background-color')).toEqual(frameIdle);
+    await page.mouse.down();
+    await expect.poll(() => visualFeedback(surface, feedbackProperty)).not.toEqual(hover);
+    expect(await visualFeedback(surface, feedbackProperty)).not.toEqual(idle);
+    if (scoreCell) {
+      expect(await visualFeedback(control, 'background-color')).toBe(controlIdle);
+      expect(await visualFeedback(control, 'filter')).toBe(controlFilter);
+    }
+    expect(await visualFeedback(frame, 'background-color')).toEqual(frameIdle);
     await page.mouse.up();
-    await expect(surface).toHaveCSS(property, hover);
+    await expect.poll(() => visualFeedback(surface, feedbackProperty)).toEqual(hover);
     await page.mouse.move(0, 0);
-    await expect(surface).toHaveCSS(property, idle);
+    await expect.poll(() => visualFeedback(surface, feedbackProperty)).toEqual(idle);
     await expect(control).toHaveCSS('outline-style', 'none');
   });
 }
@@ -104,3 +114,11 @@ test('touch activation does not leave desktop hover feedback behind', async ({ b
   await expect(control).toHaveCSS('outline-style', 'none');
   await context.close();
 });
+
+/** Wait for the control's own transitions before comparing its visible surface. */
+async function visualFeedback(locator: Locator, property: string): Promise<string> {
+  return locator.evaluate(async (node, cssProperty) => {
+    await Promise.all(node.getAnimations().map((animation) => animation.finished.catch(() => {})));
+    return getComputedStyle(node).getPropertyValue(cssProperty);
+  }, property);
+}

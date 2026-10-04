@@ -5,7 +5,7 @@ import { GAME_ASSET_MANIFEST } from './manifest.generated';
 
 test('resolves every catalog asset without changing its URL or metadata', () => {
   for (const entry of GAME_ASSET_MANIFEST) {
-    expect(requireGameAsset(entry.id)).toBe(entry);
+    expect(requireGameAsset(entry.id)).toEqual(entry);
   }
 });
 

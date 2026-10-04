@@ -28,7 +28,7 @@ function buildConfig() {
   return config({ command: 'build', mode: 'production' });
 }
 
-test('Sentry upload uses the embedded product release and keeps private sourcemaps', async () => {
+function configureProductionUpload() {
   environment.values = {
     VITE_DEPLOYMENT_ENV: 'production',
     VITE_GAME_SERVER_URL: 'https://game.example.com',
@@ -36,10 +36,15 @@ test('Sentry upload uses the embedded product release and keeps private sourcema
   };
   Object.assign(TELEMETRY_SETTINGS, {
     sentryDsn: 'https://publickey@o1.ingest.sentry.io/1',
+    sentryOrg: 'test-org',
     sentryProject: 'test-project',
   });
   // Never upload: the plugin is replaced at its external boundary.
   vi.stubEnv('SENTRY_AUTH_TOKEN', 'test-upload-token');
+}
+
+test('Sentry upload uses the embedded product release and keeps private sourcemaps', async () => {
+  configureProductionUpload();
   const result = await buildConfig();
   expect(sentryVitePlugin).toHaveBeenCalledWith(
     expect.objectContaining({
@@ -58,8 +63,16 @@ test('Sentry upload uses the embedded product release and keeps private sourcema
   expect(buildConfig).toThrow(/build-only upload credentials/u);
 });
 
+test('rejects upload credentials with a public VITE_ prefix in an otherwise valid build', () => {
+  configureProductionUpload();
+  environment.values.VITE_SENTRY_AUTH_TOKEN = 'test-public-upload-token';
+  expect(buildConfig).toThrow(/public VITE_ prefix/u);
+  expect(sentryVitePlugin).not.toHaveBeenCalled();
+});
+
 test('preview does not create or upload maps', async () => {
-  environment.values = { VITE_DEPLOYMENT_ENV: 'preview' };
+  configureProductionUpload();
+  environment.values.VITE_DEPLOYMENT_ENV = 'preview';
   const result = await buildConfig();
   expect(result.build?.sourcemap).toBe(false);
   expect(sentryVitePlugin).not.toHaveBeenCalled();

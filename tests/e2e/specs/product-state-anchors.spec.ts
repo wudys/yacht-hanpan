@@ -50,7 +50,39 @@ for (const locale of ['ko', 'en'] as const) {
       }
 
       const heading = page.getByRole('heading').first();
-      expect(await renderedLineCount(heading)).toBe(1);
+      const neighbors =
+        '.score-table-player__heading, .score-table-player__avatar, .score-table-player__total, [data-result-crown], .scrollable-panel__footer button';
+      expect(await visibleTextIssues(heading, neighbors)).toEqual([]);
+      for (const playerHeading of await page.locator('.score-table-player__heading').all()) {
+        expect(await visibleTextIssues(playerHeading, neighbors)).toEqual([]);
+      }
+      if (state.mode === 'win') {
+        // Width-only and height-only clipping must both fail this text observation.
+        const originalStyle = await heading.getAttribute('style');
+        for (const dimension of ['width', 'height'] as const) {
+          try {
+            await heading.evaluate((node: HTMLElement, axis) => {
+              node.style[axis] = '1px';
+              node.style.overflow = 'hidden';
+              node.style.whiteSpace = 'nowrap';
+            }, dimension);
+            const issues = await visibleTextIssues(heading, neighbors);
+            if (dimension === 'width') {
+              expect(issues).toContain('scroll width exceeds text box');
+            } else {
+              expect(issues).toEqual(
+                expect.arrayContaining([expect.stringMatching(/^text clipped by /u)]),
+              );
+            }
+          } finally {
+            await heading.evaluate((node, style) => {
+              if (style === null) node.removeAttribute('style');
+              else node.setAttribute('style', style);
+            }, originalStyle);
+          }
+          expect(await visibleTextIssues(heading, neighbors)).toEqual([]);
+        }
+      }
       const footerAction = page.locator('.scrollable-panel__footer button');
       await expect(footerAction).toBeVisible();
       const fit = await frameFit(page, footerAction);
@@ -116,20 +148,10 @@ for (const locale of ['ko', 'en'] as const) {
       const particles = sequence.locator('[data-achievement-particles]');
       await expect(particles).toHaveCount(kind === 'yacht' ? 1 : 0);
       if (kind === 'yacht') {
-        await expect
-          .poll(() =>
-            sequence
-              .locator('.achievement-sequence__particle')
-              .evaluateAll(
-                (nodes) =>
-                  nodes.filter((node) => Number.parseFloat(getComputedStyle(node).opacity) >= 0.5)
-                    .length,
-              ),
-          )
-          .toBeGreaterThanOrEqual(3);
+        await expect.poll(() => visibleParticleCount(sequence)).toBeGreaterThan(0);
       }
       await page.screenshot({ path: testInfo.outputPath(`achievement-${kind}-${locale}-320.png`) });
-      expect(await renderedLineCount(sequence.locator('.achievement-sequence__title'))).toBe(1);
+      expect(await visibleTextIssues(sequence.locator('.achievement-sequence__title'))).toEqual([]);
       await expect(page.locator('[data-held="true"] [data-die-face="5"]')).toHaveCount(2);
       await expect(page.locator(`[data-anchor-stage-face="${achieved.stageFace}"]`)).toHaveCount(3);
       await expect(
@@ -168,6 +190,9 @@ for (const locale of ['ko', 'en'] as const) {
       await expect
         .poll(() => content.evaluate((node) => Number.parseFloat(getComputedStyle(node).opacity)))
         .toBe(0);
+      if (kind === 'yacht') {
+        await expect.poll(() => visibleParticleCount(sequence)).toBe(0);
+      }
     });
   }
 }
@@ -184,11 +209,105 @@ async function openAnchor(page: Page, anchor: string, locale: string, mode: stri
   await expect(page.locator('[data-game-frame-slot]')).toBeVisible();
 }
 
-async function renderedLineCount(locator: Locator): Promise<number> {
-  return locator.evaluate((node) => {
-    const style = getComputedStyle(node);
-    return Math.round(node.getBoundingClientRect().height / Number.parseFloat(style.lineHeight));
-  });
+async function visibleParticleCount(sequence: Locator): Promise<number> {
+  return sequence.locator('.achievement-sequence__particle').evaluateAll(
+    (nodes) =>
+      nodes.filter((node) => {
+        const rect = node.getBoundingClientRect();
+        const board = node.closest('[data-achievement-kind]')!.getBoundingClientRect();
+        return (
+          node.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }) &&
+          rect.width > 0 &&
+          rect.height > 0 &&
+          rect.left < board.right &&
+          rect.right > board.left &&
+          rect.top < board.bottom &&
+          rect.bottom > board.top
+        );
+      }).length,
+  );
+}
+
+/** Inspect text only: image/decorative boxes do not count as rendered lines. */
+async function visibleTextIssues(
+  locator: Locator,
+  neighborSelector: string = '',
+): Promise<string[]> {
+  return locator.evaluate((node, neighbors) => {
+    const issues: string[] = [];
+    const tolerance = 0.5; // Viewport CSS pixels, including the frame transform.
+    const textRects: DOMRect[] = [];
+    const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
+    while (walker.nextNode()) {
+      const text = walker.currentNode;
+      const value = text.textContent ?? '';
+      if (!value.trim()) continue;
+      const range = document.createRange();
+      range.setStart(text, value.length - value.trimStart().length);
+      range.setEnd(text, value.trimEnd().length);
+      textRects.push(
+        ...Array.from(range.getClientRects()).filter((rect) => rect.width > 0 && rect.height > 0),
+      );
+    }
+    if (textRects.length === 0) issues.push('no rendered text');
+    const lines: { top: number; bottom: number }[] = [];
+    for (const rect of textRects) {
+      const line = lines.find(
+        (candidate) => rect.top < candidate.bottom && candidate.top < rect.bottom,
+      );
+      if (line) {
+        line.top = Math.min(line.top, rect.top);
+        line.bottom = Math.max(line.bottom, rect.bottom);
+      } else lines.push({ top: rect.top, bottom: rect.bottom });
+    }
+    if (lines.length !== 1) issues.push(`rendered ${lines.length} text lines`);
+    if (node.scrollWidth > node.clientWidth + 1) issues.push('scroll width exceeds text box');
+    const bounds = node.getBoundingClientRect();
+    for (const rect of textRects) {
+      if (rect.left < bounds.left - tolerance || rect.right > bounds.right + tolerance) {
+        issues.push(
+          `text exceeds element bounds: ${JSON.stringify({ text: rect.toJSON(), bounds: bounds.toJSON() })}`,
+        );
+      }
+      // Glyphs may extend vertically beyond a tight line-height when overflow is visible;
+      // the text element, clipping ancestors and frame constrain actual visible bounds.
+      for (let parent: Element | null = node; parent; parent = parent.parentElement) {
+        const style = getComputedStyle(parent);
+        const clipX = style.overflowX !== 'visible';
+        const clipY = style.overflowY !== 'visible';
+        const frame = parent.hasAttribute('data-game-logical-canvas');
+        const parentBounds = parent.getBoundingClientRect();
+        if (
+          ((clipX || frame) &&
+            (rect.left < parentBounds.left - tolerance ||
+              rect.right > parentBounds.right + tolerance)) ||
+          ((clipY || frame) &&
+            (rect.top < parentBounds.top - tolerance ||
+              rect.bottom > parentBounds.bottom + tolerance))
+        ) {
+          issues.push(
+            `text clipped by ${parent.className}: ${JSON.stringify({ text: rect.toJSON(), bounds: parentBounds.toJSON() })}`,
+          );
+        }
+      }
+      if (!neighbors) continue;
+      for (const neighbor of document.querySelectorAll(neighbors)) {
+        if (neighbor === node || node.contains(neighbor) || neighbor.contains(node)) continue;
+        const other = neighbor.getBoundingClientRect();
+        if (
+          rect.left < other.right - tolerance &&
+          other.left < rect.right - tolerance &&
+          rect.top < other.bottom - tolerance &&
+          other.top < rect.bottom - tolerance
+        ) {
+          issues.push(
+            `text overlaps ${neighbor.className}: ${JSON.stringify({ text: rect.toJSON(), neighbor: other.toJSON() })}`,
+          );
+        }
+      }
+    }
+    return issues;
+  }, neighborSelector);
 }
 
 async function frameFit(page: Page, locator: Locator) {

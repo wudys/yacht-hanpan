@@ -18,9 +18,10 @@ const disposers = new Set<() => void>();
 afterEach(() => {
   disposers.forEach((dispose) => dispose());
   disposers.clear();
+  vi.useRealTimers();
   vi.restoreAllMocks();
 });
-function setup() {
+function setup(now: () => number = () => 10_000) {
   const harness = createGameSessionHarness();
   const audio = createAudio();
   const recovery = createRecovery();
@@ -30,7 +31,7 @@ function setup() {
     audio,
     recovery,
     preferences,
-    clock: { now: () => 10_000 },
+    clock: { now },
   });
   disposers.add(feedback.dispose);
   const observe = (result: Promise<CommandResult>) =>
@@ -43,6 +44,37 @@ function setup() {
   const publish = () => harness.sessions.publish({ ...playingGame, stateVersion: 8 });
   return { ...harness, audio, recovery, preferences, feedback, observe, publish };
 }
+
+test('countdown ticks warn once at 5 through 1 seconds without session publication', () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(playingGame.match.currentTurn.deadlineAt - 6_000);
+  const h = setup(() => Date.now());
+  const snapshot = h.sessions.getSnapshot();
+  expect(h.audio.playCue).not.toHaveBeenCalled();
+  vi.advanceTimersByTime(1_000);
+  for (const seconds of [5, 4, 3, 2, 1]) {
+    expect(h.audio.playCue).toHaveBeenCalledTimes(6 - seconds);
+    expect(h.audio.playCue).toHaveBeenLastCalledWith(PRODUCT_CUE.TIMER_WARNING);
+    vi.advanceTimersByTime(750);
+    expect(h.audio.playCue).toHaveBeenCalledTimes(6 - seconds);
+    vi.advanceTimersByTime(250);
+  }
+  expect(h.audio.playCue).toHaveBeenCalledTimes(5);
+  vi.advanceTimersByTime(1_000);
+  expect(h.audio.playCue).toHaveBeenCalledTimes(5);
+  expect(h.sessions.getSnapshot()).toBe(snapshot);
+});
+
+test('disposal cancels countdown warnings before the remaining boundaries', () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(playingGame.match.currentTurn.deadlineAt - 6_000);
+  const h = setup(() => Date.now());
+  vi.advanceTimersByTime(1_000);
+  expect(h.audio.playCue).toHaveBeenCalledExactlyOnceWith(PRODUCT_CUE.TIMER_WARNING);
+  h.feedback.dispose();
+  vi.advanceTimersByTime(5_000);
+  expect(h.audio.playCue).toHaveBeenCalledTimes(1);
+});
 
 test.each(['command-view', 'live-view'] as const)(
   '%s confirms once when the original command receipt arrives',

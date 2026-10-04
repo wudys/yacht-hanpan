@@ -62,35 +62,32 @@ for (const duplicate of [false, true]) {
       }
       await expect(creatorOpponent).toHaveAttribute('src', guestSource!);
       await expect(guestOpponent).toHaveAttribute('src', creatorSource!);
-      if (duplicate) {
-        expect(guestSource).toContain('/variant/');
-        for (const participant of [page, guest]) {
-          await participant.getByRole('button', { name: '닫기', exact: true }).click();
-          await expect(participant.locator('.player-summary img').first()).toHaveAttribute(
-            'src',
-            creatorSource!,
-          );
-        }
-        await expect(page.locator('.player-summary img').first()).toHaveAttribute('alt', '나');
-        await expect(guest.locator('.player-summary img').first()).toHaveAttribute('alt', '상대');
-        await page.getByRole('button', { name: '굴리기', exact: true }).click();
-        const score = page.locator('button[data-score-category]').first();
-        await expect(score).toBeEnabled({ timeout: 30_000 });
-        await score.click();
-        for (const participant of [page, guest]) {
-          await expect(participant.locator('.player-summary img').first()).toHaveAttribute(
-            'src',
-            guestSource!,
-          );
-        }
-        await expect(page.locator('.player-summary img').first()).toHaveAttribute('alt', '상대');
-        await expect(guest.locator('.player-summary img').first()).toHaveAttribute('alt', '나');
-        await guest.screenshot({
-          path: test.info().outputPath('turn-summary-guest-320.png'),
-        });
-      }
       await page.screenshot({
         path: test.info().outputPath('profiles-scoreboard-320.png'),
+      });
+      for (const participant of [page, guest]) {
+        await participant.getByRole('button', { name: '닫기', exact: true }).click();
+        await expect(participant.locator('.player-summary img').first()).toHaveAttribute(
+          'src',
+          creatorSource!,
+        );
+      }
+      await expect(page.locator('.player-summary img').first()).toHaveAttribute('alt', '나');
+      await expect(guest.locator('.player-summary img').first()).toHaveAttribute('alt', '상대');
+      await page.getByRole('button', { name: '굴리기', exact: true }).click();
+      const score = page.locator('button[data-score-category]').first();
+      await expect(score).toBeEnabled({ timeout: 30_000 });
+      await score.click();
+      for (const participant of [page, guest]) {
+        await expect(participant.locator('.player-summary img').first()).toHaveAttribute(
+          'src',
+          guestSource!,
+        );
+      }
+      await expect(page.locator('.player-summary img').first()).toHaveAttribute('alt', '상대');
+      await expect(guest.locator('.player-summary img').first()).toHaveAttribute('alt', '나');
+      await guest.screenshot({
+        path: test.info().outputPath('turn-summary-guest-320.png'),
       });
       await guest.reload();
       await guest.getByRole('button', { name: '게임 시작', exact: true }).click();

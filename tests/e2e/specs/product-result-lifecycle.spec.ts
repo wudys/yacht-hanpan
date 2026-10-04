@@ -1,4 +1,4 @@
-import { expect, type WebSocket } from '@playwright/test';
+import { expect, type Page, type WebSocket } from '@playwright/test';
 
 import { joinProductGame, PRODUCT_GAME_ORIGIN } from '../helpers/product-game';
 import { test } from '../helpers/test';
@@ -13,14 +13,21 @@ for (const { returningSeat, storageUnavailable } of [
     : 'while the opponent stays on the finished Result';
   test(`seat ${returningSeat} creates another room ${condition}`, async ({ page, browser }) => {
     test.setTimeout(60_000);
-    const sockets: WebSocket[] = [];
+    const creatorSockets: WebSocket[] = [];
+    const guestSockets: WebSocket[] = [];
     // Exclude Vite's development HMR socket; only gameplay transports belong to Result.
     page.on('websocket', (socket) => {
-      if (new URL(socket.url()).pathname.startsWith('/game-socket')) sockets.push(socket);
+      if (new URL(socket.url()).pathname.startsWith('/game-socket')) creatorSockets.push(socket);
     });
     await page.goto(PRODUCT_GAME_ORIGIN);
     await page.getByRole('button', { name: '게임 시작', exact: true }).click();
-    const guestContext = await joinProductGame(page, browser);
+    const guestContext = await joinProductGame(page, browser, {
+      onGuestPage(guest: Page) {
+        guest.on('websocket', (socket) => {
+          if (new URL(socket.url()).pathname.startsWith('/game-socket')) guestSockets.push(socket);
+        });
+      },
+    });
     try {
       const guest = guestContext.pages()[0]!;
       const returning = returningSeat === 0 ? page : guest;
@@ -48,9 +55,10 @@ for (const { returningSeat, storageUnavailable } of [
       await expect(page.locator('[data-product-view="result"]')).toBeVisible();
       await expect(guest.locator('[data-product-view="result"]')).toBeVisible();
 
-      await expect
-        .poll(() => sockets.length > 0 && sockets.every((socket) => socket.isClosed()))
-        .toBe(true);
+      for (const sockets of [creatorSockets, guestSockets]) {
+        expect(sockets.length).toBeGreaterThan(0);
+        await expect.poll(() => sockets.every((socket) => socket.isClosed())).toBe(true);
+      }
       if (restoreStorage !== null) {
         await restoreStorage.evaluate((restore) => restore());
         await restoreStorage.dispose();

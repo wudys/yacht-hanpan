@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "lint": "eslint . --ext ts --report-unused-disable-directives --max-warnings 0",
-    "test": "playwright test",
+    "test": "playwright test --project=chromium",
     "test:all-browsers": "playwright test --project=chromium --project=firefox --project=webkit",
     "typecheck": "tsc --noEmit"
   },

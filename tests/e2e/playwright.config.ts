@@ -43,8 +43,22 @@ export default defineConfig({
     },
   ],
   projects: [
-    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
-    { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
+    {
+      name: 'chromium',
+      use: {
+        ...devices['Desktop Chrome'],
+        // Mute output in headed runs too, while keeping real audio playback available to tests.
+        launchOptions: { args: ['--mute-audio'] },
+      },
+    },
+    {
+      name: 'firefox',
+      use: {
+        ...devices['Desktop Firefox'],
+        // Firefox reads the output volume scale as a string preference.
+        launchOptions: { firefoxUserPrefs: { 'media.volume_scale': '0.0' } },
+      },
+    },
     { name: 'webkit', use: { ...devices['Desktop Safari'] } },
   ],
 });

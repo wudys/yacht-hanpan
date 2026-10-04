@@ -211,6 +211,7 @@ export function createGameSession(options: CreateGameSessionOptions): GameSessio
     }),
     socket.onDisconnected(() => {
       if (lifecycle.signal.aborted) return;
+      connectionAttempt?.abort();
       connectionSync = null;
       cancelSynchronization();
       connection = 'disconnected';

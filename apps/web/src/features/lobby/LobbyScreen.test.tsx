@@ -20,28 +20,28 @@ import { afterEach, expect, test, vi } from 'vitest';
 
 import LobbyScreen from '@/features/lobby/LobbyScreen';
 import { LOCALE, translate } from '@/i18n';
-import type { ProductAudioRuntime } from '@/runtime/audio/browser-audio-runtime';
+import type { BrowserAudioRuntime } from '@/runtime/audio/browser-audio-runtime';
 import { PRODUCT_CUE } from '@/runtime/audio/product-cues';
 import type { ServerReadiness } from '@/runtime/network/server-readiness';
 import {
-  createProductPreferences,
-  type ProductPreferences,
-} from '@/runtime/preferences/product-preferences';
-import { createProductProfile } from '@/runtime/profile/product-profile';
+  createPreferencesStore,
+  type PreferencesStore,
+} from '@/runtime/preferences/preferences-store';
+import { createProfileSelectionStore } from '@/runtime/profile/profile-selection-store';
 import { createRoomAccess } from '@/runtime/room-access/room-access';
 import type {
-  StoredRoomRestore,
-  StoredRoomRestoreSnapshot,
-} from '@/runtime/room-access/stored-room-restore';
-import {
-  type BrowserSessionStore,
-  createBrowserSessionStore,
-  type RecentRoomResult,
-} from '@/runtime/session/browser-session-store';
+  StoredRoomReentry,
+  StoredRoomReentrySnapshot,
+} from '@/runtime/room-access/stored-room-reentry';
 import type {
   GameSessionHolder,
   GameSessionHolderSnapshot,
-} from '@/runtime/session/session-holder';
+} from '@/runtime/session/game-session-holder';
+import {
+  createSessionCredentialStore,
+  type RecentRoomResult,
+  type SessionCredentialStore,
+} from '@/runtime/session/session-credential-store';
 import type { SessionRecovery, SessionRecoverySnapshot } from '@/runtime/session/session-recovery';
 import { createTelemetry, inactiveTelemetry, type Telemetry } from '@/runtime/telemetry/telemetry';
 import { TelemetryContext } from '@/runtime/telemetry/TelemetryContext';
@@ -93,7 +93,7 @@ function deferred<T>() {
   return { promise, resolve: resolveDeferred };
 }
 
-function createAudio(): ProductAudioRuntime {
+function createAudio(): BrowserAudioRuntime {
   return {
     supported: true,
     activate: vi.fn(() => Promise.resolve()),
@@ -197,7 +197,7 @@ function createHolder(session: GameSession): GameSessionHolder {
   };
 }
 
-function createStore(): BrowserSessionStore {
+function createStore(): SessionCredentialStore {
   let recentRoom: RecentRoomResult = {
     status: 'ready',
     room: null,
@@ -212,7 +212,7 @@ function createStore(): BrowserSessionStore {
     }),
     getClientId: () => '019cebf0-79b8-7a22-8000-000000000003',
     refreshRecentRoom: () => recentRoom,
-    recordRoom(authority: Parameters<BrowserSessionStore['recordRoom']>[0]) {
+    recordRoom(authority: Parameters<SessionCredentialStore['recordRoom']>[0]) {
       recentRoom = {
         status: 'ready',
         room: {
@@ -228,20 +228,20 @@ function renderLobby(
   client: GameClient,
   {
     session = createSession(),
-    preferences = createProductPreferences({ getItem: () => null, setItem: vi.fn() }),
+    preferences = createPreferencesStore({ getItem: () => null, setItem: vi.fn() }),
     readiness = createReadiness(),
     reentry = createReentry().value,
     recovery = createRecovery().value,
     telemetry = inactiveTelemetry,
-    store = createStore(),
+    sessionCredentialStore = createStore(),
   }: {
     session?: GameSession;
-    preferences?: ProductPreferences;
+    preferences?: PreferencesStore;
     readiness?: ServerReadiness;
-    reentry?: StoredRoomRestore;
+    reentry?: StoredRoomReentry;
     recovery?: SessionRecovery;
     telemetry?: Telemetry;
-    store?: BrowserSessionStore;
+    sessionCredentialStore?: SessionCredentialStore;
   } = {},
 ) {
   preferences.setLocale(LOCALE.EN);
@@ -250,16 +250,16 @@ function renderLobby(
     getItem: () => JSON.stringify({ characterId: 'navy-bob', variant: false }),
     setItem: vi.fn(),
   };
-  const profile = createProductProfile(profileStorage);
+  const profile = createProfileSelectionStore(profileStorage);
   const audio = createAudio();
   const activity = new AbortController().signal;
   const access = createRoomAccess({
     activity,
     client,
     sessions,
-    store,
+    sessionCredentialStore,
     readiness,
-    restore: reentry,
+    reentry: reentry,
     recovery,
   });
   render(
@@ -275,21 +275,30 @@ function renderLobby(
       />
     </TelemetryContext.Provider>,
   );
-  return { audio, profile, profileStorage, preferences, reentry, session, sessions, store };
+  return {
+    audio,
+    profile,
+    profileStorage,
+    preferences,
+    reentry,
+    session,
+    sessions,
+    sessionCredentialStore,
+  };
 }
 
 function createReadiness(): ServerReadiness {
   return { wait: vi.fn(() => Promise.resolve({ ok: true as const })) };
 }
 
-function createReentry(initial: StoredRoomRestoreSnapshot = { status: 'idle' }) {
+function createReentry(initial: StoredRoomReentrySnapshot = { status: 'idle' }) {
   let snapshot = initial;
   const listeners = new Set<() => void>();
-  const publish = (next: StoredRoomRestoreSnapshot) => {
+  const publish = (next: StoredRoomReentrySnapshot) => {
     snapshot = next;
     listeners.forEach((listener) => listener());
   };
-  const value: StoredRoomRestore = {
+  const value: StoredRoomReentry = {
     check: vi.fn(),
     completeHandoff: vi.fn(() => publish({ status: 'idle' })),
     confirmPermanentFailure: vi.fn(() => publish({ status: 'idle' })),
@@ -470,15 +479,15 @@ test('activates recent-room reentry before the first Lobby frame can expose admi
   const activity = new AbortController().signal;
   const client = { clock: { now: () => 1_000 } } as unknown as GameClient;
   const sessions = createHolder(createSession());
-  const store = createStore();
+  const sessionCredentialStore = createStore();
   const readiness = createReadiness();
   const access = createRoomAccess({
     activity,
     client,
     sessions,
-    store,
+    sessionCredentialStore,
     readiness,
-    restore: reentry.value,
+    reentry: reentry.value,
     recovery: createRecovery().value,
   });
   const host = document.createElement('div');
@@ -493,8 +502,8 @@ test('activates recent-room reentry before the first Lobby frame can expose admi
         audio={createAudio()}
         locale={LOCALE.EN}
         clock={client.clock}
-        profile={createProductProfile({ getItem: () => null, setItem: vi.fn() }, () => 0)}
-        preferences={createProductPreferences({ getItem: () => null, setItem: vi.fn() })}
+        profile={createProfileSelectionStore({ getItem: () => null, setItem: vi.fn() }, () => 0)}
+        preferences={createPreferencesStore({ getItem: () => null, setItem: vi.fn() })}
       />,
     );
   });
@@ -712,7 +721,7 @@ test('deduplicates create intent and waits for an authoritative game before navi
     clock: { now: () => 1_000 },
     createRoom,
   } as unknown as GameClient;
-  const { session, sessions, store } = renderLobby(client);
+  const { session, sessions, sessionCredentialStore } = renderLobby(client);
 
   const createButton = screen.getByRole('button', {
     name: translate(LOCALE.EN, 'lobby.createRoom'),
@@ -733,7 +742,7 @@ test('deduplicates create intent and waits for an authoritative game before navi
 
   expect(screen.getByRole('main').hasAttribute('inert')).toBe(true);
   expect(screen.getByText('001234').getAttribute('data-room-code')).toBe('001234');
-  expect(store.initialize().recentRoom).toEqual({
+  expect(sessionCredentialStore.initialize().recentRoom).toEqual({
     status: 'ready',
     room: {
       roomId: AUTHORITY.roomId,
@@ -1052,7 +1061,7 @@ test('shows waiting-room recovery and preserves authority on exhausted recovery'
       Promise.resolve({ ok: true, data: { authority: AUTHORITY, view: WAITING_VIEW }, meta: {} }),
     ),
   } as unknown as GameClient;
-  const { store, sessions } = renderLobby(client, { recovery: recovery.value });
+  const { sessionCredentialStore, sessions } = renderLobby(client, { recovery: recovery.value });
   fireEvent.click(screen.getByRole('button', { name: translate(LOCALE.EN, 'lobby.createRoom') }));
   await screen.findByText(WAITING_ROOM.roomCode);
   await act(async () => recovery.publish({ status: 'reconnecting' }));
@@ -1068,7 +1077,7 @@ test('shows waiting-room recovery and preserves authority on exhausted recovery'
   expect(screen.getByRole('button', { name: 'Refresh' })).toBeTruthy();
   expect(screen.queryByText(WAITING_ROOM.roomCode)).toBeNull();
   expect(sessions.getSnapshot().authority).toBe(AUTHORITY);
-  expect(store.removeRoom).not.toHaveBeenCalled();
+  expect(sessionCredentialStore.removeRoom).not.toHaveBeenCalled();
 });
 
 test('clears an invalid waiting-room authority only after confirming recovery failure', async () => {
@@ -1079,7 +1088,7 @@ test('clears an invalid waiting-room authority only after confirming recovery fa
       Promise.resolve({ ok: true, data: { authority: AUTHORITY, view: WAITING_VIEW }, meta: {} }),
     ),
   } as unknown as GameClient;
-  const { store, sessions } = renderLobby(client, { recovery: recovery.value });
+  const { sessionCredentialStore, sessions } = renderLobby(client, { recovery: recovery.value });
   fireEvent.click(screen.getByRole('button', { name: translate(LOCALE.EN, 'lobby.createRoom') }));
   await screen.findByText(WAITING_ROOM.roomCode);
   await act(async () =>
@@ -1088,9 +1097,9 @@ test('clears an invalid waiting-room authority only after confirming recovery fa
       error: { kind: 'server', error: { code: 'ROOM_NOT_FOUND', params: {} } },
     }),
   );
-  expect(store.removeRoom).not.toHaveBeenCalled();
+  expect(sessionCredentialStore.removeRoom).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button', { name: 'OK' }));
-  expect(store.removeRoom).toHaveBeenCalledWith(AUTHORITY.roomId);
+  expect(sessionCredentialStore.removeRoom).toHaveBeenCalledWith(AUTHORITY.roomId);
   expect(sessions.getSnapshot().authority).toBeNull();
 });
 
@@ -1169,7 +1178,7 @@ test.each([
     ),
     cancelRoom: vi.fn(() => Promise.resolve({ ok: false, error })),
   } as unknown as GameClient;
-  const { store } = renderLobby(client);
+  const { sessionCredentialStore } = renderLobby(client);
   fireEvent.click(screen.getByRole('button', { name: translate(LOCALE.EN, 'lobby.createRoom') }));
   await screen.findByText('001234');
   fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
@@ -1180,7 +1189,7 @@ test.each([
   ).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Refresh' })).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
-  expect(store.removeRoom).not.toHaveBeenCalled();
+  expect(sessionCredentialStore.removeRoom).not.toHaveBeenCalled();
 });
 
 test('cleans permanent cancel failures only after confirmation', async () => {
@@ -1201,7 +1210,7 @@ test('cleans permanent cancel failures only after confirmation', async () => {
     ),
   } as unknown as GameClient;
   const event = vi.fn();
-  const { sessions, store } = renderLobby(client, {
+  const { sessions, sessionCredentialStore } = renderLobby(client, {
     telemetry: { ...inactiveTelemetry, trackEvent: event },
   });
   fireEvent.click(screen.getByRole('button', { name: translate(LOCALE.EN, 'lobby.createRoom') }));
@@ -1218,7 +1227,7 @@ test('cleans permanent cancel failures only after confirmation', async () => {
 
   fireEvent.click(screen.getByRole('button', { name: translate(LOCALE.EN, 'common.confirm') }));
   expect(sessions.getSnapshot().authority).toBeNull();
-  expect(store.removeRoom).toHaveBeenCalledWith(AUTHORITY.roomId);
+  expect(sessionCredentialStore.removeRoom).toHaveBeenCalledWith(AUTHORITY.roomId);
   expect(
     event.mock.calls.map(([value]) => value).filter((value) => value.name === 'waiting_result'),
   ).toEqual([]);
@@ -1242,7 +1251,7 @@ test.each(['success', 'storage failure'] as const)(
       cancelRoom: vi.fn(() => Promise.resolve({ ok: true, data: {}, meta: {} })),
     } as unknown as GameClient;
     const event = vi.fn();
-    const store = createBrowserSessionStore({
+    const sessionCredentialStore = createSessionCredentialStore({
       storage: {
         getItem: () => null,
         setItem() {},
@@ -1251,20 +1260,20 @@ test.each(['success', 'storage failure'] as const)(
         },
       },
     });
-    vi.spyOn(store, 'removeRoom');
+    vi.spyOn(sessionCredentialStore, 'removeRoom');
     renderLobby(client, {
       session,
       telemetry: {
         ...inactiveTelemetry,
         trackEvent: event,
       },
-      store,
+      sessionCredentialStore,
     });
     fireEvent.click(screen.getByRole('button', { name: translate(LOCALE.EN, 'lobby.createRoom') }));
     await screen.findByText('001234');
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     await screen.findByRole('button', { name: translate(LOCALE.EN, 'lobby.createRoom') });
-    expect(store.removeRoom).toHaveBeenCalledWith(AUTHORITY.roomId);
+    expect(sessionCredentialStore.removeRoom).toHaveBeenCalledWith(AUTHORITY.roomId);
 
     await act(async () => {
       connection.resolve({
@@ -1327,7 +1336,7 @@ test('does not clear a replacement session when the cancellation HTTP reply arri
     ),
     cancelRoom: vi.fn(() => cancellation.promise),
   } as unknown as GameClient;
-  const { sessions, store } = renderLobby(client);
+  const { sessions, sessionCredentialStore } = renderLobby(client);
   const clear = vi.spyOn(sessions, 'clear');
   fireEvent.click(screen.getByRole('button', { name: translate(LOCALE.EN, 'lobby.createRoom') }));
   await screen.findByText('001234');
@@ -1342,7 +1351,7 @@ test('does not clear a replacement session when the cancellation HTTP reply arri
     await cancellation.promise;
   });
   expect(clear).not.toHaveBeenCalled();
-  expect(store.removeRoom).not.toHaveBeenCalled();
+  expect(sessionCredentialStore.removeRoom).not.toHaveBeenCalled();
 });
 
 test('keeps a failed profile selection applied and clears its inline warning after a later save', () => {

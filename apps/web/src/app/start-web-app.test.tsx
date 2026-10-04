@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 
 import type { AppRouterContext } from '@/app/app-router';
-import type { loadProductResources } from '@/bootstrap/load-product-resources';
+import type { prepareProductResources } from '@/bootstrap/prepare-product-resources';
 import type { ProductVisualPreparation } from '@/bootstrap/product-visual-preparation';
 import { inactiveTelemetry } from '@/runtime/telemetry/telemetry';
 
@@ -15,7 +15,7 @@ const fixture = vi.hoisted(() => ({
   render: vi.fn(),
   unmount: vi.fn(),
   router: vi.fn<(context: AppRouterContext) => unknown>(),
-  loadResources: vi.fn<typeof loadProductResources>(),
+  loadResources: vi.fn<typeof prepareProductResources>(),
   prepareVisuals: vi.fn<ProductVisualPreparation['prepare']>(),
   disposeVisuals: vi.fn<ProductVisualPreparation['dispose']>(),
   trackEvent: vi.fn(),
@@ -31,8 +31,8 @@ vi.mock('@/bootstrap/web-config', () => ({
 vi.mock('@/bootstrap/static-capabilities', () => ({
   detectStaticGameplayCapabilities: () => ({ ok: true, missing: [] }),
 }));
-vi.mock('@/bootstrap/load-product-resources', () => ({
-  loadProductResources: fixture.loadResources,
+vi.mock('@/bootstrap/prepare-product-resources', () => ({
+  prepareProductResources: fixture.loadResources,
 }));
 vi.mock('@/bootstrap/product-visual-preparation', async () => {
   const { createRendererReadiness: createReadiness } =
@@ -66,13 +66,13 @@ vi.mock('@/runtime/network/server-readiness', () => ({ createServerReadiness: ()
 vi.mock('@/runtime/room-access/room-access', () => ({
   createRoomAccess: () => ({ dispose: vi.fn() }),
 }));
-vi.mock('@/runtime/room-access/stored-room-restore', () => ({
-  createStoredRoomRestore: () => ({ dispose: vi.fn() }),
+vi.mock('@/runtime/room-access/stored-room-reentry', () => ({
+  createStoredRoomReentry: () => ({ dispose: vi.fn() }),
 }));
-vi.mock('@/runtime/session/browser-session-store', () => ({
-  createBrowserSessionStore: () => ({ initialize: fixture.storeInitialize }),
+vi.mock('@/runtime/session/session-credential-store', () => ({
+  createSessionCredentialStore: () => ({ initialize: fixture.storeInitialize }),
 }));
-vi.mock('@/runtime/session/session-holder', () => ({
+vi.mock('@/runtime/session/game-session-holder', () => ({
   createGameSessionHolder: () => ({
     getSnapshot: () => ({
       session: null,
@@ -88,7 +88,9 @@ vi.mock('@/runtime/session/session-holder', () => ({
 vi.mock('@/runtime/session/session-recovery', () => ({
   createSessionRecovery: () => ({ start: vi.fn(), dispose: vi.fn() }),
 }));
-vi.mock('@/runtime/telemetry/observe-telemetry', () => ({ observeTelemetry: () => vi.fn() }));
+vi.mock('@/runtime/telemetry/session-telemetry-observer', () => ({
+  observeSessionTelemetry: () => vi.fn(),
+}));
 
 let disposeApp: (() => void) | undefined;
 

@@ -5,7 +5,7 @@ import type { ActorRefFrom } from 'xstate';
 import { appLifecycleMachine } from '@/app/app-lifecycle-machine';
 import { APP_SCREEN_PATH } from '@/app/screen-paths';
 import { type Locale, translate } from '@/i18n';
-import type { BrowserSessionStore } from '@/runtime/session/browser-session-store';
+import type { SessionCredentialStore } from '@/runtime/session/session-credential-store';
 import { Button } from '@/ui/button';
 import { ScrollablePanel } from '@/ui/panel';
 
@@ -13,17 +13,20 @@ export function GlobalLayerHost({
   globalActor,
   locale,
   routePath,
-  store,
+  sessionCredentialStore,
   children,
 }: Readonly<{
   globalActor: ActorRefFrom<typeof appLifecycleMachine>;
   locale: Locale;
   routePath: string;
-  store: BrowserSessionStore;
+  sessionCredentialStore: SessionCredentialStore;
   children: ReactNode;
 }>) {
   const snapshot = useSelector(globalActor, (current) => current);
-  const { persistence } = useSyncExternalStore(store.subscribe, store.getSnapshot);
+  const { persistence } = useSyncExternalStore(
+    sessionCredentialStore.subscribe,
+    sessionCredentialStore.getSnapshot,
+  );
   const replaced = snapshot.matches('replaced');
   const network = snapshot.context.networkStatus;
   const runtimeFailure = snapshot.matches('runtimeFailure');

@@ -1,11 +1,11 @@
 import { describe, expect, test, vi } from 'vitest';
 
 import {
-  createProductPreferences,
-  type ProductPreferenceStorage,
-} from '@/runtime/preferences/product-preferences';
+  createPreferencesStore,
+  type PreferencesStorage,
+} from '@/runtime/preferences/preferences-store';
 
-class MemoryStorage implements ProductPreferenceStorage {
+class MemoryStorage implements PreferencesStorage {
   readonly #values: Map<string, string>;
 
   public constructor(entries: readonly (readonly [string, string])[] = []) {
@@ -22,15 +22,15 @@ class MemoryStorage implements ProductPreferenceStorage {
 }
 
 test('uses the stored BGM preference and defaults to enabled', () => {
-  expect(createProductPreferences(new MemoryStorage()).getSnapshot().bgmEnabled).toBe(true);
+  expect(createPreferencesStore(new MemoryStorage()).getSnapshot().bgmEnabled).toBe(true);
   expect(
-    createProductPreferences(new MemoryStorage([['bgmEnabled', 'false']])).getSnapshot().bgmEnabled,
+    createPreferencesStore(new MemoryStorage([['bgmEnabled', 'false']])).getSnapshot().bgmEnabled,
   ).toBe(false);
 });
 
-describe('createProductPreferences', () => {
+describe('createPreferencesStore', () => {
   test('loads validated preferences and defaults invalid stored values', () => {
-    const stored = createProductPreferences(
+    const stored = createPreferencesStore(
       new MemoryStorage([
         ['locale', 'en'],
         ['bgmEnabled', 'false'],
@@ -45,7 +45,7 @@ describe('createProductPreferences', () => {
     });
     expect(stored.getSnapshot()).toBe(stored.getSnapshot());
 
-    const invalid = createProductPreferences(
+    const invalid = createPreferencesStore(
       new MemoryStorage([
         ['locale', 'ja'],
         ['bgmEnabled', 'disabled'],
@@ -62,7 +62,7 @@ describe('createProductPreferences', () => {
 
   test('publishes only real value changes and detaches subscribers', () => {
     const storage = new MemoryStorage();
-    const preferences = createProductPreferences(storage);
+    const preferences = createPreferencesStore(storage);
     const notify = vi.fn();
     const unsubscribe = preferences.subscribe(notify);
     const initial = preferences.getSnapshot();
@@ -96,7 +96,7 @@ describe('createProductPreferences', () => {
     preferences.setSfxEnabled(true);
     expect(notify).toHaveBeenCalledTimes(3);
 
-    expect(createProductPreferences(storage).getSnapshot()).toEqual({
+    expect(createPreferencesStore(storage).getSnapshot()).toEqual({
       locale: 'en',
       bgmEnabled: false,
       sfxEnabled: true,
@@ -107,14 +107,14 @@ describe('createProductPreferences', () => {
   test('keeps changed state after a failed write and retries the same value', () => {
     const values = new Map<string, string>();
     let storageAvailable = false;
-    const storage: ProductPreferenceStorage = {
+    const storage: PreferencesStorage = {
       getItem: (key) => values.get(key) ?? null,
       setItem: (key, value) => {
         if (!storageAvailable) throw new Error('storage denied');
         values.set(key, value);
       },
     };
-    const preferences = createProductPreferences(storage);
+    const preferences = createPreferencesStore(storage);
     const notify = vi.fn();
     preferences.subscribe(notify);
 
@@ -133,18 +133,18 @@ describe('createProductPreferences', () => {
     expect(preferences.getSnapshot()).not.toBe(changed);
     expect(preferences.getSnapshot().storageFailed).toBe(false);
     expect(notify).toHaveBeenCalledTimes(2);
-    expect(createProductPreferences(storage).getSnapshot().locale).toBe('en');
+    expect(createPreferencesStore(storage).getSnapshot().locale).toBe('en');
   });
 
   test('tracks failures per preference until every failed key succeeds', () => {
     const failedKeys = new Set(['locale', 'bgmEnabled']);
-    const storage: ProductPreferenceStorage = {
+    const storage: PreferencesStorage = {
       getItem: () => null,
       setItem: (key) => {
         if (failedKeys.has(key)) throw new Error(`storage denied for ${key}`);
       },
     };
-    const preferences = createProductPreferences(storage);
+    const preferences = createPreferencesStore(storage);
     const notify = vi.fn();
     preferences.subscribe(notify);
 
@@ -171,7 +171,7 @@ describe('createProductPreferences', () => {
 
   test('publishes storage status changes for same-value failure and retry', () => {
     let storageAvailable = false;
-    const preferences = createProductPreferences({
+    const preferences = createPreferencesStore({
       getItem: () => null,
       setItem: () => {
         if (!storageAvailable) throw new Error('storage denied');
@@ -196,7 +196,7 @@ describe('createProductPreferences', () => {
   });
 
   test('uses defaults when preference reads throw', () => {
-    const preferences = createProductPreferences({
+    const preferences = createPreferencesStore({
       getItem: () => {
         throw new Error('storage denied');
       },

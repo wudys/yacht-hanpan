@@ -72,10 +72,10 @@ export default [
             ...browserImportRestrictions.patterns,
             {
               group: [
-                '@/runtime/session/browser-session-store',
-                '@/runtime/session/session-holder',
+                '@/runtime/session/session-credential-store',
+                '@/runtime/session/game-session-holder',
                 '@/runtime/session/session-recovery',
-                '@/runtime/room-access/stored-room-restore',
+                '@/runtime/room-access/stored-room-reentry',
                 '@/runtime/room-access/waiting-operations',
                 '@/runtime/network/server-readiness',
               ],

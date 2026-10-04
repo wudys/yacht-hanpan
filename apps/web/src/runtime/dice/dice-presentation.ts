@@ -13,7 +13,7 @@ import { PRODUCT_CUE, type ProductCue } from '@/runtime/audio/product-cues';
 import { selectFeaturedCombination } from '@/runtime/dice/achievement-selection';
 import type { PlaybackFallbackReason, RollPlayback } from '@/runtime/dice/replay';
 import type { ProceduralDiceResources } from '@/runtime/dice/resources';
-import type { GameSessionHolder } from '@/runtime/session/session-holder';
+import type { GameSessionHolder } from '@/runtime/session/game-session-holder';
 import {
   ACHIEVEMENT_SEQUENCE_DURATION_MS,
   type AchievementKind,

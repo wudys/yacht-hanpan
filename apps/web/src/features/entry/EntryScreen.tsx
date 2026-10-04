@@ -9,7 +9,7 @@ import { CapabilityFailureView } from '@/features/entry/view/CapabilityFailureVi
 import { EntryView } from '@/features/entry/view/EntryView';
 import { PrivacyDialog } from '@/features/privacy/PrivacyDialog';
 import { type Locale, translate } from '@/i18n';
-import type { ProductAudioRuntime } from '@/runtime/audio/browser-audio-runtime';
+import type { BrowserAudioRuntime } from '@/runtime/audio/browser-audio-runtime';
 import { useScreenTelemetry } from '@/runtime/telemetry/TelemetryContext';
 
 export function EntryScreen({
@@ -17,7 +17,7 @@ export function EntryScreen({
   globalActor,
   locale,
 }: Readonly<{
-  audio: ProductAudioRuntime;
+  audio: BrowserAudioRuntime;
   globalActor: ActorRefFrom<typeof appLifecycleMachine>;
   locale: Locale;
 }>) {

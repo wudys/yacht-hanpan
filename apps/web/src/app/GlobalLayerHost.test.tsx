@@ -7,7 +7,7 @@ import { createActor, waitFor as waitForActor } from 'xstate';
 import { appLifecycleMachine } from '@/app/app-lifecycle-machine';
 import { GlobalLayerHost } from '@/app/GlobalLayerHost';
 import { APP_SCREEN_PATH } from '@/app/screen-paths';
-import { createBrowserSessionStore } from '@/runtime/session/browser-session-store';
+import { createSessionCredentialStore } from '@/runtime/session/session-credential-store';
 
 const runtime = {
   capabilities: { ok: true } as const,
@@ -25,7 +25,7 @@ test('locks and retains a non-game route while offline, then restores it online'
   const actor = createActor(appLifecycleMachine, { input: runtime }).start();
   const view = render(
     <GlobalLayerHost
-      store={createBrowserSessionStore()}
+      sessionCredentialStore={createSessionCredentialStore()}
       globalActor={actor}
       locale='en'
       routePath={APP_SCREEN_PATH.ENTRY}
@@ -65,7 +65,7 @@ test('keeps unsupported, Loading, and Game failure owners above browser offline 
   unsupported.send({ type: 'NETWORK.CHANGED', status: 'offline' });
   const view = render(
     <GlobalLayerHost
-      store={createBrowserSessionStore()}
+      sessionCredentialStore={createSessionCredentialStore()}
       globalActor={unsupported}
       locale='en'
       routePath={APP_SCREEN_PATH.ENTRY}
@@ -80,7 +80,7 @@ test('keeps unsupported, Loading, and Game failure owners above browser offline 
   interaction.send({ type: 'NETWORK.CHANGED', status: 'offline' });
   view.rerender(
     <GlobalLayerHost
-      store={createBrowserSessionStore()}
+      sessionCredentialStore={createSessionCredentialStore()}
       globalActor={interaction}
       locale='en'
       routePath={APP_SCREEN_PATH.LOADING}
@@ -92,7 +92,7 @@ test('keeps unsupported, Loading, and Game failure owners above browser offline 
 
   view.rerender(
     <GlobalLayerHost
-      store={createBrowserSessionStore()}
+      sessionCredentialStore={createSessionCredentialStore()}
       globalActor={interaction}
       locale='en'
       routePath={APP_SCREEN_PATH.GAME}
@@ -113,7 +113,7 @@ test('keeps a post-ready runtime failure visible above route and network changes
   await waitForActor(actor, (snapshot) => snapshot.matches('ready'));
   const view = render(
     <GlobalLayerHost
-      store={createBrowserSessionStore()}
+      sessionCredentialStore={createSessionCredentialStore()}
       globalActor={actor}
       locale='en'
       routePath={APP_SCREEN_PATH.GAME}
@@ -139,9 +139,14 @@ test('replacement ends the route and keeps one short reload action despite later
   const reload = vi.fn();
   vi.stubGlobal('location', { reload });
   const actor = createActor(appLifecycleMachine, { input: runtime }).start();
-  const store = createBrowserSessionStore();
+  const sessionCredentialStore = createSessionCredentialStore();
   const view = render(
-    <GlobalLayerHost store={store} globalActor={actor} locale='ko' routePath={APP_SCREEN_PATH.GAME}>
+    <GlobalLayerHost
+      sessionCredentialStore={sessionCredentialStore}
+      globalActor={actor}
+      locale='ko'
+      routePath={APP_SCREEN_PATH.GAME}
+    >
       <button type='button'>게임 조작</button>
     </GlobalLayerHost>,
   );

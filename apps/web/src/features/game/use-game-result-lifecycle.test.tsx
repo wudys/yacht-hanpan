@@ -5,9 +5,13 @@ import { useSyncExternalStore } from 'react';
 import { afterEach, expect, test, vi } from 'vitest';
 
 import { useGameResultLifecycle } from '@/features/game/use-game-result-lifecycle';
-import { createBrowserSessionStore } from '@/runtime/session/browser-session-store';
+import { createSessionCredentialStore } from '@/runtime/session/session-credential-store';
 import { authority, finishedGame } from '@/testing/game-fixtures';
-import { createGameSessionHarness, createSession, createStore } from '@/testing/game-harness';
+import {
+  createGameSessionHarness,
+  createSessionCredentialStoreSpy,
+  createSessionMock,
+} from '@/testing/game-harness';
 
 const { navigate } = vi.hoisted(() => ({ navigate: vi.fn() }));
 vi.mock('@tanstack/react-router', () => ({ useNavigate: () => navigate }));
@@ -17,7 +21,9 @@ afterEach(() => {
 });
 
 function setup(
-  store: ReturnType<typeof createStore> = createStore(),
+  sessionCredentialStore: ReturnType<
+    typeof createSessionCredentialStoreSpy
+  > = createSessionCredentialStoreSpy(),
   commandPending: boolean = false,
 ) {
   const harness = createGameSessionHarness(finishedGame('explicitForfeit', 1));
@@ -28,41 +34,47 @@ function setup(
         harness.sessions.subscribe,
         harness.sessions.getSnapshot,
       );
-      return useGameResultLifecycle(harness.sessions, store, snapshot, onIntent, commandPending);
+      return useGameResultLifecycle(
+        harness.sessions,
+        sessionCredentialStore,
+        snapshot,
+        onIntent,
+        commandPending,
+      );
     },
     { initialProps: { commandPending } },
   );
-  return { ...harness, store, result, rerender };
+  return { ...harness, sessionCredentialStore, result, rerender };
 }
 
 test('removes the finished credential once and deduplicates Result return', () => {
   const harness = setup();
-  expect(harness.store.removeRoom).toHaveBeenCalledOnce();
+  expect(harness.sessionCredentialStore.removeRoom).toHaveBeenCalledOnce();
   act(() => {
     harness.result.current();
     harness.result.current();
   });
-  expect(harness.store.removeRoom).toHaveBeenCalledOnce();
+  expect(harness.sessionCredentialStore.removeRoom).toHaveBeenCalledOnce();
   expect(harness.sessions.clear).toHaveBeenCalledOnce();
   expect(navigate).toHaveBeenCalledExactlyOnceWith({ to: '/lobby' });
 });
 
 test('removes finished credentials immediately and detaches after the pending command settles', () => {
-  const harness = setup(createStore(), true);
-  expect(harness.store.removeRoom).toHaveBeenCalledOnce();
+  const harness = setup(createSessionCredentialStoreSpy(), true);
+  expect(harness.sessionCredentialStore.removeRoom).toHaveBeenCalledOnce();
   expect(harness.session.dispose).not.toHaveBeenCalled();
   harness.rerender({ commandPending: true });
   expect(harness.session.dispose).not.toHaveBeenCalled();
   harness.rerender({ commandPending: false });
   expect(harness.session.dispose).toHaveBeenCalledOnce();
-  expect(harness.store.removeRoom).toHaveBeenCalledOnce();
+  expect(harness.sessionCredentialStore.removeRoom).toHaveBeenCalledOnce();
 });
 
 test('Result return clears immediately while a command is pending', () => {
-  const harness = setup(createStore(), true);
+  const harness = setup(createSessionCredentialStoreSpy(), true);
   act(() => harness.result.current());
   expect(harness.sessions.clear).toHaveBeenCalledOnce();
-  expect(harness.store.removeRoom).toHaveBeenCalledOnce();
+  expect(harness.sessionCredentialStore.removeRoom).toHaveBeenCalledOnce();
   expect(navigate).toHaveBeenCalledExactlyOnceWith({ to: '/lobby' });
 });
 
@@ -70,12 +82,15 @@ test('returns to Lobby even when the real browser storage cannot remove the cred
   const removeItem = vi.fn(() => {
     throw new Error('storage denied');
   });
-  const actual = createBrowserSessionStore({
+  const actual = createSessionCredentialStore({
     storage: { getItem: () => null, setItem() {}, removeItem },
   });
   actual.recordRoom(authority);
-  const store = { ...createStore(), removeRoom: vi.fn(actual.removeRoom) };
-  const harness = setup(store);
+  const sessionCredentialStore = {
+    ...createSessionCredentialStoreSpy(),
+    removeRoom: vi.fn(actual.removeRoom),
+  };
+  const harness = setup(sessionCredentialStore);
   expect(removeItem).toHaveBeenCalledOnce();
   expect(actual.initialize().recentRoom).toEqual({ status: 'ready', room: null });
   act(() => harness.result.current());
@@ -86,7 +101,7 @@ test('returns to Lobby even when the real browser storage cannot remove the cred
 test('detaches a replacement finished session independently of the previous Result', async () => {
   const harness = setup();
   await waitFor(() => expect(harness.session.dispose).toHaveBeenCalledOnce());
-  const replacement = createSession({
+  const replacement = createSessionMock({
     ...harness.session.getSnapshot(),
     game: finishedGame('connectionEnded', 0),
   });

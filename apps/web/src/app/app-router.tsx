@@ -17,15 +17,15 @@ import { AppShell } from '@/app/AppShell';
 import { APP_SCREEN_PATH } from '@/app/screen-paths';
 import { EntryScreen } from '@/features/entry/EntryScreen';
 import { LoadingScreen } from '@/features/loading/LoadingScreen';
-import type { ProductAudioRuntime } from '@/runtime/audio/browser-audio-runtime';
+import type { BrowserAudioRuntime } from '@/runtime/audio/browser-audio-runtime';
 import type { GameAudioFeedback } from '@/runtime/audio/game-audio-feedback';
 import type { RendererReadiness } from '@/runtime/dice/canvas/renderer-readiness';
 import type { DicePresentation } from '@/runtime/dice/dice-presentation';
-import type { ProductPreferences } from '@/runtime/preferences/product-preferences';
-import type { ProductProfile } from '@/runtime/profile/product-profile';
+import type { PreferencesStore } from '@/runtime/preferences/preferences-store';
+import type { ProfileSelectionStore } from '@/runtime/profile/profile-selection-store';
 import type { RoomAccess } from '@/runtime/room-access/room-access';
-import type { BrowserSessionStore } from '@/runtime/session/browser-session-store';
-import type { GameSessionHolder } from '@/runtime/session/session-holder';
+import type { GameSessionHolder } from '@/runtime/session/game-session-holder';
+import type { SessionCredentialStore } from '@/runtime/session/session-credential-store';
 import type { SessionRecovery } from '@/runtime/session/session-recovery';
 
 const LobbyScreen = lazy(() => import('@/features/lobby/LobbyScreen'));
@@ -34,15 +34,15 @@ const GameScreen = lazy(() => import('@/features/game/GameScreen'));
 export interface AppRouterContext {
   readonly activity: AbortSignal;
   readonly access: RoomAccess;
-  readonly audio: ProductAudioRuntime;
+  readonly audio: BrowserAudioRuntime;
   readonly feedback: Pick<GameAudioFeedback, 'observeCommand'>;
-  readonly preferences: ProductPreferences;
-  readonly profile: ProductProfile;
+  readonly preferences: PreferencesStore;
+  readonly profile: ProfileSelectionStore;
   readonly globalActor: ActorRefFrom<typeof appLifecycleMachine>;
   readonly renderer: RendererReadiness;
   readonly clock: Pick<ServerClock, 'now'>;
   readonly sessions: GameSessionHolder;
-  readonly store: BrowserSessionStore;
+  readonly sessionCredentialStore: SessionCredentialStore;
   readonly recovery: SessionRecovery;
   readonly presentation: DicePresentation;
 }
@@ -94,8 +94,15 @@ declare module '@tanstack/react-router' {
 }
 
 function RootLayout() {
-  const { globalActor, preferences, audio, recovery, renderer, presentation, store } =
-    rootRoute.useRouteContext();
+  const {
+    globalActor,
+    preferences,
+    audio,
+    recovery,
+    renderer,
+    presentation,
+    sessionCredentialStore,
+  } = rootRoute.useRouteContext();
   const routePath = useRouterState({ select: (state) => state.location.pathname });
   return (
     <AppShell
@@ -104,7 +111,7 @@ function RootLayout() {
       preferences={preferences}
       renderer={renderer}
       presentation={presentation}
-      store={store}
+      sessionCredentialStore={sessionCredentialStore}
       routePath={routePath}
       onOrientationGuardExit={recovery.requestSynchronization}
     >
@@ -144,8 +151,16 @@ function LobbyRoute() {
 }
 
 function GameRoute() {
-  const { audio, feedback, preferences, clock, sessions, store, recovery, presentation } =
-    gameRoute.useRouteContext();
+  const {
+    audio,
+    feedback,
+    preferences,
+    clock,
+    sessions,
+    sessionCredentialStore,
+    recovery,
+    presentation,
+  } = gameRoute.useRouteContext();
   const locale = useRouteLocale(preferences);
   return (
     <Suspense fallback={null}>
@@ -155,7 +170,7 @@ function GameRoute() {
         locale={locale}
         clock={clock}
         sessions={sessions}
-        store={store}
+        sessionCredentialStore={sessionCredentialStore}
         preferences={preferences}
         recovery={recovery}
         presentation={presentation}
@@ -164,7 +179,7 @@ function GameRoute() {
   );
 }
 
-function useRouteLocale(preferences: ProductPreferences) {
+function useRouteLocale(preferences: PreferencesStore) {
   const getLocale = useCallback(() => preferences.getSnapshot().locale, [preferences]);
   return useSyncExternalStore(preferences.subscribe, getLocale);
 }

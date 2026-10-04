@@ -2,8 +2,8 @@ import type { GameClient, GameSession } from '@repo/game-client-sdk';
 import type { ClientError } from '@repo/game-client-sdk/errors';
 
 import type { ServerReadiness } from '@/runtime/network/server-readiness';
-import type { ProductProfile } from '@/runtime/profile/product-profile';
-import type { StoredRoomRestore } from '@/runtime/room-access/stored-room-restore';
+import type { ProfileSelectionStore } from '@/runtime/profile/profile-selection-store';
+import type { StoredRoomReentry } from '@/runtime/room-access/stored-room-reentry';
 import {
   type Cancellation,
   createWaitingOperations,
@@ -11,11 +11,11 @@ import {
   type WaitingRoomSummary,
 } from '@/runtime/room-access/waiting-operations';
 import { isPermanentAuthorityFailure } from '@/runtime/session/authority-failure';
-import type { BrowserSessionStore } from '@/runtime/session/browser-session-store';
-import type { GameSessionHolder } from '@/runtime/session/session-holder';
+import type { GameSessionHolder } from '@/runtime/session/game-session-holder';
+import type { SessionCredentialStore } from '@/runtime/session/session-credential-store';
 import type { SessionRecovery } from '@/runtime/session/session-recovery';
 
-type Profile = ReturnType<ProductProfile['getSnapshot']>['selection'];
+type Profile = ReturnType<ProfileSelectionStore['getSnapshot']>['selection'];
 export type ReadinessFailure = Extract<Awaited<ReturnType<ServerReadiness['wait']>>, { ok: false }>;
 export type {
   Cancellation,
@@ -124,17 +124,17 @@ export function createRoomAccess({
   activity,
   client,
   sessions,
-  store,
+  sessionCredentialStore,
   readiness,
-  restore,
+  reentry,
   recovery,
 }: Readonly<{
   activity: AbortSignal;
   client: Pick<GameClient, 'createRoom' | 'joinRoom' | 'cancelRoom' | 'resumeRoom'>;
   sessions: GameSessionHolder;
-  store: BrowserSessionStore;
+  sessionCredentialStore: SessionCredentialStore;
   readiness: ServerReadiness;
-  restore: StoredRoomRestore;
+  reentry: StoredRoomReentry;
   recovery: Pick<SessionRecovery, 'getSnapshot' | 'subscribe'>;
 }>): RoomAccess {
   let snapshot: RoomAccessSnapshot = { status: 'idle' };
@@ -143,7 +143,7 @@ export function createRoomAccess({
   let operation: AbortController | null = null;
   let failedSession: GameSession | null = null;
   let restoreSession: GameSession | null = null;
-  const waiting = createWaitingOperations({ client, sessions, store });
+  const waiting = createWaitingOperations({ client, sessions, sessionCredentialStore });
   let phase: LocalPhase = { status: 'idle' };
   let connectionSession: GameSession | null = null;
   let handoffScheduled = false;
@@ -153,7 +153,7 @@ export function createRoomAccess({
   function compose(): RoomAccessSnapshot {
     if (disposed) return { status: 'disposed' };
     if (activity.aborted) return { status: 'replaced' };
-    const restored = restore.getSnapshot();
+    const restored = reentry.getSnapshot();
     const holder = sessions.getSnapshot();
     if (restored.status === 'playing')
       return { status: 'handoff', origin: 'restore', target: 'game' };
@@ -242,7 +242,7 @@ export function createRoomAccess({
   }
   const changed = () => refresh();
   const observeRestore = () => {
-    const restored = restore.getSnapshot();
+    const restored = reentry.getSnapshot();
     if (restored.status === 'connecting' || restored.status === 'synchronizing')
       restoreSession = sessions.getSnapshot().session;
     else if (
@@ -260,13 +260,13 @@ export function createRoomAccess({
   };
   const stops = [
     sessions.subscribe(changed),
-    restore.subscribe(observeRestore),
+    reentry.subscribe(observeRestore),
     recovery.subscribe(observeRecovery),
   ];
   activity.addEventListener('abort', changed, { once: true });
   if (
     ['connecting', 'synchronizing', 'refreshRequired', 'permanentFailure'].includes(
-      restore.getSnapshot().status,
+      reentry.getSnapshot().status,
     )
   )
     restoreSession = sessions.getSnapshot().session;
@@ -332,9 +332,9 @@ export function createRoomAccess({
     activity.addEventListener('abort', abort, { once: true });
     const active = () => current(revision) && !controller.signal.aborted;
     try {
-      restore.check();
+      reentry.check();
       if (!active()) return { status: 'stale' };
-      if (restore.getSnapshot().status !== 'idle' || sessions.getSnapshot().authority !== null)
+      if (reentry.getSnapshot().status !== 'idle' || sessions.getSnapshot().authority !== null)
         return { status: 'blocked' };
       publish({ status: 'preparing', operation: kind });
       if (!active()) return { status: 'stale' };
@@ -345,7 +345,7 @@ export function createRoomAccess({
       publish({ status: 'requesting', operation: kind });
       if (!active()) return { status: 'stale' };
       if (sessions.getSnapshot().authority !== null) return { status: 'stale' };
-      const request = { clientId: store.getClientId(), profile: input.profile };
+      const request = { clientId: sessionCredentialStore.getClientId(), profile: input.profile };
       const result = await (kind === 'create'
         ? client.createRoom(request, { signal: controller.signal })
         : client.joinRoom(
@@ -355,7 +355,7 @@ export function createRoomAccess({
       if (!active()) return { status: 'stale' };
       if (!result.ok) return { status: 'failure', stage: 'response', error: result.error };
       if (sessions.getSnapshot().authority !== null) return { status: 'stale' };
-      store.recordRoom(result.data.authority);
+      sessionCredentialStore.recordRoom(result.data.authority);
       if (!active() || sessions.getSnapshot().authority !== null) return { status: 'stale' };
       const session = sessions.installAuthority(result.data.authority);
       if (!active() || !current(revision, session)) return { status: 'stale' };
@@ -439,7 +439,7 @@ export function createRoomAccess({
     },
     checkStoredRoom: () => {
       if (!disposed && !activity.aborted) {
-        restore.check();
+        reentry.check();
         refresh(false);
       }
     },
@@ -456,13 +456,13 @@ export function createRoomAccess({
     confirmAuthorityFailure() {
       if (disposed || activity.aborted) return;
       if (snapshot.status === 'authorityFailure' && snapshot.origin === 'restore') {
-        restore.confirmPermanentFailure();
+        reentry.confirmPermanentFailure();
         refresh(false);
         return;
       }
       const { session, authority, sessionSnapshot } = sessions.getSnapshot();
       if (!session || session !== failedSession || !authority || sessionSnapshot.game) return;
-      store.removeRoom(authority.roomId);
+      sessionCredentialStore.removeRoom(authority.roomId);
       const latest = sessions.getSnapshot();
       if (
         !disposed &&
@@ -473,7 +473,7 @@ export function createRoomAccess({
         sessions.clear();
     },
     completeHandoff() {
-      const outcome = restore.getSnapshot();
+      const outcome = reentry.getSnapshot();
       if (
         disposed ||
         activity.aborted ||
@@ -485,8 +485,8 @@ export function createRoomAccess({
       // Let every source and access observer see the confirmed restore before telemetry attribution changes.
       queueMicrotask(() => {
         handoffScheduled = false;
-        if (!disposed && !activity.aborted && restore.getSnapshot() === outcome)
-          restore.completeHandoff();
+        if (!disposed && !activity.aborted && reentry.getSnapshot() === outcome)
+          reentry.completeHandoff();
       });
     },
     dispose() {

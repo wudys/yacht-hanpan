@@ -5,12 +5,12 @@ import type { ActorRefFrom } from 'xstate';
 import type { appLifecycleMachine } from '@/app/app-lifecycle-machine';
 import { GlobalLayerHost } from '@/app/GlobalLayerHost';
 import { translate } from '@/i18n';
-import type { ProductAudioRuntime } from '@/runtime/audio/browser-audio-runtime';
+import type { BrowserAudioRuntime } from '@/runtime/audio/browser-audio-runtime';
 import type { RendererReadiness } from '@/runtime/dice/canvas/renderer-readiness';
 import type { DicePresentation } from '@/runtime/dice/dice-presentation';
 import { PersistentDiceCanvas } from '@/runtime/dice/PersistentDiceCanvas';
-import type { ProductPreferences } from '@/runtime/preferences/product-preferences';
-import type { BrowserSessionStore } from '@/runtime/session/browser-session-store';
+import type { PreferencesStore } from '@/runtime/preferences/preferences-store';
+import type { SessionCredentialStore } from '@/runtime/session/session-credential-store';
 import { GameFrame } from '@/ui/layout';
 
 const wrapperPatternUrl = requireGameAsset('brand.wrapper-pattern').url;
@@ -26,17 +26,17 @@ export function AppShell({
   preferences,
   renderer,
   presentation,
-  store,
+  sessionCredentialStore,
   routePath,
   onOrientationGuardExit,
   children,
 }: Readonly<{
-  audio: ProductAudioRuntime;
+  audio: BrowserAudioRuntime;
   globalActor: ActorRefFrom<typeof appLifecycleMachine>;
-  preferences: ProductPreferences;
+  preferences: PreferencesStore;
   renderer: RendererReadiness;
   presentation: DicePresentation;
-  store: BrowserSessionStore;
+  sessionCredentialStore: SessionCredentialStore;
   routePath: string;
   onOrientationGuardExit: () => void;
   children: ReactNode;
@@ -59,7 +59,7 @@ export function AppShell({
         logo={<img className='web-logo' src={wrapperLogoUrl} alt='' draggable={false} />}
       >
         <GlobalLayerHost
-          store={store}
+          sessionCredentialStore={sessionCredentialStore}
           globalActor={globalActor}
           locale={locale}
           routePath={routePath}

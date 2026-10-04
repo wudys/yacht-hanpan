@@ -14,8 +14,8 @@ import {
 } from '@/bootstrap/static-capabilities';
 import { EntryScreen } from '@/features/entry/EntryScreen';
 import { LOCALE, type Locale, translate } from '@/i18n';
-import type { ProductAudioRuntime } from '@/runtime/audio/browser-audio-runtime';
-import { createBrowserSessionStore } from '@/runtime/session/browser-session-store';
+import type { BrowserAudioRuntime } from '@/runtime/audio/browser-audio-runtime';
+import { createSessionCredentialStore } from '@/runtime/session/session-credential-store';
 
 const navigate = vi.hoisted(() => vi.fn());
 
@@ -32,7 +32,7 @@ afterEach(() => {
   navigate.mockReset();
 });
 
-function createAudio(): ProductAudioRuntime {
+function createAudio(): BrowserAudioRuntime {
   return {
     supported: true,
     activate: vi.fn(() => Promise.resolve()),
@@ -68,7 +68,7 @@ function renderEntry({
   render(
     <div className='game-logical-canvas'>
       <GlobalLayerHost
-        store={createBrowserSessionStore()}
+        sessionCredentialStore={createSessionCredentialStore()}
         globalActor={actor}
         locale={locale}
         routePath={APP_SCREEN_PATH.ENTRY}

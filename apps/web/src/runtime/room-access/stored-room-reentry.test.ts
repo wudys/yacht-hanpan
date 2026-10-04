@@ -6,9 +6,12 @@ import { parsePublicRoom } from '@repo/game-protocol/socket';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 
 import { createServerReadiness, type ServerReadiness } from '@/runtime/network/server-readiness';
-import { createStoredRoomRestore } from '@/runtime/room-access/stored-room-restore';
-import type { BrowserSessionStore, RecentRoom } from '@/runtime/session/browser-session-store';
-import { createGameSessionHolder } from '@/runtime/session/session-holder';
+import { createStoredRoomReentry } from '@/runtime/room-access/stored-room-reentry';
+import { createGameSessionHolder } from '@/runtime/session/game-session-holder';
+import type {
+  RecentRoom,
+  SessionCredentialStore,
+} from '@/runtime/session/session-credential-store';
 
 const RECENT_ROOM = {
   roomId: '019cebf0-79b8-7a22-8000-000000000001',
@@ -60,18 +63,18 @@ describe('Lobby reentry', () => {
     'does not clear current %s when confirming an old restore failure',
     async (current) => {
       const session = createSessionFixture();
-      const store = createStore(RECENT_ROOM);
+      const sessionCredentialStore = createStore(RECENT_ROOM);
       const holder = createGameSessionHolder({ createSession: () => session.value });
-      const restore = createStoredRoomRestore({
+      const reentry = createStoredRoomReentry({
         client: createClient(session.value, {
           ok: false,
           error: { kind: 'server', error: { code: PUBLIC_ERROR_CODE.ROOM_NOT_FOUND, params: {} } },
         }),
         readiness: readyReadiness(),
         sessions: holder,
-        store,
+        sessionCredentialStore,
       });
-      restore.check();
+      reentry.check();
       await flushPromises();
       const installed = {
         ...RECENT_ROOM,
@@ -83,11 +86,11 @@ describe('Lobby reentry', () => {
       holder.installAuthority(installed);
       if (current === 'Game') session.publish({ game: PLAYING_GAME });
       const clear = vi.spyOn(holder, 'clear');
-      restore.confirmPermanentFailure();
+      reentry.confirmPermanentFailure();
       expect(clear).not.toHaveBeenCalled();
-      expect(store.removeRoom).not.toHaveBeenCalled();
+      expect(sessionCredentialStore.removeRoom).not.toHaveBeenCalled();
       expect(holder.getSnapshot().authority).toEqual(installed);
-      restore.dispose();
+      reentry.dispose();
       holder.dispose();
     },
   );
@@ -95,15 +98,15 @@ describe('Lobby reentry', () => {
     'does not clear a later %s when confirming a failed pending restore',
     async (arrival) => {
       const session = createSessionFixture();
-      const store = createStore(RECENT_ROOM);
+      const sessionCredentialStore = createStore(RECENT_ROOM);
       const holder = createGameSessionHolder({ createSession: () => session.value });
-      const restore = createStoredRoomRestore({
+      const reentry = createStoredRoomReentry({
         client: createClient(session.value),
         readiness: readyReadiness(),
         sessions: holder,
-        store,
+        sessionCredentialStore,
       });
-      restore.check();
+      reentry.check();
       await flushPromises();
       session.publish({ game: PLAYING_GAME });
       session.resolveConnect({
@@ -111,20 +114,20 @@ describe('Lobby reentry', () => {
         error: { kind: 'server', error: { code: PUBLIC_ERROR_CODE.ROOM_NOT_FOUND, params: {} } },
       });
       await flushPromises();
-      expect(restore.getSnapshot().status).toBe('permanentFailure');
+      expect(reentry.getSnapshot().status).toBe('permanentFailure');
       const publishNewGame = () =>
         session.publish({
           game: { ...PLAYING_GAME, stateVersion: 2 as GameSnapshot['stateVersion'] },
         });
       if (arrival === 'Game') publishNewGame();
-      else vi.mocked(store.removeRoom).mockImplementation(publishNewGame);
+      else vi.mocked(sessionCredentialStore.removeRoom).mockImplementation(publishNewGame);
       const clear = vi.spyOn(holder, 'clear');
-      restore.confirmPermanentFailure();
+      reentry.confirmPermanentFailure();
       expect(clear).not.toHaveBeenCalled();
       expect(holder.getSnapshot().sessionSnapshot?.game?.stateVersion).toBe(2);
-      expect(restore.getSnapshot()).toEqual({ status: 'idle' });
-      if (arrival === 'Game') expect(store.removeRoom).not.toHaveBeenCalled();
-      restore.dispose();
+      expect(reentry.getSnapshot()).toEqual({ status: 'idle' });
+      if (arrival === 'Game') expect(sessionCredentialStore.removeRoom).not.toHaveBeenCalled();
+      reentry.dispose();
       holder.dispose();
     },
   );
@@ -133,31 +136,31 @@ describe('Lobby reentry', () => {
     const session = createSessionFixture();
     const replacement = createSessionFixture();
     const createSession = vi.fn(() => session.value);
-    const store = createStore(RECENT_ROOM);
+    const sessionCredentialStore = createStore(RECENT_ROOM);
     const holder = createGameSessionHolder({ createSession });
-    const restore = createStoredRoomRestore({
+    const reentry = createStoredRoomReentry({
       client: createClient(session.value),
       readiness: readyReadiness(),
       sessions: holder,
-      store,
+      sessionCredentialStore,
     });
-    restore.check();
+    reentry.check();
     await flushPromises();
     session.resolveConnect({
       ok: false,
       error: { kind: 'server', error: { code: PUBLIC_ERROR_CODE.ROOM_NOT_FOUND, params: {} } },
     });
     await flushPromises();
-    expect(restore.getSnapshot().status).toBe('permanentFailure');
+    expect(reentry.getSnapshot().status).toBe('permanentFailure');
     holder.clear();
     createSession.mockReturnValueOnce(replacement.value);
     holder.installAuthority({ ...RECENT_ROOM, seatIndex: 0 });
     const clear = vi.spyOn(holder, 'clear');
-    restore.confirmPermanentFailure();
+    reentry.confirmPermanentFailure();
     expect(clear).not.toHaveBeenCalled();
-    expect(store.removeRoom).not.toHaveBeenCalled();
+    expect(sessionCredentialStore.removeRoom).not.toHaveBeenCalled();
     expect(holder.getSnapshot().session).toBe(replacement.value);
-    restore.dispose();
+    reentry.dispose();
     holder.dispose();
   });
 
@@ -167,11 +170,11 @@ describe('Lobby reentry', () => {
     const session = createSessionFixture();
     const holder = createGameSessionHolder({ createSession: () => session.value });
     const client = createClient(session.value);
-    const reentry = createStoredRoomRestore({
+    const reentry = createStoredRoomReentry({
       client,
       readiness: { wait: () => ready.promise },
       sessions: holder,
-      store: createStore(RECENT_ROOM),
+      sessionCredentialStore: createStore(RECENT_ROOM),
       now: () => time,
     });
     const attempt = vi.fn();
@@ -200,11 +203,11 @@ describe('Lobby reentry', () => {
     async (order) => {
       const session = createSessionFixture();
       const holder = createGameSessionHolder({ createSession: () => session.value });
-      const reentry = createStoredRoomRestore({
+      const reentry = createStoredRoomReentry({
         client: createClient(session.value),
         readiness: readyReadiness(),
         sessions: holder,
-        store: createStore(RECENT_ROOM),
+        sessionCredentialStore: createStore(RECENT_ROOM),
       });
       const event = vi.fn();
       const handoff = () => {
@@ -235,11 +238,11 @@ describe('Lobby reentry', () => {
     const second = createSessionFixture();
     const createSession = vi.fn().mockReturnValueOnce(first.value).mockReturnValue(second.value);
     const holder = createGameSessionHolder({ createSession });
-    const reentry = createStoredRoomRestore({
+    const reentry = createStoredRoomReentry({
       client: createClient(first.value),
       readiness: readyReadiness(),
       sessions: holder,
-      store: createStore(RECENT_ROOM),
+      sessionCredentialStore: createStore(RECENT_ROOM),
     });
     const event = vi.fn();
     reentry.subscribeAttempt(event);
@@ -268,14 +271,14 @@ describe('Lobby reentry', () => {
   test('reports a permanent failure once before confirmation clears the candidate', async () => {
     const session = createSessionFixture();
     const holder = createGameSessionHolder({ createSession: () => session.value });
-    const reentry = createStoredRoomRestore({
+    const reentry = createStoredRoomReentry({
       client: createClient(session.value, {
         ok: false,
         error: { kind: 'server', error: { code: PUBLIC_ERROR_CODE.ROOM_NOT_FOUND, params: {} } },
       }),
       readiness: readyReadiness(),
       sessions: holder,
-      store: createStore(RECENT_ROOM),
+      sessionCredentialStore: createStore(RECENT_ROOM),
     });
     const event = vi.fn();
     reentry.subscribeAttempt(event);
@@ -298,16 +301,16 @@ describe('Lobby reentry', () => {
   test('preserves authority and exposes malformed readiness in the failed attempt', async () => {
     const session = createSessionFixture();
     const holder = createGameSessionHolder({ createSession: () => session.value });
-    const store = createStore(RECENT_ROOM);
+    const sessionCredentialStore = createStore(RECENT_ROOM);
     const client = createClient(session.value);
-    const reentry = createStoredRoomRestore({
+    const reentry = createStoredRoomReentry({
       client,
       readiness: createServerReadiness(
         'https://game.example',
         async () => new Response('not json'),
       ),
       sessions: holder,
-      store,
+      sessionCredentialStore,
     });
     const event = vi.fn();
     reentry.subscribeAttempt(event);
@@ -321,7 +324,7 @@ describe('Lobby reentry', () => {
         { phase: 'finished', outcome: 'failure', durationMs: expect.any(Number), error },
       ]);
       expect(client.resumeRoom).not.toHaveBeenCalled();
-      expect(store.removeRoom).not.toHaveBeenCalled();
+      expect(sessionCredentialStore.removeRoom).not.toHaveBeenCalled();
       expect(session.value.connect).not.toHaveBeenCalled();
     } finally {
       reentry.dispose();
@@ -330,16 +333,16 @@ describe('Lobby reentry', () => {
   });
 
   test('blocks fresh admission when recovery storage cannot be read', () => {
-    const store = createStore(null);
-    store.refreshRecentRoom = () => ({ status: 'unavailable' });
+    const sessionCredentialStore = createStore(null);
+    sessionCredentialStore.refreshRecentRoom = () => ({ status: 'unavailable' });
     const readiness = readyReadiness();
     const session = createSessionFixture();
     const client = createClient(session.value);
-    const reentry = createStoredRoomRestore({
+    const reentry = createStoredRoomReentry({
       client,
       readiness,
       sessions: createGameSessionHolder({ createSession: () => session.value }),
-      store,
+      sessionCredentialStore,
     });
     reentry.check();
     expect(reentry.getSnapshot()).toEqual({
@@ -349,18 +352,18 @@ describe('Lobby reentry', () => {
     });
     expect(readiness.wait).not.toHaveBeenCalled();
     expect(client.resumeRoom).not.toHaveBeenCalled();
-    expect(store.removeRoom).not.toHaveBeenCalled();
+    expect(sessionCredentialStore.removeRoom).not.toHaveBeenCalled();
   });
 
   test('does not start readiness without a recent room and deduplicates start', async () => {
     const readiness = readyReadiness();
     const session = createSessionFixture();
     const holder = createGameSessionHolder({ createSession: () => session.value });
-    const reentry = createStoredRoomRestore({
+    const reentry = createStoredRoomReentry({
       client: createClient(session.value),
       readiness,
       sessions: holder,
-      store: createStore(null),
+      sessionCredentialStore: createStore(null),
     });
 
     const event = vi.fn();
@@ -378,18 +381,18 @@ describe('Lobby reentry', () => {
     const session = createSessionFixture();
     const synchronization = deferred<Awaited<ReturnType<GameSession['synchronize']>>>();
     vi.mocked(session.value.synchronize).mockReturnValue(synchronization.promise);
-    const store = createStore(RECENT_ROOM);
+    const sessionCredentialStore = createStore(RECENT_ROOM);
     const holder = createGameSessionHolder({ createSession: () => session.value });
     const client = createClient(session.value, {
       ok: true,
       data: { seatIndex: 0, view: { room: WAITING_ROOM, game: null, presence: PRESENCE } },
       meta: {},
     });
-    const reentry = createStoredRoomRestore({
+    const reentry = createStoredRoomReentry({
       client,
       readiness: readyReadiness(),
       sessions: holder,
-      store,
+      sessionCredentialStore,
     });
 
     reentry.check();
@@ -398,7 +401,7 @@ describe('Lobby reentry', () => {
 
     expect(client.resumeRoom).toHaveBeenCalledOnce();
     expect(reentry.getSnapshot().status).toBe('connecting');
-    expect(store.recordRoom).not.toHaveBeenCalled();
+    expect(sessionCredentialStore.recordRoom).not.toHaveBeenCalled();
     expect(holder.getSnapshot().room).toBe(WAITING_ROOM);
 
     session.publish({ connection: 'connected', presence: PRESENCE });
@@ -431,11 +434,11 @@ describe('Lobby reentry', () => {
       data: { seatIndex: 0, view: { room: PLAYING_ROOM, game: PLAYING_GAME, presence: PRESENCE } },
       meta: {},
     });
-    const reentry = createStoredRoomRestore({
+    const reentry = createStoredRoomReentry({
       client,
       readiness: readyReadiness(),
       sessions: holder,
-      store: createStore(RECENT_ROOM),
+      sessionCredentialStore: createStore(RECENT_ROOM),
     });
 
     reentry.check();
@@ -459,11 +462,11 @@ describe('Lobby reentry', () => {
     const synchronization = deferred<Awaited<ReturnType<GameSession['synchronize']>>>();
     vi.mocked(session.value.synchronize).mockReturnValue(synchronization.promise);
     const holder = createGameSessionHolder({ createSession: () => session.value });
-    const reentry = createStoredRoomRestore({
+    const reentry = createStoredRoomReentry({
       client: createClient(session.value),
       readiness: readyReadiness(),
       sessions: holder,
-      store: createStore(RECENT_ROOM),
+      sessionCredentialStore: createStore(RECENT_ROOM),
     });
 
     reentry.check();
@@ -482,7 +485,7 @@ describe('Lobby reentry', () => {
   test('hands a newly finished authoritative SDK snapshot to Game for Result rendering', async () => {
     const session = createSessionFixture();
     const holder = createGameSessionHolder({ createSession: () => session.value });
-    const reentry = createStoredRoomRestore({
+    const reentry = createStoredRoomReentry({
       client: createClient(session.value, {
         ok: true,
         data: {
@@ -493,7 +496,7 @@ describe('Lobby reentry', () => {
       }),
       readiness: readyReadiness(),
       sessions: holder,
-      store: createStore(RECENT_ROOM),
+      sessionCredentialStore: createStore(RECENT_ROOM),
     });
 
     reentry.check();
@@ -511,56 +514,56 @@ describe('Lobby reentry', () => {
 
   test('keeps permanent-failure credentials until the user confirms', async () => {
     const session = createSessionFixture();
-    const store = createStore(RECENT_ROOM);
+    const sessionCredentialStore = createStore(RECENT_ROOM);
     const holder = createGameSessionHolder({ createSession: () => session.value });
     const error = {
       kind: 'server' as const,
       error: { code: PUBLIC_ERROR_CODE.ROOM_NOT_FOUND, params: {} },
     };
-    const reentry = createStoredRoomRestore({
+    const reentry = createStoredRoomReentry({
       client: createClient(session.value, { ok: false, error }),
       readiness: readyReadiness(),
       sessions: holder,
-      store,
+      sessionCredentialStore,
     });
 
     reentry.check();
     await flushPromises();
 
     expect(reentry.getSnapshot()).toEqual({ status: 'permanentFailure', error });
-    expect(store.removeRoom).not.toHaveBeenCalled();
+    expect(sessionCredentialStore.removeRoom).not.toHaveBeenCalled();
 
     reentry.confirmPermanentFailure();
     await flushPromises();
 
-    expect(store.removeRoom).toHaveBeenCalledWith(RECENT_ROOM.roomId);
+    expect(sessionCredentialStore.removeRoom).toHaveBeenCalledWith(RECENT_ROOM.roomId);
     expect(holder.getSnapshot().authority).toBeNull();
     expect(reentry.getSnapshot()).toEqual({ status: 'idle' });
   });
 
   test('uses refresh-only after the HTTP client exhausts a transient resume failure', async () => {
     const session = createSessionFixture();
-    const store = createStore(RECENT_ROOM);
+    const sessionCredentialStore = createStore(RECENT_ROOM);
     const error = createTransportError(CLIENT_ERROR_CODE.NETWORK_UNAVAILABLE);
-    const reentry = createStoredRoomRestore({
+    const reentry = createStoredRoomReentry({
       client: createClient(session.value, { ok: false, error }),
       readiness: readyReadiness(),
       sessions: createGameSessionHolder({ createSession: () => session.value }),
-      store,
+      sessionCredentialStore,
     });
 
     reentry.check();
     await flushPromises();
 
     expect(reentry.getSnapshot()).toEqual({ status: 'refreshRequired', error });
-    expect(store.removeRoom).not.toHaveBeenCalled();
+    expect(sessionCredentialStore.removeRoom).not.toHaveBeenCalled();
   });
 
   test('ends a completed transient first connection failure without waiting for the budget', async () => {
     vi.useFakeTimers();
     const session = createSessionFixture();
     const holder = createGameSessionHolder({ createSession: () => session.value });
-    const reentry = createStoredRoomRestore({
+    const reentry = createStoredRoomReentry({
       client: createClient(session.value, {
         ok: true,
         data: {
@@ -571,7 +574,7 @@ describe('Lobby reentry', () => {
       }),
       readiness: readyReadiness(),
       sessions: holder,
-      store: createStore(RECENT_ROOM),
+      sessionCredentialStore: createStore(RECENT_ROOM),
     });
 
     reentry.check();
@@ -601,26 +604,26 @@ describe('Lobby reentry', () => {
   test('ends a completed transient first synchronization failure immediately', async () => {
     const session = createSessionFixture();
     const holder = createGameSessionHolder({ createSession: () => session.value });
-    const store = createStore(RECENT_ROOM);
+    const sessionCredentialStore = createStore(RECENT_ROOM);
     const error = createTransportError(CLIENT_ERROR_CODE.ACK_TIMEOUT);
     vi.mocked(session.value.synchronize).mockResolvedValueOnce({ ok: false, error });
-    const restore = createStoredRoomRestore({
+    const reentry = createStoredRoomReentry({
       client: createClient(session.value),
       readiness: readyReadiness(),
       sessions: holder,
-      store,
+      sessionCredentialStore,
     });
-    restore.check();
+    reentry.check();
     await flushPromises();
     session.publish({ connection: 'connected', presence: PRESENCE });
     await flushPromises();
-    expect(restore.getSnapshot()).toEqual({ status: 'refreshRequired', error });
+    expect(reentry.getSnapshot()).toEqual({ status: 'refreshRequired', error });
     expect(session.value.disconnect).toHaveBeenCalledOnce();
-    expect(store.removeRoom).not.toHaveBeenCalled();
+    expect(sessionCredentialStore.removeRoom).not.toHaveBeenCalled();
     session.resolveConnect({ ok: true });
     await flushPromises();
-    expect(restore.getSnapshot()).toEqual({ status: 'refreshRequired', error });
-    restore.dispose();
+    expect(reentry.getSnapshot()).toEqual({ status: 'refreshRequired', error });
+    reentry.dispose();
     holder.dispose();
   });
 
@@ -630,11 +633,11 @@ describe('Lobby reentry', () => {
     const cause = new Error('transport invariant');
     const onUnexpected = vi.fn();
     vi.mocked(client.resumeRoom).mockRejectedValueOnce(cause);
-    const reentry = createStoredRoomRestore({
+    const reentry = createStoredRoomReentry({
       client,
       readiness: readyReadiness(),
       sessions: createGameSessionHolder({ createSession: () => session.value }),
-      store: createStore(RECENT_ROOM),
+      sessionCredentialStore: createStore(RECENT_ROOM),
       onUnexpected,
     });
 
@@ -658,11 +661,11 @@ describe('Lobby reentry', () => {
       if (stage === 'synchronize')
         vi.mocked(session.value.synchronize).mockRejectedValueOnce(cause);
       const holder = createGameSessionHolder({ createSession: () => session.value });
-      const reentry = createStoredRoomRestore({
+      const reentry = createStoredRoomReentry({
         client: createClient(session.value),
         readiness,
         sessions: holder,
-        store: createStore(RECENT_ROOM),
+        sessionCredentialStore: createStore(RECENT_ROOM),
         onUnexpected,
       });
       reentry.check();
@@ -687,11 +690,11 @@ describe('Lobby reentry', () => {
     );
     const holder = createGameSessionHolder({ createSession: () => session.value });
     const onUnexpected = vi.fn();
-    const reentry = createStoredRoomRestore({
+    const reentry = createStoredRoomReentry({
       client,
       sessions: holder,
       readiness: readyReadiness(),
-      store: createStore(RECENT_ROOM),
+      sessionCredentialStore: createStore(RECENT_ROOM),
       onUnexpected,
     });
     reentry.check();
@@ -701,14 +704,14 @@ describe('Lobby reentry', () => {
     await flushPromises();
     expect(onUnexpected).not.toHaveBeenCalled();
     holder.dispose();
-    const failed = createStoredRoomRestore({
+    const failed = createStoredRoomReentry({
       client: createClient(session.value, {
         ok: false,
         error: createTransportError(CLIENT_ERROR_CODE.NETWORK_UNAVAILABLE),
       }),
       sessions: createGameSessionHolder({ createSession: () => session.value }),
       readiness: readyReadiness(),
-      store: createStore(RECENT_ROOM),
+      sessionCredentialStore: createStore(RECENT_ROOM),
       onUnexpected,
     });
     failed.check();
@@ -722,7 +725,7 @@ describe('Lobby reentry', () => {
     vi.useFakeTimers();
     const session = createSessionFixture();
     const holder = createGameSessionHolder({ createSession: () => session.value });
-    const reentry = createStoredRoomRestore({
+    const reentry = createStoredRoomReentry({
       client: createClient(session.value, {
         ok: true,
         data: {
@@ -733,7 +736,7 @@ describe('Lobby reentry', () => {
       }),
       readiness: readyReadiness(),
       sessions: holder,
-      store: createStore(RECENT_ROOM),
+      sessionCredentialStore: createStore(RECENT_ROOM),
     });
 
     reentry.check();
@@ -755,7 +758,7 @@ function readyReadiness(): ServerReadiness {
   return { wait: vi.fn(() => Promise.resolve({ ok: true as const })) };
 }
 
-function createStore(recentRoom: RecentRoom | null): BrowserSessionStore {
+function createStore(recentRoom: RecentRoom | null): SessionCredentialStore {
   return {
     removeRoom: vi.fn(() => {}),
     initialize: () => ({

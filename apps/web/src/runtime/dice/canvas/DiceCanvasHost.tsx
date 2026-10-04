@@ -8,7 +8,7 @@ import type { RendererReadiness } from '@/runtime/dice/canvas/renderer-readiness
 import { warmupRenderer } from '@/runtime/dice/canvas/warmup-renderer';
 import type { DicePresentation } from '@/runtime/dice/dice-presentation';
 import { DICE_CANVAS_VIEWPORT_SIZE } from '@/runtime/dice/game-dice-layout';
-import { DiceRollWarmupScene } from '@/runtime/dice/renderer';
+import { DiceWarmupScene } from '@/runtime/dice/renderer';
 
 function WarmupScene({
   renderer,
@@ -22,7 +22,7 @@ function WarmupScene({
     void renderer.run(snapshot.attempt, () => warmupRenderer(gl, scene, camera));
   }, [renderer, snapshot.attempt, gl, scene, camera, resources]);
   return resources === null ? null : (
-    <DiceRollWarmupScene resources={resources} visible={snapshot.status === 'warming'} />
+    <DiceWarmupScene resources={resources} visible={snapshot.status === 'warming'} />
   );
 }
 

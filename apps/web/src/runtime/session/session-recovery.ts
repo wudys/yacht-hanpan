@@ -3,8 +3,8 @@ import { CLIENT_ERROR_CODE } from '@repo/game-client-sdk/errors';
 import { PUBLIC_ERROR_CODE } from '@repo/game-protocol';
 
 import { isPermanentAuthorityFailure } from '@/runtime/session/authority-failure';
+import type { GameSessionHolder } from '@/runtime/session/game-session-holder';
 import type { RecoveryAttemptEvent } from '@/runtime/session/recovery-attempt';
-import type { GameSessionHolder } from '@/runtime/session/session-holder';
 
 const SESSION_RECOVERY_BUDGET_MS = 30_000;
 

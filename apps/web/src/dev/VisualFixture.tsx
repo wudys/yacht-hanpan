@@ -2,7 +2,7 @@ import { requireGameAsset, resolveCharacterImageAssetId } from '@repo/game-asset
 import { MAX_ROLLS_PER_TURN } from '@repo/yacht-rules';
 import { type CSSProperties, type ReactNode, useState } from 'react';
 
-import { createAnchorGame, createAnchorResult } from '@/dev/anchor-models';
+import { createFixtureGame, createFixtureResult } from '@/dev/fixture-models';
 import { createGameBoardPresentation } from '@/features/game/game-presentation';
 import { type CategoryLabels, GameBoard, GameResultView, ScoreTable } from '@/features/game/view';
 import { AchievementSequence } from '@/features/game/view/AchievementSequence';
@@ -17,20 +17,20 @@ const RESULT_REASON_MESSAGE = {
   timeout: 'game.resultTimeout',
   'connection-ended': 'game.resultConnectionEnded',
 } as const satisfies Readonly<
-  Record<Exclude<ReturnType<typeof createAnchorResult>['reason'], 'normal'>, MessageKey>
+  Record<Exclude<ReturnType<typeof createFixtureResult>['reason'], 'normal'>, MessageKey>
 >;
 
-export type AnchorProps = Readonly<{
+export type VisualFixtureProps = Readonly<{
   anchor: string;
   mode: string;
   locale: Locale;
   replay?: ReactNode;
 }>;
 
-export function Anchor({ anchor, mode, locale, replay }: AnchorProps) {
+export function VisualFixture({ anchor, mode, locale, replay }: VisualFixtureProps) {
   const t = (key: MessageKeyWithoutParams) => translate(locale, key);
-  const result = createAnchorResult(mode);
-  const model = anchor === 'result' ? result.model : createAnchorGame(mode);
+  const result = createFixtureResult(mode);
+  const model = anchor === 'result' ? result.model : createFixtureGame(mode);
   const categories = Object.fromEntries(
     model.scoreRows.map(({ categoryId }) => [categoryId, t(`category.${categoryId}`)]),
   ) as CategoryLabels;

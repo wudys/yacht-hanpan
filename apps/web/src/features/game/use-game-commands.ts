@@ -4,13 +4,13 @@ import type { CommandResult, CommandRetry } from '@repo/game-client-sdk/session'
 import { PUBLIC_ERROR_CODE } from '@repo/game-protocol';
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
-import type { ProductAudioRuntime } from '@/runtime/audio/browser-audio-runtime';
+import type { BrowserAudioRuntime } from '@/runtime/audio/browser-audio-runtime';
 import type { GameAudioFeedback } from '@/runtime/audio/game-audio-feedback';
 import { PRODUCT_CUE, type ProductCue } from '@/runtime/audio/product-cues';
 import type {
   GameSessionHolder,
   GameSessionHolderSnapshot,
-} from '@/runtime/session/session-holder';
+} from '@/runtime/session/game-session-holder';
 import type { SessionRecovery, SessionRecoverySnapshot } from '@/runtime/session/session-recovery';
 import { reportClientFailure } from '@/runtime/telemetry/error-policy';
 import { useTelemetry } from '@/runtime/telemetry/TelemetryContext';
@@ -29,7 +29,7 @@ type CommandRetryNotice = Readonly<{
 export function useGameCommands(
   sessions: GameSessionHolder,
   recovery: SessionRecovery,
-  audio: ProductAudioRuntime,
+  audio: BrowserAudioRuntime,
   feedback: Pick<GameAudioFeedback, 'observeCommand'>,
 ) {
   const telemetry = useTelemetry();

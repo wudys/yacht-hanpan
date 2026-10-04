@@ -7,7 +7,7 @@ import {
   DESKTOP_MAX_SCALE,
   isUnsupportedCoarseLandscape,
   MOBILE_MAX_WIDTH,
-} from '@/ui/layout/metrics';
+} from '@/ui/layout/frame-metrics';
 
 describe('computeFrameMetrics', () => {
   test.each([

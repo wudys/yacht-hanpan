@@ -6,14 +6,14 @@ import { expect, test, vi } from 'vitest';
 
 import GameScreen from '@/features/game/GameScreen';
 import { LOCALE, translate } from '@/i18n';
-import { createProductPreferences } from '@/runtime/preferences/product-preferences';
+import { createPreferencesStore } from '@/runtime/preferences/preferences-store';
 import { commandSuccess } from '@/testing/game-fixtures';
 import {
-  createAudio,
+  createAudioMock,
   createGameSessionHarness,
-  createPresentation,
-  createRecovery,
-  createStore,
+  createPresentationFake,
+  createRecoveryFake,
+  createSessionCredentialStoreSpy,
 } from '@/testing/game-harness';
 
 vi.mock('@tanstack/react-router', () => ({ useNavigate: () => vi.fn() }));
@@ -27,13 +27,13 @@ for (const locale of [LOCALE.KO, LOCALE.EN]) {
       vi.useFakeTimers();
       const harness = {
         ...createGameSessionHarness(),
-        audio: createAudio(),
+        audio: createAudioMock(),
         feedback: { observeCommand: vi.fn() },
         clock: { now: () => 10_000 },
-        store: createStore(),
-        preferences: createProductPreferences({ getItem: () => null, setItem: () => undefined }),
-        presentation: createPresentation(),
-        recovery: createRecovery(),
+        sessionCredentialStore: createSessionCredentialStoreSpy(),
+        preferences: createPreferencesStore({ getItem: () => null, setItem: () => undefined }),
+        presentation: createPresentationFake(),
+        recovery: createRecoveryFake(),
       };
       try {
         render(<GameScreen {...harness} locale={locale} />);

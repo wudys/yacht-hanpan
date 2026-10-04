@@ -11,7 +11,6 @@ import {
 } from 'react';
 
 import {
-  useDeadlineReadiness,
   useDelayedRollSpinner,
   useViewerTurnSummaryEmphasis,
 } from '@/features/game/game-display-hooks';
@@ -25,9 +24,10 @@ import {
   createGameScorePresentation,
   createResultPresentation,
 } from '@/features/game/game-presentation';
-import { GameDeadlineDisplay } from '@/features/game/GameDeadlineDisplay';
-import { GamePresenceNotice, GamePresenceProvider } from '@/features/game/GamePresenceNotice';
 import { GameRecoveryFrame } from '@/features/game/GameRecoveryFrame';
+import { useDeadlineReadiness } from '@/features/game/hud/game-deadline-hooks';
+import { GameDeadlineDisplay } from '@/features/game/hud/GameDeadlineDisplay';
+import { GamePresenceNotice, GamePresenceProvider } from '@/features/game/hud/GamePresenceNotice';
 import { SettledDiceControls } from '@/features/game/SettledDiceControls';
 import { useGameCommands } from '@/features/game/use-game-commands';
 import { useGameResultLifecycle } from '@/features/game/use-game-result-lifecycle';
@@ -42,28 +42,28 @@ import { AchievementSequence } from '@/features/game/view/AchievementSequence';
 import { GameRollSpinner } from '@/features/game/view/board/GameRollSpinner';
 import { SettingsLayer } from '@/features/settings/SettingsLayer';
 import { type Locale, translate } from '@/i18n';
-import type { ProductAudioRuntime } from '@/runtime/audio/browser-audio-runtime';
+import type { BrowserAudioRuntime } from '@/runtime/audio/browser-audio-runtime';
 import type { GameAudioFeedback } from '@/runtime/audio/game-audio-feedback';
 import { PRODUCT_CUE } from '@/runtime/audio/product-cues';
 import type { DicePresentation } from '@/runtime/dice/dice-presentation';
 import { gamePhysicsAreaBounds } from '@/runtime/dice/game-dice-layout';
-import type { ProductPreferences } from '@/runtime/preferences/product-preferences';
-import type { BrowserSessionStore } from '@/runtime/session/browser-session-store';
-import type { GameSessionHolder } from '@/runtime/session/session-holder';
+import type { PreferencesStore } from '@/runtime/preferences/preferences-store';
+import type { GameSessionHolder } from '@/runtime/session/game-session-holder';
+import type { SessionCredentialStore } from '@/runtime/session/session-credential-store';
 import type { SessionRecovery } from '@/runtime/session/session-recovery';
 import { useScreenTelemetry } from '@/runtime/telemetry/TelemetryContext';
 import { Button } from '@/ui/button';
 import { ScrollablePanel } from '@/ui/panel';
 
 type GameScreenProps = Readonly<{
-  audio: ProductAudioRuntime;
+  audio: BrowserAudioRuntime;
   feedback: Pick<GameAudioFeedback, 'observeCommand'>;
   locale: Locale;
   clock: Pick<ServerClock, 'now'>;
   sessions: GameSessionHolder;
   recovery: SessionRecovery;
-  store: BrowserSessionStore;
-  preferences: ProductPreferences;
+  sessionCredentialStore: SessionCredentialStore;
+  preferences: PreferencesStore;
   presentation: DicePresentation;
 }>;
 
@@ -88,11 +88,14 @@ export default function GameScreen({
   locale,
   recovery,
   sessions,
-  store,
+  sessionCredentialStore,
   preferences,
   presentation,
 }: GameScreenProps) {
-  const { persistence } = useSyncExternalStore(store.subscribe, store.getSnapshot);
+  const { persistence } = useSyncExternalStore(
+    sessionCredentialStore.subscribe,
+    sessionCredentialStore.getSnapshot,
+  );
   const presentationSnapshot = useSyncExternalStore(
     presentation.subscribe,
     presentation.getSnapshot,
@@ -172,7 +175,7 @@ export default function GameScreen({
 
   const returnToLobby = useGameResultLifecycle(
     sessions,
-    store,
+    sessionCredentialStore,
     holderSnapshot,
     () => audio.playCue(PRODUCT_CUE.CLICK),
     pendingCommandKind !== null,

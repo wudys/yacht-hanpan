@@ -1,4 +1,4 @@
-import '@/features/lobby/lobby.css';
+import '@/features/lobby/lobby-screen.css';
 
 import { requireGameAsset } from '@repo/game-assets';
 import { type CharacterId, resolveCharacterImageAssetId } from '@repo/game-assets/characters';
@@ -15,10 +15,10 @@ import { useLobbyAdmission } from '@/features/lobby/use-lobby-admission';
 import { LobbyView } from '@/features/lobby/view/LobbyView';
 import { SettingsLayer } from '@/features/settings/SettingsLayer';
 import { type Locale, translate } from '@/i18n';
-import type { ProductAudioRuntime } from '@/runtime/audio/browser-audio-runtime';
+import type { BrowserAudioRuntime } from '@/runtime/audio/browser-audio-runtime';
 import { PRODUCT_CUE } from '@/runtime/audio/product-cues';
-import type { ProductPreferences } from '@/runtime/preferences/product-preferences';
-import type { ProductProfile } from '@/runtime/profile/product-profile';
+import type { PreferencesStore } from '@/runtime/preferences/preferences-store';
+import type { ProfileSelectionStore } from '@/runtime/profile/profile-selection-store';
 import type { RoomAccess } from '@/runtime/room-access/room-access';
 import { useScreenTelemetry } from '@/runtime/telemetry/TelemetryContext';
 import { Button } from '@/ui/button';
@@ -26,13 +26,13 @@ import { ScrollablePanel } from '@/ui/panel';
 import { ColorCycleDiceLoader } from '@/ui/status';
 
 type LobbyScreenProps = Readonly<{
-  audio: ProductAudioRuntime;
+  audio: BrowserAudioRuntime;
   locale: Locale;
   activity: AbortSignal;
   access: RoomAccess;
   clock: Pick<ServerClock, 'now'>;
-  profile: ProductProfile;
-  preferences: ProductPreferences;
+  profile: ProfileSelectionStore;
+  preferences: PreferencesStore;
 }>;
 
 export default function LobbyScreen({

@@ -12,29 +12,29 @@ import {
   selectLobbyView,
 } from '@/features/lobby/lobby-machine';
 import { createServerReadiness } from '@/runtime/network/server-readiness';
-import { createProductProfile } from '@/runtime/profile/product-profile';
+import { createProfileSelectionStore } from '@/runtime/profile/profile-selection-store';
 import { createRoomAccess } from '@/runtime/room-access/room-access';
 import {
-  createStoredRoomRestore,
-  type StoredRoomRestoreSnapshot,
-} from '@/runtime/room-access/stored-room-restore';
-import {
-  type BrowserSessionStore,
-  createBrowserSessionStore,
-} from '@/runtime/session/browser-session-store';
+  createStoredRoomReentry,
+  type StoredRoomReentrySnapshot,
+} from '@/runtime/room-access/stored-room-reentry';
+import { createGameSessionHolder } from '@/runtime/session/game-session-holder';
 import type { RecoveryAttemptEvent } from '@/runtime/session/recovery-attempt';
-import { createGameSessionHolder } from '@/runtime/session/session-holder';
-import { observeTelemetry } from '@/runtime/telemetry/observe-telemetry';
+import {
+  createSessionCredentialStore,
+  type SessionCredentialStore,
+} from '@/runtime/session/session-credential-store';
+import { observeSessionTelemetry } from '@/runtime/telemetry/session-telemetry-observer';
 import { inactiveTelemetry, type Telemetry } from '@/runtime/telemetry/telemetry';
 import { authority, playingGame, room, waitingRoom } from '@/testing/game-fixtures';
 
 function setup(
   overrides: Partial<GameClient> = {},
   telemetry: Telemetry = inactiveTelemetry,
-  store?: BrowserSessionStore,
+  sessionCredentialStore?: SessionCredentialStore,
 ) {
   const attemptListeners = new Set<(event: RecoveryAttemptEvent) => void>();
-  let reentry: StoredRoomRestoreSnapshot = { status: 'idle' };
+  let reentry: StoredRoomReentrySnapshot = { status: 'idle' };
   const listeners = new Set<() => void>();
   let snapshot: GameSessionSnapshot = {
     connection: 'idle',
@@ -87,10 +87,10 @@ function setup(
   const services = {
     activity: activity.signal,
     client,
-    profile: createProductProfile({ getItem: () => null, setItem: () => {} }, () => 0),
+    profile: createProfileSelectionStore({ getItem: () => null, setItem: () => {} }, () => 0),
     readiness: { wait: () => Promise.resolve({ ok: true }) },
     sessions,
-    store: store ?? {
+    sessionCredentialStore: sessionCredentialStore ?? {
       getClientId: () => 'fixture',
       recordRoom: vi.fn(),
       removeRoom: vi.fn(() => {}),
@@ -119,17 +119,17 @@ function setup(
   } as unknown as Omit<LobbyServices, 'access'> & {
     client: GameClient;
     sessions: ReturnType<typeof createGameSessionHolder>;
-    store: BrowserSessionStore;
+    sessionCredentialStore: SessionCredentialStore;
     readiness: ReturnType<typeof createServerReadiness>;
-    reentry: ReturnType<typeof createStoredRoomRestore>;
+    reentry: ReturnType<typeof createStoredRoomReentry>;
     recovery: import('@/runtime/session/session-recovery').SessionRecovery;
   };
-  const baseServices = store
-    ? { ...services, reentry: createStoredRoomRestore({ ...services, store }) }
+  const baseServices = sessionCredentialStore
+    ? { ...services, reentry: createStoredRoomReentry({ ...services, sessionCredentialStore }) }
     : services;
   const admissionServices = {
     ...baseServices,
-    access: createRoomAccess({ ...baseServices, restore: baseServices.reentry }),
+    access: createRoomAccess({ ...baseServices, reentry: baseServices.reentry }),
   };
   const navigate = vi.fn();
   const actor = createActor(createLobbyMachine(admissionServices, telemetry, navigate));
@@ -158,7 +158,7 @@ function setup(
     client,
     session,
     navigate,
-    publish: (next: StoredRoomRestoreSnapshot) => {
+    publish: (next: StoredRoomReentrySnapshot) => {
       reentry = next;
       listeners.forEach((listener) => listener());
     },
@@ -377,8 +377,8 @@ test.each(['create', 'join', 'newCreate'] as const)(
         values.delete(key);
       },
     };
-    const first = createBrowserSessionStore({ storage });
-    const second = createBrowserSessionStore({ storage });
+    const first = createSessionCredentialStore({ storage });
+    const second = createSessionCredentialStore({ storage });
     second.initialize();
     const createRoom = vi.fn<GameClient['createRoom']>(() =>
       Promise.resolve({
@@ -422,8 +422,8 @@ test.each(['create', 'join', 'newCreate'] as const)(
 
 test('blocks admission if the previously readable recovery storage becomes unavailable', async () => {
   const storage = { getItem: vi.fn(() => null), setItem() {}, removeItem() {} };
-  const store = createBrowserSessionStore({ storage });
-  const { actor, client, services } = setup({}, inactiveTelemetry, store);
+  const sessionCredentialStore = createSessionCredentialStore({ storage });
+  const { actor, client, services } = setup({}, inactiveTelemetry, sessionCredentialStore);
   try {
     storage.getItem.mockImplementation(() => {
       throw new Error('denied');
@@ -445,7 +445,7 @@ test('blocks admission if the previously readable recovery storage becomes unava
 
 test('allows fresh admission after confirming a permanently unavailable recovery candidate', async () => {
   const values = new Map<string, string>();
-  const store = createBrowserSessionStore({
+  const sessionCredentialStore = createSessionCredentialStore({
     storage: {
       getItem: (key: string) => values.get(key) ?? null,
       setItem: (key: string, value: string) => {
@@ -456,14 +456,18 @@ test('allows fresh admission after confirming a permanently unavailable recovery
       },
     },
   });
-  store.recordRoom(authority);
+  sessionCredentialStore.recordRoom(authority);
   const resumeRoom = vi.fn<GameClient['resumeRoom']>(() =>
     Promise.resolve({
       ok: false,
       error: { kind: 'server', error: { code: 'RESUME_NOT_AVAILABLE', params: {} } },
     }),
   );
-  const { actor, client, services } = setup({ resumeRoom }, inactiveTelemetry, store);
+  const { actor, client, services } = setup(
+    { resumeRoom },
+    inactiveTelemetry,
+    sessionCredentialStore,
+  );
   try {
     await vi.waitFor(() => expect(services.reentry.getSnapshot().status).toBe('permanentFailure'));
     services.reentry.confirmPermanentFailure();
@@ -665,9 +669,9 @@ test('lets every root observer see resumed success before the single route hando
   const { actor, services, publish, publishAttempt, publishGame, navigate } = setup();
   const trackEvent = vi.fn();
   // Subscribe after the machine to exercise the adverse subscriber order.
-  const stop = observeTelemetry({
+  const stop = observeSessionTelemetry({
     ...services,
-    restore: services.reentry,
+    reentry: services.reentry,
     telemetry: { ...inactiveTelemetry, trackEvent },
   });
   publishAttempt({ phase: 'started' });
@@ -808,7 +812,7 @@ test.each([
   });
   actor.send({ type: 'DISMISS_NOTICE' });
   expect(services.sessions.getSnapshot().session).toBe(replacement);
-  expect(services.store.removeRoom).not.toHaveBeenCalled();
+  expect(services.sessionCredentialStore.removeRoom).not.toHaveBeenCalled();
   actor.stop();
   services.sessions.dispose();
 });
@@ -843,14 +847,14 @@ test('expiry confirmation waits for the server and preserves a late matched cred
     { roomId: authority.roomId, seatToken: authority.seatToken },
     { signal: expect.any(AbortSignal) },
   );
-  expect(services.store.removeRoom).not.toHaveBeenCalled();
+  expect(services.sessionCredentialStore.removeRoom).not.toHaveBeenCalled();
   actor.send({ type: 'CREATE_REQUESTED' });
   expect(services.client.createRoom).toHaveBeenCalledOnce();
   publishGame();
   await waitFor(actor, (state) => state.status === 'done');
   finish({ ok: false, error: { kind: 'server', error: { code: 'ROOM_NOT_FOUND', params: {} } } });
   await Promise.resolve();
-  expect(services.store.removeRoom).not.toHaveBeenCalled();
+  expect(services.sessionCredentialStore.removeRoom).not.toHaveBeenCalled();
   expect(navigate).toHaveBeenCalledOnce();
 });
 
@@ -872,7 +876,9 @@ test.each(['NETWORK_UNAVAILABLE', 'ROOM_NOT_FOUND'] as const)(
     await waitFor(actor, (state) =>
       state.matches(code === 'ROOM_NOT_FOUND' ? 'home' : 'connectionFailed'),
     );
-    expect(services.store.removeRoom).toHaveBeenCalledTimes(code === 'ROOM_NOT_FOUND' ? 1 : 0);
+    expect(services.sessionCredentialStore.removeRoom).toHaveBeenCalledTimes(
+      code === 'ROOM_NOT_FOUND' ? 1 : 0,
+    );
     actor.stop();
   },
 );
@@ -897,7 +903,7 @@ test('losing tab ownership aborts admission and ignores a late successful respon
   await Promise.resolve();
   actor.send({ type: 'CREATE_REQUESTED' });
   expect(createRoom).toHaveBeenCalledOnce();
-  expect(services.store.recordRoom).not.toHaveBeenCalled();
+  expect(services.sessionCredentialStore.recordRoom).not.toHaveBeenCalled();
   expect(actor.getSnapshot().matches('replaced')).toBe(true);
 });
 

@@ -1,8 +1,8 @@
 import { createGameClient, type GameClient } from '@repo/game-client-sdk';
 
 import {
+  type BrowserAudioRuntime,
   createBrowserAudioRuntime,
-  type ProductAudioRuntime,
 } from '@/runtime/audio/browser-audio-runtime';
 import {
   type GameAudioFeedback,
@@ -10,32 +10,38 @@ import {
 } from '@/runtime/audio/game-audio-feedback';
 import { createDicePresentation, type DicePresentation } from '@/runtime/dice/dice-presentation';
 import { createServerReadiness } from '@/runtime/network/server-readiness';
-import type { ProductPreferences } from '@/runtime/preferences/product-preferences';
-import { createProductProfile, type ProductProfile } from '@/runtime/profile/product-profile';
+import type { PreferencesStore } from '@/runtime/preferences/preferences-store';
+import {
+  createProfileSelectionStore,
+  type ProfileSelectionStore,
+} from '@/runtime/profile/profile-selection-store';
 import { createRoomAccess, type RoomAccess } from '@/runtime/room-access/room-access';
 import {
-  createStoredRoomRestore,
-  type StoredRoomRestore,
-} from '@/runtime/room-access/stored-room-restore';
+  createStoredRoomReentry,
+  type StoredRoomReentry,
+} from '@/runtime/room-access/stored-room-reentry';
 import {
-  type BrowserSessionStore,
-  createBrowserSessionStore,
-} from '@/runtime/session/browser-session-store';
-import { createGameSessionHolder, type GameSessionHolder } from '@/runtime/session/session-holder';
+  createGameSessionHolder,
+  type GameSessionHolder,
+} from '@/runtime/session/game-session-holder';
+import {
+  createSessionCredentialStore,
+  type SessionCredentialStore,
+} from '@/runtime/session/session-credential-store';
 import { createSessionRecovery, type SessionRecovery } from '@/runtime/session/session-recovery';
 import type { Telemetry } from '@/runtime/telemetry/telemetry';
 
 export interface ProductExecution {
   readonly activity: AbortSignal;
-  readonly audio: ProductAudioRuntime;
+  readonly audio: BrowserAudioRuntime;
   readonly client: GameClient;
-  readonly profile: ProductProfile;
-  readonly store: BrowserSessionStore;
+  readonly profile: ProfileSelectionStore;
+  readonly sessionCredentialStore: SessionCredentialStore;
   readonly sessions: GameSessionHolder;
   readonly recovery: SessionRecovery;
   readonly feedback: GameAudioFeedback;
   readonly presentation: DicePresentation;
-  readonly restore: StoredRoomRestore;
+  readonly reentry: StoredRoomReentry;
   readonly access: RoomAccess;
   stop(): void;
 }
@@ -48,17 +54,17 @@ export function createProductExecution({
 }: {
   serverUrl: string;
   releaseId: string;
-  preferences: ProductPreferences;
+  preferences: PreferencesStore;
   telemetry: Telemetry;
 }): ProductExecution {
   const activity = new AbortController();
   let stopped = false;
-  let audio: ProductAudioRuntime | undefined;
+  let audio: BrowserAudioRuntime | undefined;
   let sessions: GameSessionHolder | undefined;
   let recovery: SessionRecovery | undefined;
   let feedback: GameAudioFeedback | undefined;
   let presentation: DicePresentation | undefined;
-  let restore: StoredRoomRestore | undefined;
+  let reentry: StoredRoomReentry | undefined;
   let access: RoomAccess | undefined;
 
   function stop() {
@@ -66,7 +72,7 @@ export function createProductExecution({
     stopped = true;
     activity.abort();
     access?.dispose();
-    restore?.dispose();
+    reentry?.dispose();
     feedback?.dispose();
     recovery?.dispose();
     presentation?.dispose();
@@ -78,8 +84,8 @@ export function createProductExecution({
     const { bgmEnabled, sfxEnabled } = preferences.getSnapshot();
     const executionAudio = createBrowserAudioRuntime({ bgmEnabled, sfxEnabled });
     audio = executionAudio;
-    const store = createBrowserSessionStore({ signal: activity.signal });
-    const profile = createProductProfile({
+    const sessionCredentialStore = createSessionCredentialStore({ signal: activity.signal });
+    const profile = createProfileSelectionStore({
       getItem: (key) => window.localStorage.getItem(key),
       setItem: (key, value) => window.localStorage.setItem(key, value),
     });
@@ -122,22 +128,22 @@ export function createProductExecution({
     presentation = executionPresentation;
     executionPresentation.start();
     const readiness = createServerReadiness(serverUrl);
-    const executionRestore = createStoredRoomRestore({
+    const executionReentry = createStoredRoomReentry({
       client,
       sessions: executionSessions,
-      store,
+      sessionCredentialStore,
       readiness,
       onUnexpected: (error) =>
         telemetry.reportUnexpected(error, { operation: 'synchronize', stage: 'promise' }),
     });
-    restore = executionRestore;
+    reentry = executionReentry;
     const executionAccess = createRoomAccess({
       activity: activity.signal,
       client,
       sessions: executionSessions,
-      store,
+      sessionCredentialStore,
       readiness,
-      restore: executionRestore,
+      reentry: executionReentry,
       recovery: executionRecovery,
     });
     access = executionAccess;
@@ -146,12 +152,12 @@ export function createProductExecution({
       audio: executionAudio,
       client,
       profile,
-      store,
+      sessionCredentialStore,
       sessions: executionSessions,
       recovery: executionRecovery,
       feedback: executionFeedback,
       presentation: executionPresentation,
-      restore: executionRestore,
+      reentry: executionReentry,
       access: executionAccess,
       stop,
     };

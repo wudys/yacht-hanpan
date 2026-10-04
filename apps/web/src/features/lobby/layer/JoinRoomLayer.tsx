@@ -1,7 +1,7 @@
 import { LobbyLayer, PendingIndicator } from '@/features/lobby/layer/LobbyLayer';
+import { RoomCodeInput } from '@/features/lobby/layer/RoomCodeInput';
 import { LOBBY_ICONS } from '@/features/lobby/lobby-assets';
 import { type LobbyError, lobbyErrorKey } from '@/features/lobby/lobby-errors';
-import { RoomCodeInput } from '@/features/lobby/RoomCodeInput';
 import { type Locale, translate } from '@/i18n';
 import { Button, IconButton } from '@/ui/button';
 import { ScrollablePanel } from '@/ui/panel';

@@ -6,18 +6,18 @@ import {
   type ReadinessReporter,
 } from '@/bootstrap/bootstrap-progress';
 import { VISUAL_ASSET_MANIFEST } from '@/bootstrap/preload-assets';
-import type { ProductAudioRuntime } from '@/runtime/audio/browser-audio-runtime';
+import type { BrowserAudioRuntime } from '@/runtime/audio/browser-audio-runtime';
 
 export type ResourceStage = 'modules' | 'audio' | 'dice' | 'bgm';
 
 // One budget for required preparation, including response bodies and renderer warm-up.
 const RESOURCE_PREPARATION_TIMEOUT_MS = 60_000;
 
-export async function loadProductResources(
+export async function prepareProductResources(
   options: Readonly<{
     signal?: AbortSignal;
     bgmEnabled: boolean;
-    prefetchScenes: ProductAudioRuntime['prefetchScenes'];
+    prefetchScenes: BrowserAudioRuntime['prefetchScenes'];
     loadModules: () => Promise<unknown>;
     prepareProductAudio: () => Promise<void>;
     prepareVisuals: (report: ReadinessReporter, signal: AbortSignal) => Promise<unknown>;

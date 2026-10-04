@@ -7,8 +7,8 @@ import { afterEach, expect, test, vi } from 'vitest';
 import { useGameCommands } from '@/features/game/use-game-commands';
 import { startGameAudioFeedback } from '@/runtime/audio/game-audio-feedback';
 import { PRODUCT_CUE } from '@/runtime/audio/product-cues';
-import { createProductPreferences } from '@/runtime/preferences/product-preferences';
-import { observeTelemetry } from '@/runtime/telemetry/observe-telemetry';
+import { createPreferencesStore } from '@/runtime/preferences/preferences-store';
+import { observeSessionTelemetry } from '@/runtime/telemetry/session-telemetry-observer';
 import { inactiveTelemetry } from '@/runtime/telemetry/telemetry';
 import { TelemetryContext } from '@/runtime/telemetry/TelemetryContext';
 import {
@@ -17,10 +17,10 @@ import {
   playingGameInput as playingGame,
 } from '@/testing/game-fixtures';
 import {
-  createAudio,
+  createAudioMock,
   createGameSessionHarness,
-  createRecovery,
-  createSession,
+  createRecoveryFake,
+  createSessionMock,
   deferred,
 } from '@/testing/game-harness';
 
@@ -32,9 +32,9 @@ afterEach(() => {
 });
 function setup() {
   const harness = createGameSessionHarness();
-  const audio = createAudio();
-  const recovery = createRecovery();
-  const preferences = createProductPreferences({ getItem: () => null, setItem: () => {} });
+  const audio = createAudioMock();
+  const recovery = createRecoveryFake();
+  const preferences = createPreferencesStore({ getItem: () => null, setItem: () => {} });
   const feedback = startGameAudioFeedback({
     audio,
     sessions: harness.sessions,
@@ -75,7 +75,7 @@ test('releases the command lock after an SDK command rejection', async () => {
 test('does not report a late command rejection from a replaced session', async () => {
   const harness = setup();
   act(() => harness.result.current.roll());
-  act(() => harness.sessions.replaceSession(createSession()));
+  act(() => harness.sessions.replaceSession(createSessionMock()));
   await act(async () =>
     harness.roll.resolve({ ok: false, error: { kind: 'protocol', code: 'STATE_UNAVAILABLE' } }),
   );
@@ -85,11 +85,11 @@ test('does not report a late command rejection from a replaced session', async (
 
 test('reports a contract failure once when the SDK publishes the command error first', async () => {
   const harness = setup();
-  const stop = observeTelemetry({
+  const stop = observeSessionTelemetry({
     telemetry: { ...inactiveTelemetry, reportUnexpected: harness.report },
     sessions: harness.sessions,
     recovery: harness.recovery,
-    restore: {
+    reentry: {
       getSnapshot: () => ({ status: 'idle' }),
       subscribe: () => () => {},
       subscribeAttempt: () => () => {},
@@ -142,7 +142,7 @@ test('submits an intent retained across renders to the current session until its
   const harness = setup();
   const { roll } = harness.result.current;
   const response = deferred<CommandResult>();
-  const replacement = createSession();
+  const replacement = createSessionMock();
   replacement.rollDice.mockImplementation(() => response.promise);
   act(() => harness.sessions.replaceSession(replacement));
   act(() => {
@@ -181,7 +181,7 @@ test('a finished holder keeps its final snapshot while the original command comp
 test('a late success releases the original command without replacing the new session snapshot', async () => {
   const harness = setup();
   act(() => harness.result.current.roll());
-  const replacement = createSession();
+  const replacement = createSessionMock();
   act(() => harness.sessions.publish({ ...playingGame, stateVersion: 8 }));
   expect(harness.result.current.pendingCommandKind).toBe('roll');
   await act(async () => {

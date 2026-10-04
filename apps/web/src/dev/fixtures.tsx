@@ -1,9 +1,9 @@
 import '@/app/styles.css';
-import '@/dev/anchors.css';
+import '@/dev/fixtures.css';
 
 import { createRoot } from 'react-dom/client';
 
-import { Anchor } from '@/dev/Anchor';
+import { VisualFixture } from '@/dev/VisualFixture';
 import { normalizeLocale } from '@/i18n';
 
 const params = new URLSearchParams(location.search);
@@ -15,9 +15,9 @@ const root = document.getElementById('root');
 if (!root) throw new Error('Missing fixture root');
 if (anchor === 'replay') {
   // This entry is development-only; never reachable from the product router/build.
-  void import('@/dev/ReplayAnchor').then(({ ReplayAnchor }) =>
+  void import('@/dev/ReplayFixture').then(({ ReplayFixture }) =>
     createRoot(root).render(
-      <ReplayAnchor
+      <ReplayFixture
         anchor={anchor}
         mode={mode}
         locale={locale}
@@ -29,5 +29,5 @@ if (anchor === 'replay') {
     ),
   );
 } else {
-  createRoot(root).render(<Anchor anchor={anchor} mode={mode} locale={locale} />);
+  createRoot(root).render(<VisualFixture anchor={anchor} mode={mode} locale={locale} />);
 }

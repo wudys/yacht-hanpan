@@ -17,19 +17,19 @@ import GameScreen from '@/features/game/GameScreen';
 import { LoadingScreen } from '@/features/loading/LoadingScreen';
 import LobbyScreen from '@/features/lobby/LobbyScreen';
 import { LOCALE, translate } from '@/i18n';
-import type { ProductAudioRuntime } from '@/runtime/audio/browser-audio-runtime';
+import type { BrowserAudioRuntime } from '@/runtime/audio/browser-audio-runtime';
 import DiceCanvasHost from '@/runtime/dice/canvas/DiceCanvasHost';
 import { createRendererReadiness as createReadiness } from '@/runtime/dice/canvas/renderer-readiness';
 import { createDicePresentation } from '@/runtime/dice/dice-presentation';
 import {
-  createProductPreferences,
-  type ProductPreferenceStorage,
-} from '@/runtime/preferences/product-preferences';
-import { createProductProfile } from '@/runtime/profile/product-profile';
+  createPreferencesStore,
+  type PreferencesStorage,
+} from '@/runtime/preferences/preferences-store';
+import { createProfileSelectionStore } from '@/runtime/profile/profile-selection-store';
 import { createRoomAccess } from '@/runtime/room-access/room-access';
-import { createStoredRoomRestore } from '@/runtime/room-access/stored-room-restore';
-import { createBrowserSessionStore } from '@/runtime/session/browser-session-store';
-import { createGameSessionHolder } from '@/runtime/session/session-holder';
+import { createStoredRoomReentry } from '@/runtime/room-access/stored-room-reentry';
+import { createGameSessionHolder } from '@/runtime/session/game-session-holder';
+import { createSessionCredentialStore } from '@/runtime/session/session-credential-store';
 import { createSessionRecovery } from '@/runtime/session/session-recovery';
 
 const activeActors = new Set<ActorRefFrom<typeof appLifecycleMachine>>();
@@ -153,7 +153,7 @@ function stubAnimationFrames() {
   };
 }
 
-function createTestAudioRuntime(): ProductAudioRuntime {
+function createTestAudioRuntime(): BrowserAudioRuntime {
   return {
     supported: true,
     activate: vi.fn(() => Promise.resolve()),
@@ -170,8 +170,8 @@ function createTestAudioRuntime(): ProductAudioRuntime {
 
 function renderApp(
   loadResources: () => Promise<void> = () => Promise.resolve(),
-  audio: ProductAudioRuntime = createTestAudioRuntime(),
-  preferenceStorage: ProductPreferenceStorage = {
+  audio: BrowserAudioRuntime = createTestAudioRuntime(),
+  preferenceStorage: PreferencesStorage = {
     getItem: () => null,
     setItem: () => undefined,
   },
@@ -187,24 +187,24 @@ function renderApp(
   });
   globalActor.start();
   activeActors.add(globalActor);
-  const store = createBrowserSessionStore();
+  const sessionCredentialStore = createSessionCredentialStore();
   const client = createGameClient({
     serverUrl: 'http://localhost:3002',
     releaseId: 'app-test',
   });
-  const preferences = createProductPreferences(preferenceStorage);
+  const preferences = createPreferencesStore(preferenceStorage);
   const sessions = createGameSessionHolder(client);
   const readiness = { wait: vi.fn(async () => ({ ok: true as const })) };
-  const reentry = createStoredRoomRestore({ client, sessions, store, readiness });
+  const reentry = createStoredRoomReentry({ client, sessions, sessionCredentialStore, readiness });
   const recovery = createSessionRecovery({ sessions });
   const activity = new AbortController().signal;
   const access = createRoomAccess({
     activity,
     client,
     sessions,
-    store,
+    sessionCredentialStore,
     readiness,
-    restore: reentry,
+    reentry,
     recovery,
   });
   const renderer = createReadiness();
@@ -214,12 +214,12 @@ function renderApp(
     audio,
     feedback: { observeCommand: () => {} },
     globalActor,
-    profile: createProductProfile({ getItem: () => null, setItem: () => undefined }),
+    profile: createProfileSelectionStore({ getItem: () => null, setItem: () => undefined }),
     preferences,
     renderer,
     clock: client.clock,
     sessions,
-    store,
+    sessionCredentialStore,
     recovery,
     presentation: createDicePresentation({
       sessions,

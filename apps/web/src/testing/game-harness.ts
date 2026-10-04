@@ -15,16 +15,16 @@ import {
 } from '@repo/game-protocol/socket';
 import { vi } from 'vitest';
 
-import type { ProductAudioRuntime } from '@/runtime/audio/browser-audio-runtime';
+import type { BrowserAudioRuntime } from '@/runtime/audio/browser-audio-runtime';
 import type { DicePresentation, DicePresentationSnapshot } from '@/runtime/dice/dice-presentation';
-import {
-  type BrowserSessionStore,
-  createBrowserSessionStore,
-} from '@/runtime/session/browser-session-store';
 import type {
   GameSessionHolder,
   GameSessionHolderSnapshot,
-} from '@/runtime/session/session-holder';
+} from '@/runtime/session/game-session-holder';
+import {
+  createSessionCredentialStore,
+  type SessionCredentialStore,
+} from '@/runtime/session/session-credential-store';
 import type { SessionRecovery, SessionRecoverySnapshot } from '@/runtime/session/session-recovery';
 import { authority, commandSuccess, playingGame, room } from '@/testing/game-fixtures';
 
@@ -38,22 +38,22 @@ export function deferred<T>() {
   return { promise, resolve, reject };
 }
 
-export function createAudio() {
+export function createAudioMock() {
   return {
     supported: true,
-    activate: vi.fn<ProductAudioRuntime['activate']>(async () => {}),
-    prepareCues: vi.fn<ProductAudioRuntime['prepareCues']>(async () => {}),
-    playCue: vi.fn<ProductAudioRuntime['playCue']>(),
-    prefetchScenes: vi.fn<ProductAudioRuntime['prefetchScenes']>(async () => {}),
-    setBgmEnabled: vi.fn<ProductAudioRuntime['setBgmEnabled']>(async () => {}),
-    setScene: vi.fn<ProductAudioRuntime['setScene']>(async () => {}),
-    setSfxEnabled: vi.fn<ProductAudioRuntime['setSfxEnabled']>(),
-    stopCue: vi.fn<ProductAudioRuntime['stopCue']>(),
-    dispose: vi.fn<ProductAudioRuntime['dispose']>(async () => {}),
-  } satisfies ProductAudioRuntime;
+    activate: vi.fn<BrowserAudioRuntime['activate']>(async () => {}),
+    prepareCues: vi.fn<BrowserAudioRuntime['prepareCues']>(async () => {}),
+    playCue: vi.fn<BrowserAudioRuntime['playCue']>(),
+    prefetchScenes: vi.fn<BrowserAudioRuntime['prefetchScenes']>(async () => {}),
+    setBgmEnabled: vi.fn<BrowserAudioRuntime['setBgmEnabled']>(async () => {}),
+    setScene: vi.fn<BrowserAudioRuntime['setScene']>(async () => {}),
+    setSfxEnabled: vi.fn<BrowserAudioRuntime['setSfxEnabled']>(),
+    stopCue: vi.fn<BrowserAudioRuntime['stopCue']>(),
+    dispose: vi.fn<BrowserAudioRuntime['dispose']>(async () => {}),
+  } satisfies BrowserAudioRuntime;
 }
 
-export function createRecovery() {
+export function createRecoveryFake() {
   let snapshot: SessionRecoverySnapshot = { status: 'idle' };
   const listeners = new Set<() => void>();
   return {
@@ -78,8 +78,8 @@ export function createRecovery() {
   } satisfies SessionRecovery & { publish(next: SessionRecoverySnapshot): void };
 }
 
-export function createStore() {
-  const store = createBrowserSessionStore({
+export function createSessionCredentialStoreSpy() {
+  const store = createSessionCredentialStore({
     storage: { getItem: () => null, setItem: () => {}, removeItem: () => {} },
     createClientId: () => '019976a2-d8d8-7000-8000-000000000002',
   });
@@ -90,11 +90,11 @@ export function createStore() {
     getClientId: vi.fn(store.getClientId),
     refreshRecentRoom: vi.fn(store.refreshRecentRoom),
     recordRoom: vi.fn(store.recordRoom),
-    removeRoom: vi.fn<BrowserSessionStore['removeRoom']>(store.removeRoom),
-  } satisfies BrowserSessionStore;
+    removeRoom: vi.fn<SessionCredentialStore['removeRoom']>(store.removeRoom),
+  } satisfies SessionCredentialStore;
 }
 
-export function createPresentation() {
+export function createPresentationFake() {
   let snapshot: DicePresentationSnapshot = { phase: 'settled', resources: null, dice: [] };
   const listeners = new Set<() => void>();
   return {
@@ -152,7 +152,7 @@ function sessionSnapshot(
   };
 }
 
-export function createSession(snapshot: GameSessionSnapshot = sessionSnapshot()) {
+export function createSessionMock(snapshot: GameSessionSnapshot = sessionSnapshot()) {
   assertSessionView(snapshot);
   const getSnapshot = vi.fn(() => snapshot);
   const success = () => commandSuccess(getSnapshot().game?.stateVersion);
@@ -175,7 +175,7 @@ export function createGameSessionHarness(
   presentedRoom: PublicRoom = room,
 ) {
   const roll = deferred<CommandResult>();
-  const session = createSession(sessionSnapshot(game, presentedRoom));
+  const session = createSessionMock(sessionSnapshot(game, presentedRoom));
   session.rollDice.mockImplementation(() => roll.promise);
   let snapshot: Extract<GameSessionHolderSnapshot, { authority: RoomAuthority }> = {
     authority,
@@ -216,7 +216,7 @@ export function createGameSessionHarness(
     }),
     dispose: vi.fn<GameSessionHolder['dispose']>(),
     installAuthority: vi.fn<GameSessionHolder['installAuthority']>((nextAuthority) => {
-      const nextSession = createSession();
+      const nextSession = createSessionMock();
       snapshot = {
         ...snapshot,
         authority: nextAuthority,

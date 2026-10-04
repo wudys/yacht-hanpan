@@ -23,38 +23,38 @@ export type RecentRoom = Readonly<{
 export type RecentRoomResult =
   Readonly<{ status: 'ready'; room: RecentRoom | null }> | Readonly<{ status: 'unavailable' }>;
 export type RoomPersistence = 'saved' | 'memoryOnly';
-export type BrowserSessionSnapshot = Readonly<{ persistence: RoomPersistence }>;
+export type SessionCredentialSnapshot = Readonly<{ persistence: RoomPersistence }>;
 
-export type BrowserSessionState = Readonly<{
+export type SessionCredentialState = Readonly<{
   clientId: string;
   recentRoom: RecentRoomResult;
 }>;
 
-export type BrowserSessionStoreOptions = Readonly<{
+export type SessionCredentialStoreOptions = Readonly<{
   storage?: BrowserStorage;
   signal?: AbortSignal;
   createClientId?: () => string;
 }>;
 
-export interface BrowserSessionStore {
+export interface SessionCredentialStore {
   /** Ends this execution's candidate use; shared storage removal is best-effort, without cross-tab coordination. */
   removeRoom(roomId: string): void;
-  initialize(): BrowserSessionState;
+  initialize(): SessionCredentialState;
   getClientId(): string;
   /** Reads one candidate at admission; it does not reserve a seat or lock other executions. */
   refreshRecentRoom(): RecentRoomResult;
   recordRoom(authority: RoomAuthority): void;
-  getSnapshot(): BrowserSessionSnapshot;
+  getSnapshot(): SessionCredentialSnapshot;
   subscribe(listener: () => void): () => void;
 }
 
-export function createBrowserSessionStore(
-  options: BrowserSessionStoreOptions = {},
-): BrowserSessionStore {
+export function createSessionCredentialStore(
+  options: SessionCredentialStoreOptions = {},
+): SessionCredentialStore {
   const createClientId = options.createClientId ?? uuidV7;
   let clientId: string | null = null;
   let recentRoom: RecentRoomResult = { status: 'unavailable' };
-  let snapshot: BrowserSessionSnapshot = { persistence: 'saved' };
+  let snapshot: SessionCredentialSnapshot = { persistence: 'saved' };
   const subscribers = new Set<() => void>();
 
   function storage(): BrowserStorage {
@@ -123,7 +123,7 @@ export function createBrowserSessionStore(
     }
   }
 
-  function initialize(): BrowserSessionState {
+  function initialize(): SessionCredentialState {
     if (clientId === null) {
       let storedClientId: string | null = null;
       try {

@@ -1,7 +1,7 @@
 import { CHARACTER_IDS } from '@repo/game-assets/characters';
 import { expect, test, vi } from 'vitest';
 
-import { createProductProfile } from '@/runtime/profile/product-profile';
+import { createProfileSelectionStore } from '@/runtime/profile/profile-selection-store';
 
 test('initializes only when requested and preserves legacy identity and unrelated storage', () => {
   const values = new Map([
@@ -16,7 +16,7 @@ test('initializes only when requested and preserves legacy identity and unrelate
     }),
   };
   const random = vi.fn(() => 0.99);
-  const profile = createProductProfile(storage, random);
+  const profile = createProfileSelectionStore(storage, random);
   expect(storage.getItem).not.toHaveBeenCalled();
   expect(random).not.toHaveBeenCalled();
   expect(profile.initialize().selection).toEqual({
@@ -26,7 +26,7 @@ test('initializes only when requested and preserves legacy identity and unrelate
   expect(profile.initialize()).toBe(profile.getSnapshot());
   expect(random).toHaveBeenCalledTimes(1);
   profile.setSelection({ characterId: CHARACTER_IDS[4], variant: true });
-  expect(createProductProfile(storage).getSnapshot().selection).toEqual({
+  expect(createProfileSelectionStore(storage).getSnapshot().selection).toEqual({
     characterId: CHARACTER_IDS[4],
     variant: true,
   });
@@ -41,14 +41,14 @@ test.each([
   '{"characterId":"navy-bob","variant":"false"}',
 ])('replaces invalid stored selection %s with a stable default', (stored) => {
   const storage = { getItem: () => stored, setItem: vi.fn() };
-  const profile = createProductProfile(storage, () => 0.25);
+  const profile = createProfileSelectionStore(storage, () => 0.25);
   const selection = { characterId: CHARACTER_IDS[3], variant: false };
   expect(profile.getSnapshot().selection).toEqual(selection);
   expect(storage.setItem).toHaveBeenCalledWith('profileSelection', JSON.stringify(selection));
 });
 
 test('keeps a stable memory selection when storage cannot be read or written', () => {
-  const profile = createProductProfile(
+  const profile = createProfileSelectionStore(
     {
       getItem: () => {
         throw new Error('storage unavailable');
@@ -75,7 +75,7 @@ test('uses the default write result when the initial profile cannot be read', ()
     },
     setItem: vi.fn(),
   };
-  const profile = createProductProfile(storage, () => 0);
+  const profile = createProfileSelectionStore(storage, () => 0);
   expect(profile.initialize().storageFailed).toBe(false);
   expect(storage.setItem).toHaveBeenCalledOnce();
 });
@@ -85,7 +85,7 @@ test('reports selection changes separately from storage recovery and skips saved
     getItem: () => JSON.stringify({ characterId: CHARACTER_IDS[0], variant: false }),
     setItem: vi.fn(),
   };
-  const profile = createProductProfile(storage);
+  const profile = createProfileSelectionStore(storage);
   const initial = profile.initialize();
   const observed: ReturnType<typeof profile.getSnapshot>[] = [];
   const unsubscribe = profile.subscribe(() => observed.push(profile.getSnapshot()));

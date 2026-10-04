@@ -6,7 +6,7 @@ import { act, cleanup, render, screen } from '@testing-library/react';
 import type { ComponentProps } from 'react';
 import { afterEach, expect, test, vi } from 'vitest';
 
-import { GamePresenceNotice, GamePresenceProvider } from '@/features/game/GamePresenceNotice';
+import { GamePresenceNotice, GamePresenceProvider } from '@/features/game/hud/GamePresenceNotice';
 import { LOCALE, translate } from '@/i18n';
 import { room } from '@/testing/game-fixtures';
 

@@ -1,4 +1,4 @@
-/* Only the development entry imports this file; product view styling lives in game-ui. */
+/* Only the development entry imports this file; product view styling belongs to feature views and shared UI. */
 .game-logical-canvas:has(> .game-board) {
   background: #7b4b2c;
 }

@@ -18,7 +18,7 @@ vi.mock('@react-three/fiber', () => ({
 }));
 
 vi.mock('@/runtime/dice/renderer', () => ({
-  DiceRollPlayback: ({
+  DiceRollScene: ({
     onComplete,
     playback,
   }: {

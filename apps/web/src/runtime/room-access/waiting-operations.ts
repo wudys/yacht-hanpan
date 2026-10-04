@@ -3,8 +3,8 @@ import type { ClientError } from '@repo/game-client-sdk/errors';
 import { PUBLIC_ERROR_CODE } from '@repo/game-protocol';
 
 import { isPermanentAuthorityFailure } from '@/runtime/session/authority-failure';
-import type { BrowserSessionStore } from '@/runtime/session/browser-session-store';
-import type { GameSessionHolder } from '@/runtime/session/session-holder';
+import type { GameSessionHolder } from '@/runtime/session/game-session-holder';
+import type { SessionCredentialStore } from '@/runtime/session/session-credential-store';
 
 export type WaitingRoomSummary = Readonly<{ roomCode: string; expiresAt: number }>;
 export type ExpiryCheck =
@@ -19,11 +19,11 @@ export type Cancellation =
 export function createWaitingOperations({
   client,
   sessions,
-  store,
+  sessionCredentialStore,
 }: {
   client: Pick<GameClient, 'resumeRoom' | 'cancelRoom'>;
   sessions: GameSessionHolder;
-  store: BrowserSessionStore;
+  sessionCredentialStore: SessionCredentialStore;
 }) {
   const current = (session: GameSession) => sessions.getSnapshot().session === session;
   return {
@@ -39,7 +39,7 @@ export function createWaitingOperations({
         if (!isPermanentAuthorityFailure(result.error))
           return { status: 'failure', error: result.error };
         if (sessions.getSnapshot().sessionSnapshot?.game) return { status: 'matched' };
-        store.removeRoom(authority.roomId);
+        sessionCredentialStore.removeRoom(authority.roomId);
         if (signal.aborted || !current(session)) return { status: 'stale' };
         if (sessions.getSnapshot().sessionSnapshot?.game) return { status: 'matched' };
         sessions.clear();
@@ -74,7 +74,7 @@ export function createWaitingOperations({
       if (signal.aborted || !current(session)) return { status: 'stale' };
       if (sessions.getSnapshot().sessionSnapshot?.game) return { status: 'matched' };
       if (result.ok) {
-        store.removeRoom(authority.roomId);
+        sessionCredentialStore.removeRoom(authority.roomId);
         if (signal.aborted || !current(session)) return { status: 'stale' };
         if (sessions.getSnapshot().sessionSnapshot?.game) return { status: 'matched' };
         sessions.clear();

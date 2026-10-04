@@ -3,15 +3,15 @@ import { useNavigate } from '@tanstack/react-router';
 import { useEffect, useRef } from 'react';
 
 import { APP_SCREEN_PATH } from '@/app/screen-paths';
-import type { BrowserSessionStore } from '@/runtime/session/browser-session-store';
 import type {
   GameSessionHolder,
   GameSessionHolderSnapshot,
-} from '@/runtime/session/session-holder';
+} from '@/runtime/session/game-session-holder';
+import type { SessionCredentialStore } from '@/runtime/session/session-credential-store';
 
 export function useGameResultLifecycle(
   sessions: GameSessionHolder,
-  store: BrowserSessionStore,
+  sessionCredentialStore: SessionCredentialStore,
   holderSnapshot: GameSessionHolderSnapshot,
   onIntent: () => void,
   commandPending: boolean,
@@ -33,11 +33,11 @@ export function useGameResultLifecycle(
     }
     if (finishedSessionRef.current !== current.session) {
       finishedSessionRef.current = current.session;
-      store.removeRoom(current.authority.roomId);
+      sessionCredentialStore.removeRoom(current.authority.roomId);
     }
     // Result can render immediately; the existing bounded command must still deliver its receipt.
     if (!commandPending) sessions.detachFinishedSession(current.session);
-  }, [commandPending, finished, holderSnapshot, sessions, store]);
+  }, [commandPending, finished, holderSnapshot, sessions, sessionCredentialStore]);
 
   const returnToLobby = (): void => {
     if (terminalActionPendingRef.current) return;
@@ -49,7 +49,8 @@ export function useGameResultLifecycle(
       void navigate({ to: APP_SCREEN_PATH.LOBBY });
       return;
     }
-    if (finishedSessionRef.current !== current.session) store.removeRoom(current.authority.roomId);
+    if (finishedSessionRef.current !== current.session)
+      sessionCredentialStore.removeRoom(current.authority.roomId);
     if (sessions.getSnapshot().session !== current.session) {
       terminalActionPendingRef.current = false;
       return;

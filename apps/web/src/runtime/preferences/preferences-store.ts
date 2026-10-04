@@ -4,28 +4,28 @@ const BGM_ENABLED_STORAGE_KEY = 'bgmEnabled';
 const LOCALE_STORAGE_KEY = 'locale';
 const SFX_ENABLED_STORAGE_KEY = 'sfxEnabled';
 
-export interface ProductPreferenceStorage {
+export interface PreferencesStorage {
   readonly getItem: (key: string) => string | null;
   readonly setItem: (key: string, value: string) => void;
 }
 
-export type ProductPreferencesSnapshot = Readonly<{
+export type PreferencesSnapshot = Readonly<{
   locale: Locale;
   bgmEnabled: boolean;
   sfxEnabled: boolean;
   storageFailed: boolean;
 }>;
 
-export interface ProductPreferences {
-  getSnapshot(): ProductPreferencesSnapshot;
+export interface PreferencesStore {
+  getSnapshot(): PreferencesSnapshot;
   subscribe(listener: () => void): () => void;
   setLocale(locale: Locale): boolean;
   setBgmEnabled(enabled: boolean): boolean;
   setSfxEnabled(enabled: boolean): void;
 }
 
-export function createProductPreferences(storage: ProductPreferenceStorage): ProductPreferences {
-  let snapshot: ProductPreferencesSnapshot = {
+export function createPreferencesStore(storage: PreferencesStorage): PreferencesStore {
+  let snapshot: PreferencesSnapshot = {
     locale: readStoredLocale(storage),
     bgmEnabled: readItem(storage, BGM_ENABLED_STORAGE_KEY) !== 'false',
     sfxEnabled: readItem(storage, SFX_ENABLED_STORAGE_KEY) !== 'false',
@@ -86,11 +86,11 @@ export function createProductPreferences(storage: ProductPreferenceStorage): Pro
   };
 }
 
-export function readStoredLocale(storage: Pick<ProductPreferenceStorage, 'getItem'>): Locale {
+export function readStoredLocale(storage: Pick<PreferencesStorage, 'getItem'>): Locale {
   return normalizeLocale(readItem(storage, LOCALE_STORAGE_KEY));
 }
 
-function readItem(storage: Pick<ProductPreferenceStorage, 'getItem'>, key: string): string | null {
+function readItem(storage: Pick<PreferencesStorage, 'getItem'>, key: string): string | null {
   try {
     return storage.getItem(key);
   } catch {

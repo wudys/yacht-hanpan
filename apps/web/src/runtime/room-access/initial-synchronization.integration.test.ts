@@ -6,9 +6,9 @@ import { GAME_PROTOCOL_VERSION } from '@repo/game-protocol/version';
 import { expect, test, vi } from 'vitest';
 
 import { createRoomAccess } from '@/runtime/room-access/room-access';
-import { createStoredRoomRestore } from '@/runtime/room-access/stored-room-restore';
-import { createBrowserSessionStore } from '@/runtime/session/browser-session-store';
-import { createGameSessionHolder } from '@/runtime/session/session-holder';
+import { createStoredRoomReentry } from '@/runtime/room-access/stored-room-reentry';
+import { createGameSessionHolder } from '@/runtime/session/game-session-holder';
+import { createSessionCredentialStore } from '@/runtime/session/session-credential-store';
 import { createSessionRecovery } from '@/runtime/session/session-recovery';
 import { authority, playingGame, room, waitingRoom } from '@/testing/game-fixtures';
 
@@ -78,7 +78,7 @@ function setup(saved: boolean, controlRecovery: boolean = false) {
     meta: {},
   } as Awaited<ReturnType<typeof client.resumeRoom>>);
   const values = new Map<string, string>();
-  const store = createBrowserSessionStore({
+  const sessionCredentialStore = createSessionCredentialStore({
     storage: {
       getItem: (key) => values.get(key) ?? null,
       setItem: (key, value) => {
@@ -89,11 +89,11 @@ function setup(saved: boolean, controlRecovery: boolean = false) {
       },
     },
   });
-  store.initialize();
-  if (saved) store.recordRoom(authority);
+  sessionCredentialStore.initialize();
+  if (saved) sessionCredentialStore.recordRoom(authority);
   const sessions = createGameSessionHolder(client);
   const readiness = { wait: async () => ({ ok: true as const }) };
-  const restore = createStoredRoomRestore({ client, readiness, sessions, store });
+  const reentry = createStoredRoomReentry({ client, readiness, sessions, sessionCredentialStore });
   const recovery = createSessionRecovery({
     sessions,
     subscribeForeground: () => () => {},
@@ -113,9 +113,9 @@ function setup(saved: boolean, controlRecovery: boolean = false) {
     activity: new AbortController().signal,
     client,
     sessions,
-    store,
+    sessionCredentialStore,
     readiness,
-    restore,
+    reentry,
     recovery,
   });
   return {
@@ -125,9 +125,9 @@ function setup(saved: boolean, controlRecovery: boolean = false) {
     },
     access,
     sessions,
-    store,
+    sessionCredentialStore,
     socket,
-    restore,
+    reentry,
     recovery,
     drop: () => disconnected(),
     reconnect: () => connected(),
@@ -159,7 +159,7 @@ function setup(saved: boolean, controlRecovery: boolean = false) {
       }),
     dispose() {
       access.dispose();
-      restore.dispose();
+      reentry.dispose();
       recovery.dispose();
       sessions.dispose();
     },
@@ -187,7 +187,7 @@ test.each(['create', 'join', 'restore'] as const)(
       );
       expect(fixture.socket.disconnect).toHaveBeenCalledOnce();
       expect(fixture.sessions.getSnapshot().authority).toEqual(authority);
-      expect(fixture.store.refreshRecentRoom()).toEqual({
+      expect(fixture.sessionCredentialStore.refreshRecentRoom()).toEqual({
         status: 'ready',
         room: { roomId: authority.roomId, seatToken: authority.seatToken },
       });
@@ -287,7 +287,7 @@ test.each([
       expect(fixture.sessions.getSnapshot().sessionSnapshot?.syncRevision).toBe(0);
       fixture.rejectSync(code);
       await vi.waitFor(() =>
-        expect(fixture.restore.getSnapshot()).toMatchObject({ status: 'permanentFailure' }),
+        expect(fixture.reentry.getSnapshot()).toMatchObject({ status: 'permanentFailure' }),
       );
       expect(fixture.access.getSnapshot()).toMatchObject({
         status: 'authorityFailure',
@@ -298,7 +298,10 @@ test.each([
       fixture.access.confirmAuthorityFailure();
       expect(fixture.access.getSnapshot()).toEqual({ status: 'idle' });
       expect(fixture.sessions.getSnapshot().authority).toBeNull();
-      expect(fixture.store.refreshRecentRoom()).toEqual({ status: 'ready', room: null });
+      expect(fixture.sessionCredentialStore.refreshRecentRoom()).toEqual({
+        status: 'ready',
+        room: null,
+      });
     } finally {
       fixture.dispose();
     }
@@ -322,12 +325,12 @@ test('hands off a newer Game when confirming the former saved restore failure', 
     fixture.liveGame(newerGame);
     const currentSession = fixture.sessions.getSnapshot().session;
     fixture.access.confirmAuthorityFailure();
-    expect(fixture.restore.getSnapshot()).toEqual({ status: 'idle' });
+    expect(fixture.reentry.getSnapshot()).toEqual({ status: 'idle' });
     expect(fixture.access.getSnapshot()).toMatchObject({ status: 'handoff', target: 'game' });
     expect(fixture.sessions.getSnapshot().session).toBe(currentSession);
     expect(fixture.sessions.getSnapshot().sessionSnapshot?.game).toEqual(newerGame);
     expect(fixture.sessions.getSnapshot().authority).toEqual(authority);
-    expect(fixture.store.refreshRecentRoom()).toEqual({
+    expect(fixture.sessionCredentialStore.refreshRecentRoom()).toEqual({
       status: 'ready',
       room: { roomId: authority.roomId, seatToken: authority.seatToken },
     });

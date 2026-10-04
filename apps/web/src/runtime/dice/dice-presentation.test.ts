@@ -10,7 +10,7 @@ import type { ProceduralDiceResources } from '@/runtime/dice/resources';
 import type {
   GameSessionHolder,
   GameSessionHolderSnapshot,
-} from '@/runtime/session/session-holder';
+} from '@/runtime/session/game-session-holder';
 
 const AUTHORITY = {
   roomId: '01991e1b-4f4f-7000-8000-000000000001',

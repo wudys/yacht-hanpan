@@ -29,8 +29,8 @@ import { startGameAudioFeedback } from '@/runtime/audio/game-audio-feedback';
 import { PRODUCT_CUE } from '@/runtime/audio/product-cues';
 import { createDicePresentation } from '@/runtime/dice/dice-presentation';
 import type { RollPlayback } from '@/runtime/dice/replay';
-import { createProductPreferences } from '@/runtime/preferences/product-preferences';
-import { createGameSessionHolder } from '@/runtime/session/session-holder';
+import { createPreferencesStore } from '@/runtime/preferences/preferences-store';
+import { createGameSessionHolder } from '@/runtime/session/game-session-holder';
 import {
   authority,
   commandSuccess,
@@ -40,12 +40,12 @@ import {
   room,
 } from '@/testing/game-fixtures';
 import {
-  createAudio,
+  createAudioMock,
   createGameSessionHarness,
-  createPresentation,
-  createRecovery,
-  createSession,
-  createStore,
+  createPresentationFake,
+  createRecoveryFake,
+  createSessionCredentialStoreSpy,
+  createSessionMock,
   deferred,
 } from '@/testing/game-harness';
 const { navigate } = vi.hoisted(() => ({ navigate: vi.fn() }));
@@ -125,12 +125,12 @@ function createHarness(
   let currentServerNow = serverNow;
   const harness = {
     ...createGameSessionHarness(game, presentedRoom),
-    audio: createAudio(),
+    audio: createAudioMock(),
     clock: { now: () => currentServerNow },
-    store: createStore(),
-    preferences: createProductPreferences({ getItem: () => null, setItem: () => undefined }),
-    presentation: createPresentation(),
-    recovery: createRecovery(),
+    sessionCredentialStore: createSessionCredentialStoreSpy(),
+    preferences: createPreferencesStore({ getItem: () => null, setItem: () => undefined }),
+    presentation: createPresentationFake(),
+    recovery: createRecoveryFake(),
     setServerNow(next: number | null) {
       currentServerNow = next;
     },
@@ -198,7 +198,7 @@ test('emphasizes each authoritative viewer turn once across updates and session 
           currentTurn: { ...initialPlayingMatch.currentTurn, rollCount: 2 },
         },
       } satisfies GameSnapshotInput);
-      harness.sessions.replaceSession(createSession());
+      harness.sessions.replaceSession(createSessionMock());
     });
     expect(getViewerSummary().getAttribute('data-summary-emphasized')).toBe('false');
 
@@ -217,7 +217,7 @@ test('emphasizes each authoritative viewer turn once across updates and session 
         },
       });
       harness.sessions.replaceSession(
-        createSession({ ...harness.session.getSnapshot(), ...nextView }),
+        createSessionMock({ ...harness.session.getSnapshot(), ...nextView }),
         { ...authority, roomId: nextRoom.roomId },
       );
     });
@@ -399,7 +399,7 @@ test('ignores a late rate-limit result from a replaced session or unmounted Game
   const replaced = createHarness();
   const { unmount: unmountReplaced } = render(<GameScreen {...replaced} locale={LOCALE.EN} />);
   fireEvent.click(screen.getByRole('button', { name: 'Roll again' }));
-  act(() => replaced.sessions.replaceSession(createSession()));
+  act(() => replaced.sessions.replaceSession(createSessionMock()));
   await act(async () =>
     replaced.roll.resolve({
       ok: false,
@@ -596,7 +596,7 @@ test('does not resurrect retry UI after session replacement or an authoritative 
     }),
   );
   fireEvent.click(screen.getByRole('button', { name: translate(LOCALE.EN, 'common.retry') }));
-  act(() => harness.sessions.replaceSession(createSession()));
+  act(() => harness.sessions.replaceSession(createSessionMock()));
   await act(async () =>
     retryResult.resolve({
       ok: false,
@@ -1294,7 +1294,7 @@ test.each([LOCALE.KO, LOCALE.EN])(
     const harness = createHarness();
     const { sessionSnapshot } = harness.sessions.getSnapshot();
     harness.sessions.replaceSession(
-      createSession({
+      createSessionMock({
         ...sessionSnapshot,
         presence: parsePresenceSnapshot({
           roomId: authority.roomId,
@@ -1396,8 +1396,8 @@ test('clears current authority only from the permanent recovery terminal', async
   fireEvent.click(confirm);
   fireEvent.click(confirm);
 
-  expect(harness.store.removeRoom).toHaveBeenCalledOnce();
-  expect(harness.store.removeRoom).toHaveBeenCalledWith(authority.roomId);
+  expect(harness.sessionCredentialStore.removeRoom).toHaveBeenCalledOnce();
+  expect(harness.sessionCredentialStore.removeRoom).toHaveBeenCalledWith(authority.roomId);
   await waitFor(() => {
     expect(harness.sessions.clear).toHaveBeenCalledOnce();
     expect(navigate).toHaveBeenCalledWith({ to: '/lobby' });
@@ -1420,7 +1420,7 @@ test.each<ClientError | null>([null, { kind: 'transport', code: 'SOCKET_DISCONNE
     expect(within(terminal).getByText(translate(LOCALE.EN, 'lobby.reentryRefresh'))).not.toBeNull();
     fireEvent.click(within(terminal).getByRole('button', { name: 'Refresh' }));
     expect(reload).toHaveBeenCalledOnce();
-    expect(harness.store.removeRoom).not.toHaveBeenCalled();
+    expect(harness.sessionCredentialStore.removeRoom).not.toHaveBeenCalled();
     expect(harness.sessions.clear).not.toHaveBeenCalled();
   },
 );
@@ -1469,12 +1469,14 @@ test('detaches the authoritative Result from transport before returning to the l
 
   expect(screen.getByRole('heading', { name: 'Game result' })).not.toBeNull();
   await waitFor(() => expect(harness.session.dispose).toHaveBeenCalledOnce());
-  await waitFor(() => expect(harness.store.removeRoom).toHaveBeenCalledWith(authority.roomId));
+  await waitFor(() =>
+    expect(harness.sessionCredentialStore.removeRoom).toHaveBeenCalledWith(authority.roomId),
+  );
   expect(harness.sessions.clear).not.toHaveBeenCalled();
   expect(navigate).not.toHaveBeenCalled();
   expect(screen.getByRole('heading', { name: 'Game result' })).not.toBeNull();
   fireEvent.click(screen.getByRole('button', { name: translate(LOCALE.EN, 'game.backToLobby') }));
-  expect(harness.store.removeRoom).toHaveBeenCalledWith(authority.roomId);
+  expect(harness.sessionCredentialStore.removeRoom).toHaveBeenCalledWith(authority.roomId);
   await waitFor(() => {
     expect(harness.sessions.clear).toHaveBeenCalledOnce();
     expect(navigate).toHaveBeenCalledWith({ to: '/lobby' });
@@ -1567,7 +1569,7 @@ test('score confirmation belongs to the submitting player after the next-turn sn
   expect(harness.audio.playCue).not.toHaveBeenCalled();
   act(() => harness.sessions.publish(finishedGame('scoresCompleted', 0)));
   expect(screen.getByRole('heading', { name: 'Game result' })).not.toBeNull();
-  expect(harness.store.removeRoom).toHaveBeenCalledOnce();
+  expect(harness.sessionCredentialStore.removeRoom).toHaveBeenCalledOnce();
   expect(harness.session.dispose).not.toHaveBeenCalled();
   await act(async () => result.resolve(commandSuccess()));
   expect(harness.audio.playCue).toHaveBeenCalledExactlyOnceWith(PRODUCT_CUE.SCORE);
@@ -1650,10 +1652,10 @@ test.each(['ack-first', 'live-first', 'ack-timeout'] as const)(
     });
     const session = sessions.installAuthority(authority);
     expect(await session.connect()).toEqual({ ok: true });
-    const audio = createAudio();
-    const recovery = createRecovery();
-    const store = createStore();
-    const preferences = createProductPreferences({ getItem: () => null, setItem: () => {} });
+    const audio = createAudioMock();
+    const recovery = createRecoveryFake();
+    const sessionCredentialStore = createSessionCredentialStoreSpy();
+    const preferences = createPreferencesStore({ getItem: () => null, setItem: () => {} });
     const feedback = startGameAudioFeedback({
       audio,
       sessions,
@@ -1670,9 +1672,9 @@ test.each(['ack-first', 'live-first', 'ack-timeout'] as const)(
         feedback={feedback}
         recovery={recovery}
         sessions={sessions}
-        store={store}
+        sessionCredentialStore={sessionCredentialStore}
         preferences={preferences}
-        presentation={createPresentation()}
+        presentation={createPresentationFake()}
         clock={{ now: () => 10_000 }}
         locale={LOCALE.EN}
       />,
@@ -1687,7 +1689,7 @@ test.each(['ack-first', 'live-first', 'ack-timeout'] as const)(
         socket.onRoomUpdate.mock.lastCall?.[0]({ type: 'state:committed', view: finished }),
       );
       expect(screen.getByRole('heading', { name: 'Game result' })).not.toBeNull();
-      expect(store.removeRoom).toHaveBeenCalledOnce();
+      expect(sessionCredentialStore.removeRoom).toHaveBeenCalledOnce();
       expect(session.getSnapshot().connection).toBe('connected');
     }
     if (order === 'ack-timeout') {
@@ -1720,7 +1722,7 @@ test.each(['ack-first', 'live-first', 'ack-timeout'] as const)(
     }
     expect(session.getSnapshot().connection).toBe('disposed');
     expect(screen.getByRole('heading', { name: 'Game result' })).not.toBeNull();
-    expect(store.removeRoom).toHaveBeenCalledOnce();
+    expect(sessionCredentialStore.removeRoom).toHaveBeenCalledOnce();
   },
 );
 

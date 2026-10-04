@@ -1,0 +1,6 @@
+.score-group-tab,
+.score-category-cell,
+.held-dice-rack__slot,
+.player-summary__bonus-action {
+  font: inherit;
+}

@@ -13,19 +13,14 @@ import { TimelineDie } from '@/runtime/dice/renderer/parts/TimelineDie';
 import type { RollPlayback } from '@/runtime/dice/replay/resolve-playback';
 import type { ProceduralDiceResources } from '@/runtime/dice/resources/procedural-resources';
 
-type DiceRollPlaybackProps = Readonly<{
+type DiceRollSceneProps = Readonly<{
   playback: RollPlayback;
   resources: ProceduralDiceResources;
   layout?: RollStageLayout;
   onComplete?: (rollId: string) => void;
 }>;
 
-export function DiceRollPlayback({
-  playback,
-  resources,
-  layout,
-  onComplete,
-}: DiceRollPlaybackProps) {
+export function DiceRollScene({ playback, resources, layout, onComplete }: DiceRollSceneProps) {
   if (playback.status === 'static-fallback') {
     return (
       <group name={`roll-fallback-${playback.rollId}`}>
@@ -59,7 +54,7 @@ function PlaybackDriver({
 }: Readonly<{
   rollId: string;
   durationMs: number;
-  onComplete?: DiceRollPlaybackProps['onComplete'];
+  onComplete?: DiceRollSceneProps['onComplete'];
 }>) {
   const clock = useRollPlaybackClock();
   const completed = useRef(false);

@@ -9,7 +9,7 @@ import { PUBLIC_ERROR_CODE } from '@repo/game-protocol';
 import type { GameSnapshot } from '@repo/game-protocol/socket';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 
-import { createGameSessionHolder } from '@/runtime/session/session-holder';
+import { createGameSessionHolder } from '@/runtime/session/game-session-holder';
 import { createSessionRecovery } from '@/runtime/session/session-recovery';
 
 const AUTHORITY = {

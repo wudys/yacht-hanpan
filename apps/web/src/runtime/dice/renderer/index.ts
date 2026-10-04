@@ -1,3 +1,3 @@
-export { DiceRollPlayback } from '@/runtime/dice/renderer/DiceRollPlayback';
-export { DiceRollWarmupScene } from '@/runtime/dice/renderer/DiceRollWarmupScene';
+export { DiceRollScene } from '@/runtime/dice/renderer/DiceRollScene';
 export { DiceSettledScene } from '@/runtime/dice/renderer/DiceSettledScene';
+export { DiceWarmupScene } from '@/runtime/dice/renderer/DiceWarmupScene';

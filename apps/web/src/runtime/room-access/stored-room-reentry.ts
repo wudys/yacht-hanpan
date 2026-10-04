@@ -13,13 +13,16 @@ import { PUBLIC_ERROR_CODE } from '@repo/game-protocol';
 
 import type { ServerReadiness } from '@/runtime/network/server-readiness';
 import { isPermanentAuthorityFailure } from '@/runtime/session/authority-failure';
-import type { BrowserSessionStore, RecentRoom } from '@/runtime/session/browser-session-store';
+import type { GameSessionHolder } from '@/runtime/session/game-session-holder';
 import type { RecoveryAttemptEvent } from '@/runtime/session/recovery-attempt';
-import type { GameSessionHolder } from '@/runtime/session/session-holder';
+import type {
+  RecentRoom,
+  SessionCredentialStore,
+} from '@/runtime/session/session-credential-store';
 
 const REENTRY_CONNECT_BUDGET_MS = 30_000;
 
-export type StoredRoomRestoreSnapshot =
+export type StoredRoomReentrySnapshot =
   | Readonly<{ status: 'idle' }>
   | Readonly<{ status: 'checking' }>
   | Readonly<{ status: 'connecting' }>
@@ -29,30 +32,30 @@ export type StoredRoomRestoreSnapshot =
   | Readonly<{ status: 'permanentFailure'; error: ClientError }>
   | Readonly<{ status: 'refreshRequired'; error: ClientError | null; reason?: 'storage' }>;
 
-export interface StoredRoomRestore {
+export interface StoredRoomReentry {
   check(): void;
   completeHandoff(): void;
   confirmPermanentFailure(): void;
-  getSnapshot(): StoredRoomRestoreSnapshot;
+  getSnapshot(): StoredRoomReentrySnapshot;
   subscribe(listener: () => void): () => void;
   subscribeAttempt(listener: (event: RecoveryAttemptEvent) => void): () => void;
   dispose(): void;
 }
 
-type CreateStoredRoomRestoreOptions = Readonly<{
+type CreateStoredRoomReentryOptions = Readonly<{
   client: Pick<GameClient, 'resumeRoom'>;
   readiness: ServerReadiness;
   sessions: GameSessionHolder;
-  store: BrowserSessionStore;
+  sessionCredentialStore: SessionCredentialStore;
   onUnexpected?: (error: unknown) => void;
   now?: () => number;
 }>;
 
-const IDLE: StoredRoomRestoreSnapshot = { status: 'idle' };
+const IDLE: StoredRoomReentrySnapshot = { status: 'idle' };
 
-export function createStoredRoomRestore(
-  options: CreateStoredRoomRestoreOptions,
-): StoredRoomRestore {
+export function createStoredRoomReentry(
+  options: CreateStoredRoomReentryOptions,
+): StoredRoomReentry {
   const now = options.now ?? (() => globalThis.performance.now());
   let snapshot = IDLE;
   let disposed = false;
@@ -84,7 +87,7 @@ export function createStoredRoomRestore(
     notifyAttempt({ phase: 'finished', outcome, durationMs, ...(error ? { error } : {}) });
   };
 
-  const publish = (next: StoredRoomRestoreSnapshot): void => {
+  const publish = (next: StoredRoomReentrySnapshot): void => {
     if (disposed || snapshot === next) return;
     snapshot = next;
     if (next.status === 'checking' && attemptStartedAt === null) {
@@ -283,7 +286,7 @@ export function createStoredRoomRestore(
         options.sessions.getSnapshot().authority !== null
       )
         return;
-      const stored = options.store.refreshRecentRoom();
+      const stored = options.sessionCredentialStore.refreshRecentRoom();
       if (stored.status === 'unavailable') {
         publish({ status: 'refreshRequired', error: null, reason: 'storage' });
         return;
@@ -327,7 +330,7 @@ export function createStoredRoomRestore(
         return;
       }
       recentRoom = null;
-      options.store.removeRoom(target.roomId);
+      options.sessionCredentialStore.removeRoom(target.roomId);
       const latest = options.sessions.getSnapshot();
       if (
         !disposed &&

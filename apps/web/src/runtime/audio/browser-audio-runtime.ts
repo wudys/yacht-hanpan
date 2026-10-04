@@ -17,12 +17,12 @@ export type ProductAudioScene = keyof typeof SCENE_AUDIO_URL;
 const SILENT_UNLOCK_AUDIO_URL =
   'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQQAAACAgICA';
 
-export interface ProductAudioRuntimeOptions {
+export interface BrowserAudioRuntimeOptions {
   readonly bgmEnabled?: boolean;
   readonly sfxEnabled?: boolean;
 }
 
-export interface ProductAudioRuntime {
+export interface BrowserAudioRuntime {
   readonly supported: boolean;
   readonly activate: () => Promise<void>;
   readonly prepareCues: () => Promise<void>;
@@ -40,8 +40,8 @@ export interface ProductAudioRuntime {
 }
 
 export function createBrowserAudioRuntime(
-  options: ProductAudioRuntimeOptions = {},
-): ProductAudioRuntime {
+  options: BrowserAudioRuntimeOptions = {},
+): BrowserAudioRuntime {
   const AudioContextConstructor = resolveAudioContextConstructor();
   const AudioConstructor = globalThis.Audio;
   const cues = createProductCueRuntime({ enabled: options.sfxEnabled ?? true });

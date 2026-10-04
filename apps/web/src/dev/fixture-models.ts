@@ -23,15 +23,15 @@ const bonusEarnedPlayers = [
   players[1],
 ] as const;
 
-type AnchorResultMode = 'win' | 'loss' | 'draw' | 'forfeit' | 'timeout' | 'connection-ended';
-type AnchorResultOutcome = 'viewer-win' | 'opponent-win' | 'draw';
-type AnchorResultReason = 'normal' | 'forfeit' | 'timeout' | 'connection-ended';
-type AnchorPlayer = Readonly<{ scorecard: Scorecard; timeoutCount: 0 | 1 | 2 | 3 }>;
+type FixtureResultMode = 'win' | 'loss' | 'draw' | 'forfeit' | 'timeout' | 'connection-ended';
+type FixtureResultOutcome = 'viewer-win' | 'opponent-win' | 'draw';
+type FixtureResultReason = 'normal' | 'forfeit' | 'timeout' | 'connection-ended';
+type FixturePlayer = Readonly<{ scorecard: Scorecard; timeoutCount: 0 | 1 | 2 | 3 }>;
 
-export type AnchorResult = Readonly<{
+export type FixtureResult = Readonly<{
   model: GameViewModel;
-  outcome: AnchorResultOutcome;
-  reason: AnchorResultReason;
+  outcome: FixtureResultOutcome;
+  reason: FixtureResultReason;
 }>;
 
 const COMPLETE_HIGH: Scorecard = {
@@ -65,7 +65,7 @@ const COMPLETE_LOW: Scorecard = {
 const PARTIAL_LOW: Scorecard = { ones: 3, twos: 6, 'full-house': 0 };
 const PARTIAL_HIGH: Scorecard = { ones: 2, twos: 4, choice: 21 };
 
-export function createAnchorGame(mode: string) {
+export function createFixtureGame(mode: string) {
   const achievedFace = mode === 'yacht' ? 5 : mode === 'other' ? 4 : null;
   const snapshot: GameViewInput = {
     match: {
@@ -96,7 +96,7 @@ export function createAnchorGame(mode: string) {
   return deriveGameViewModel(snapshot, 0);
 }
 
-export function createAnchorResult(input: string): AnchorResult {
+export function createFixtureResult(input: string): FixtureResult {
   const configuration = resultConfiguration(normalizeResultMode(input));
   const model = deriveGameViewModel(
     {
@@ -111,7 +111,7 @@ export function createAnchorResult(input: string): AnchorResult {
   };
 }
 
-function normalizeResultMode(input: string): AnchorResultMode {
+function normalizeResultMode(input: string): FixtureResultMode {
   return input === 'loss' ||
     input === 'draw' ||
     input === 'forfeit' ||
@@ -121,10 +121,10 @@ function normalizeResultMode(input: string): AnchorResultMode {
     : 'win';
 }
 
-function resultConfiguration(mode: AnchorResultMode): Readonly<{
-  players: readonly [AnchorPlayer, AnchorPlayer];
-  outcome: AnchorResultOutcome;
-  reason: AnchorResultReason;
+function resultConfiguration(mode: FixtureResultMode): Readonly<{
+  players: readonly [FixturePlayer, FixturePlayer];
+  outcome: FixtureResultOutcome;
+  reason: FixtureResultReason;
 }> {
   switch (mode) {
     case 'loss':
@@ -166,6 +166,6 @@ function resultConfiguration(mode: AnchorResultMode): Readonly<{
   }
 }
 
-function player(scorecard: Scorecard, timeoutCount: 0 | 1 | 2 | 3 = 0): AnchorPlayer {
+function player(scorecard: Scorecard, timeoutCount: 0 | 1 | 2 | 3 = 0): FixturePlayer {
   return { scorecard, timeoutCount };
 }

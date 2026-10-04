@@ -8,14 +8,14 @@ import { StrictMode } from 'react';
 import { afterEach, expect, test, vi } from 'vitest';
 
 import { useLobbyAdmission } from '@/features/lobby/use-lobby-admission';
-import { createProductProfile } from '@/runtime/profile/product-profile';
+import { createProfileSelectionStore } from '@/runtime/profile/profile-selection-store';
 import { createRoomAccess } from '@/runtime/room-access/room-access';
-import type { StoredRoomRestore } from '@/runtime/room-access/stored-room-restore';
+import type { StoredRoomReentry } from '@/runtime/room-access/stored-room-reentry';
+import { createGameSessionHolder } from '@/runtime/session/game-session-holder';
 import {
-  type BrowserSessionStore,
-  createBrowserSessionStore,
-} from '@/runtime/session/browser-session-store';
-import { createGameSessionHolder } from '@/runtime/session/session-holder';
+  createSessionCredentialStore,
+  type SessionCredentialStore,
+} from '@/runtime/session/session-credential-store';
 import type { SessionRecovery } from '@/runtime/session/session-recovery';
 
 vi.mock('@tanstack/react-router', () => ({ useNavigate: () => vi.fn() }));
@@ -23,7 +23,7 @@ afterEach(cleanup);
 
 function setup(
   overrides: Partial<GameClient> = {},
-  store: BrowserSessionStore = createBrowserSessionStore(),
+  sessionCredentialStore: SessionCredentialStore = createSessionCredentialStore(),
 ) {
   const idle = { status: 'idle' } as const;
   const createRoom = vi.fn(() =>
@@ -38,23 +38,23 @@ function setup(
     getSnapshot: () => idle,
     subscribe: () => () => {},
     check: vi.fn(),
-  } as unknown as StoredRoomRestore;
+  } as unknown as StoredRoomReentry;
   const recovery = {
     getSnapshot: () => idle,
     subscribe: () => () => {},
   } as unknown as SessionRecovery;
   const onIntent = vi.fn();
   const sessions = createGameSessionHolder(client);
-  const profile = createProductProfile({ getItem: () => null, setItem: () => {} }, () => 0);
+  const profile = createProfileSelectionStore({ getItem: () => null, setItem: () => {} }, () => 0);
   const activity = new AbortController().signal;
   const readiness = { wait: () => Promise.resolve({ ok: true as const }) };
   const access = createRoomAccess({
     activity,
     client,
     sessions,
-    store,
+    sessionCredentialStore,
     readiness,
-    restore: reentry,
+    reentry,
     recovery,
   });
   const { result, unmount } = renderHook(
@@ -164,8 +164,8 @@ test('does not replace a newer recovery tuple when aborted admission succeeds af
       },
     },
   };
-  const store = createBrowserSessionStore(options);
-  const { result, unmount } = setup({ createRoom, createSession }, store);
+  const sessionCredentialStore = createSessionCredentialStore(options);
+  const { result, unmount } = setup({ createRoom, createSession }, sessionCredentialStore);
   await act(async () => {
     result.current.createRoom();
   });
@@ -179,13 +179,13 @@ test('does not replace a newer recovery tuple when aborted admission succeeds af
     ...response.data.authority,
     roomId: '019cebf0-79b8-7a22-8000-000000000002' as typeof response.data.authority.roomId,
   };
-  store.recordRoom(newerAuthority);
-  const currentRoom = store.initialize().recentRoom;
+  sessionCredentialStore.recordRoom(newerAuthority);
+  const currentRoom = sessionCredentialStore.initialize().recentRoom;
   await act(async () => {
     completeAdmission(response);
     await pending;
   });
-  expect(store.initialize().recentRoom).toEqual(currentRoom);
-  expect(createBrowserSessionStore(options).initialize().recentRoom).toEqual(currentRoom);
+  expect(sessionCredentialStore.initialize().recentRoom).toEqual(currentRoom);
+  expect(createSessionCredentialStore(options).initialize().recentRoom).toEqual(currentRoom);
   expect(createSession).not.toHaveBeenCalled();
 });

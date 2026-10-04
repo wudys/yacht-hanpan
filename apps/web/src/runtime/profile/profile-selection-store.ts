@@ -7,23 +7,23 @@ interface ProfileStorage {
   setItem(key: string, value: string): void;
 }
 
-export type ProductProfileSnapshot = Readonly<{
+export type ProfileSelectionSnapshot = Readonly<{
   selection: ProfileSelection;
   storageFailed: boolean;
 }>;
 
-export interface ProductProfile {
-  initialize(): ProductProfileSnapshot;
-  getSnapshot(): ProductProfileSnapshot;
+export interface ProfileSelectionStore {
+  initialize(): ProfileSelectionSnapshot;
+  getSnapshot(): ProfileSelectionSnapshot;
   subscribe(listener: () => void): () => void;
   setSelection(selection: ProfileSelection): boolean;
 }
 
-export function createProductProfile(
+export function createProfileSelectionStore(
   storage: ProfileStorage,
   random: () => number = Math.random,
-): ProductProfile {
-  let snapshot: ProductProfileSnapshot | null = null;
+): ProfileSelectionStore {
+  let snapshot: ProfileSelectionSnapshot | null = null;
   const subscribers = new Set<() => void>();
 
   function persist(selection: ProfileSelection): boolean {
@@ -35,7 +35,7 @@ export function createProductProfile(
     }
   }
 
-  function initialize(): ProductProfileSnapshot {
+  function initialize(): ProfileSelectionSnapshot {
     if (snapshot !== null) return snapshot;
     let selection: ProfileSelection | null = null;
     let storageFailed = false;

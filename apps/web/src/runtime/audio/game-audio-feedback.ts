@@ -1,11 +1,11 @@
 import type { GameSession, ServerClock } from '@repo/game-client-sdk';
 import type { CommandResult } from '@repo/game-client-sdk/session';
 
-import type { ProductAudioRuntime } from '@/runtime/audio/browser-audio-runtime';
+import type { BrowserAudioRuntime } from '@/runtime/audio/browser-audio-runtime';
 import { PRODUCT_CUE, type ProductCue } from '@/runtime/audio/product-cues';
 import { createTurnWarning } from '@/runtime/audio/turn-warning';
-import type { ProductPreferences } from '@/runtime/preferences/product-preferences';
-import type { GameSessionHolder } from '@/runtime/session/session-holder';
+import type { PreferencesStore } from '@/runtime/preferences/preferences-store';
+import type { GameSessionHolder } from '@/runtime/session/game-session-holder';
 import type { SessionRecovery } from '@/runtime/session/session-recovery';
 
 interface ObservedCommand {
@@ -20,11 +20,11 @@ export interface GameAudioFeedback {
 }
 
 export function startGameAudioFeedback(options: {
-  audio: ProductAudioRuntime;
+  audio: BrowserAudioRuntime;
   clock: Pick<ServerClock, 'now'>;
   sessions: GameSessionHolder;
   recovery: SessionRecovery;
-  preferences: ProductPreferences;
+  preferences: PreferencesStore;
 }): GameAudioFeedback {
   const { audio, clock, sessions, recovery, preferences } = options;
   const warning = createTurnWarning(

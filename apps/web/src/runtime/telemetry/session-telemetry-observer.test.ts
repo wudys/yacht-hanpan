@@ -1,11 +1,11 @@
 import type { GameSession, GameSessionSnapshot } from '@repo/game-client-sdk';
 import { expect, it, vi } from 'vitest';
 
-import type { StoredRoomRestore } from '@/runtime/room-access/stored-room-restore';
+import type { StoredRoomReentry } from '@/runtime/room-access/stored-room-reentry';
+import { createGameSessionHolder } from '@/runtime/session/game-session-holder';
 import type { RecoveryAttemptEvent } from '@/runtime/session/recovery-attempt';
-import { createGameSessionHolder } from '@/runtime/session/session-holder';
 import { createSessionRecovery, type SessionRecovery } from '@/runtime/session/session-recovery';
-import { observeTelemetry } from '@/runtime/telemetry/observe-telemetry';
+import { observeSessionTelemetry } from '@/runtime/telemetry/session-telemetry-observer';
 import { inactiveTelemetry } from '@/runtime/telemetry/telemetry';
 import { authority, finishedGame, playingGame } from '@/testing/game-fixtures';
 
@@ -18,11 +18,11 @@ it('records cancellation when live finished arrives before the pending full sync
     subscribeForeground: () => () => {},
   });
   const event = vi.fn();
-  const stop = observeTelemetry({
+  const stop = observeSessionTelemetry({
     telemetry: { ...inactiveTelemetry, trackEvent: event },
     sessions: fixture.sessions,
     recovery,
-    restore: idleReentry(),
+    reentry: idleReentry(),
   });
   recovery.start();
   fixture.publish({ connection: 'disconnected' });
@@ -41,7 +41,7 @@ it('records cancellation when live finished arrives before the pending full sync
   ]);
 });
 
-function idleReentry(): StoredRoomRestore {
+function idleReentry(): StoredRoomReentry {
   return {
     getSnapshot: () => ({ status: 'idle' }),
     subscribe: () => () => {},
@@ -137,9 +137,9 @@ it.each(['new', 'resumed'] as const)(
       requireRefreshAfterSynchronization() {},
       reportCommandError() {},
     };
-    let reentrySnapshot: ReturnType<StoredRoomRestore['getSnapshot']> =
+    let reentrySnapshot: ReturnType<StoredRoomReentry['getSnapshot']> =
       entry === 'new' ? { status: 'idle' } : { status: 'checking' };
-    const reentry: StoredRoomRestore = {
+    const reentry: StoredRoomReentry = {
       getSnapshot: () => reentrySnapshot,
       subscribe: () => () => {},
       subscribeAttempt: () => () => {},
@@ -149,11 +149,11 @@ it.each(['new', 'resumed'] as const)(
       confirmPermanentFailure() {},
     };
     const event = vi.fn();
-    const stop = observeTelemetry({
+    const stop = observeSessionTelemetry({
       telemetry: { ...inactiveTelemetry, trackEvent: event },
       sessions,
       recovery,
-      restore: reentry,
+      reentry: reentry,
     });
     sessions.installAuthority(authority);
     snapshot = { ...snapshot, game: playingGame };
@@ -179,7 +179,7 @@ it.each(['new', 'resumed'] as const)(
 
 it('counts and diagnoses failed reentry once even after a later snapshot changes', () => {
   let recoverySnapshot: ReturnType<SessionRecovery['getSnapshot']> = { status: 'idle' };
-  let reentrySnapshot: ReturnType<StoredRoomRestore['getSnapshot']> = { status: 'idle' };
+  let reentrySnapshot: ReturnType<StoredRoomReentry['getSnapshot']> = { status: 'idle' };
   let publishRecovery = () => {};
   let publishAttempt = (_event: RecoveryAttemptEvent) => {};
   const recovery: SessionRecovery = {
@@ -195,7 +195,7 @@ it('counts and diagnoses failed reentry once even after a later snapshot changes
     requireRefreshAfterSynchronization() {},
     reportCommandError() {},
   };
-  const reentry: StoredRoomRestore = {
+  const reentry: StoredRoomReentry = {
     getSnapshot: () => reentrySnapshot,
     subscribe: () => () => {},
     subscribeAttempt(listener: (event: RecoveryAttemptEvent) => void) {
@@ -214,11 +214,11 @@ it('counts and diagnoses failed reentry once even after a later snapshot changes
   });
   const event = vi.fn();
   const reportUnexpected = vi.fn();
-  const stop = observeTelemetry({
+  const stop = observeSessionTelemetry({
     telemetry: { ...inactiveTelemetry, trackEvent: event, reportUnexpected },
     sessions,
     recovery,
-    restore: reentry,
+    reentry: reentry,
   });
   reentrySnapshot = { status: 'checking' };
   publishAttempt({ phase: 'started' });
@@ -266,11 +266,11 @@ it('diagnoses each session error once without losing the first playing event aft
   const recovery = createSessionRecovery({ sessions: fixture.sessions });
   const reportUnexpected = vi.fn();
   const trackEvent = vi.fn();
-  const stop = observeTelemetry({
+  const stop = observeSessionTelemetry({
     telemetry: { ...inactiveTelemetry, reportUnexpected, trackEvent },
     sessions: fixture.sessions,
     recovery,
-    restore: idleReentry(),
+    reentry: idleReentry(),
   });
   const error = { kind: 'protocol', code: 'INVALID_RESPONSE', requestId: 'PRIVATE' } as const;
   fixture.publish({ error });
@@ -292,11 +292,11 @@ it('does not count a finished baseline as a new participation', () => {
   fixture.publish({ game: finishedGame('scoresCompleted', 0) });
   const recovery = createSessionRecovery({ sessions: fixture.sessions });
   const trackEvent = vi.fn();
-  const stop = observeTelemetry({
+  const stop = observeSessionTelemetry({
     telemetry: { ...inactiveTelemetry, trackEvent },
     sessions: fixture.sessions,
     recovery,
-    restore: idleReentry(),
+    reentry: idleReentry(),
   });
   fixture.publish({ syncRevision: 2 });
   expect(trackEvent).not.toHaveBeenCalled();
@@ -312,7 +312,7 @@ it('counts one reentry pair while its owner includes the lower connection recove
     subscribeForeground: () => () => {},
   });
   let attempt = (_event: RecoveryAttemptEvent) => {};
-  const reentry: StoredRoomRestore = {
+  const reentry: StoredRoomReentry = {
     ...idleReentry(),
     getSnapshot: () => ({ status: 'checking' }),
     subscribeAttempt(listener: (event: RecoveryAttemptEvent) => void) {
@@ -321,11 +321,11 @@ it('counts one reentry pair while its owner includes the lower connection recove
     },
   };
   const trackEvent = vi.fn();
-  const stop = observeTelemetry({
+  const stop = observeSessionTelemetry({
     telemetry: { ...inactiveTelemetry, trackEvent },
     sessions: fixture.sessions,
     recovery,
-    restore: reentry,
+    reentry: reentry,
   });
   recovery.start();
   attempt({ phase: 'started' });
@@ -348,9 +348,9 @@ it('counts one reentry pair while its owner includes the lower connection recove
 it('keeps a reentry error under the attempt owner across failure and handoff snapshots', () => {
   const fixture = recoveryFixture();
   const recovery = createSessionRecovery({ sessions: fixture.sessions });
-  let snapshot: ReturnType<StoredRoomRestore['getSnapshot']> = { status: 'checking' };
+  let snapshot: ReturnType<StoredRoomReentry['getSnapshot']> = { status: 'checking' };
   let attempt = (_event: RecoveryAttemptEvent) => {};
-  const reentry: StoredRoomRestore = {
+  const reentry: StoredRoomReentry = {
     ...idleReentry(),
     getSnapshot: () => snapshot,
     subscribeAttempt(listener: (event: RecoveryAttemptEvent) => void) {
@@ -359,11 +359,11 @@ it('keeps a reentry error under the attempt owner across failure and handoff sna
     },
   };
   const reportUnexpected = vi.fn();
-  const stop = observeTelemetry({
+  const stop = observeSessionTelemetry({
     telemetry: { ...inactiveTelemetry, reportUnexpected },
     sessions: fixture.sessions,
     recovery,
-    restore: reentry,
+    reentry: reentry,
   });
   attempt({ phase: 'started' });
   const error = { kind: 'protocol', code: 'INVALID_RESPONSE' } as const;

@@ -6,14 +6,14 @@ import { expect, test, vi } from 'vitest';
 
 import GameScreen from '@/features/game/GameScreen';
 import { LOCALE, translate } from '@/i18n';
-import { createProductPreferences } from '@/runtime/preferences/product-preferences';
+import { createPreferencesStore } from '@/runtime/preferences/preferences-store';
 import {
-  createAudio,
+  createAudioMock,
   createGameSessionHarness,
-  createPresentation,
-  createRecovery,
-  createSession,
-  createStore,
+  createPresentationFake,
+  createRecoveryFake,
+  createSessionCredentialStoreSpy,
+  createSessionMock,
 } from '@/testing/game-harness';
 
 vi.mock('@tanstack/react-router', () => ({ useNavigate: () => vi.fn() }));
@@ -21,13 +21,13 @@ vi.mock('@tanstack/react-router', () => ({ useNavigate: () => vi.fn() }));
 function createHarness() {
   return {
     ...createGameSessionHarness(),
-    audio: createAudio(),
+    audio: createAudioMock(),
     feedback: { observeCommand: vi.fn() },
     clock: { now: () => 10_000 },
-    store: createStore(),
-    preferences: createProductPreferences({ getItem: () => null, setItem: () => undefined }),
-    presentation: createPresentation(),
-    recovery: createRecovery(),
+    sessionCredentialStore: createSessionCredentialStoreSpy(),
+    preferences: createPreferencesStore({ getItem: () => null, setItem: () => undefined }),
+    presentation: createPresentationFake(),
+    recovery: createRecoveryFake(),
   };
 }
 
@@ -100,7 +100,7 @@ test('resets a hidden reconnect notice when the session is replaced', () => {
     act(() => harness.sessions.publishOpponentConnection(true));
     fireEvent.click(screen.getByRole('button', { name: 'Scoreboard' }));
     advance(1_000);
-    act(() => harness.sessions.replaceSession(createSession()));
+    act(() => harness.sessions.replaceSession(createSessionMock()));
     fireEvent.click(screen.getByRole('button', { name: 'Close' }));
     const message = translate(LOCALE.EN, 'game.opponentReconnected');
     expect(screen.queryByText(message)).toBeNull();

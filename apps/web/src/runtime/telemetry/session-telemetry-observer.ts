@@ -1,19 +1,19 @@
 import type { ClientError } from '@repo/game-client-sdk';
 
-import type { StoredRoomRestore } from '@/runtime/room-access/stored-room-restore';
+import type { StoredRoomReentry } from '@/runtime/room-access/stored-room-reentry';
+import type { GameSessionHolder } from '@/runtime/session/game-session-holder';
 import type { RecoveryAttemptEvent } from '@/runtime/session/recovery-attempt';
-import type { GameSessionHolder } from '@/runtime/session/session-holder';
 import type { SessionRecovery } from '@/runtime/session/session-recovery';
 import { reportClientFailure } from '@/runtime/telemetry/error-policy';
 import { clientFailureFields, type Telemetry } from '@/runtime/telemetry/telemetry';
 
-export function observeTelemetry(options: {
+export function observeSessionTelemetry(options: {
   telemetry: Telemetry;
   sessions: GameSessionHolder;
   recovery: SessionRecovery;
-  restore: StoredRoomRestore;
+  reentry: StoredRoomReentry;
 }): () => void {
-  const { telemetry, sessions, recovery, restore } = options;
+  const { telemetry, sessions, recovery, reentry } = options;
   const seen = new WeakMap<
     NonNullable<ReturnType<GameSessionHolder['getSnapshot']>['session']>,
     { entry: 'new' | 'resumed' | null; finished: boolean; error: ClientError | null }
@@ -30,7 +30,7 @@ export function observeTelemetry(options: {
     if (error !== state.error) {
       // Reentry reports its result; remember the same snapshot error through handoff.
       state.error = error;
-      if (error && restore.getSnapshot().status === 'idle')
+      if (error && reentry.getSnapshot().status === 'idle')
         reportClientFailure(telemetry, error, {
           operation: 'synchronize',
           stage: 'snapshot',
@@ -39,7 +39,7 @@ export function observeTelemetry(options: {
     const match = sessionSnapshot.game?.match;
     if (!match) return;
     if (match.status === 'playing' && state.entry === null) {
-      state.entry = restore.getSnapshot().status === 'idle' ? 'new' : 'resumed';
+      state.entry = reentry.getSnapshot().status === 'idle' ? 'new' : 'resumed';
       telemetry.trackEvent({
         name: 'play_started',
         entry: state.entry,
@@ -72,7 +72,7 @@ export function observeTelemetry(options: {
     return (event: RecoveryAttemptEvent): void => {
       if (event.phase === 'started') {
         // Reentry owns its whole reconnect/sync episode, including connection changes.
-        collected = operation === 'reentry' || restore.getSnapshot().status === 'idle';
+        collected = operation === 'reentry' || reentry.getSnapshot().status === 'idle';
         if (collected) telemetry.trackEvent({ name: 'recovery_started', operation });
         return;
       }
@@ -95,7 +95,7 @@ export function observeTelemetry(options: {
   const stops = [
     sessions.subscribe(observeSession),
     recovery.subscribeAttempt(observeAttempt('connection')),
-    restore.subscribeAttempt(observeAttempt('reentry')),
+    reentry.subscribeAttempt(observeAttempt('reentry')),
   ];
   observeSession();
   return () => {

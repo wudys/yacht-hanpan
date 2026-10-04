@@ -3,7 +3,7 @@ import { useLayoutEffect, useSyncExternalStore } from 'react';
 
 import { DICE_REVEAL_DURATION_MS, type DicePresentation } from '@/runtime/dice/dice-presentation';
 import { GAME_ROLL_LAYOUT } from '@/runtime/dice/game-dice-layout';
-import { DiceRollPlayback, DiceSettledScene } from '@/runtime/dice/renderer';
+import { DiceRollScene, DiceSettledScene } from '@/runtime/dice/renderer';
 
 export function DicePresentationScene({
   presentation,
@@ -22,7 +22,7 @@ export function DicePresentationScene({
   if (snapshot.resources === null || snapshot.phase === 'hidden') return null;
   if (snapshot.phase === 'rolling') {
     return (
-      <DiceRollPlayback
+      <DiceRollScene
         key={snapshot.rollId}
         playback={snapshot.playback}
         resources={snapshot.resources}

@@ -55,7 +55,7 @@ vi.mock('@react-three/fiber', async (importOriginal) => {
   };
 });
 vi.mock('@/runtime/dice/renderer', () => ({
-  DiceRollWarmupScene: function BorrowedResourceConsumer() {
+  DiceWarmupScene: function BorrowedResourceConsumer() {
     useEffect(() => {
       fixture.activeConsumers += 1;
       return () => {
@@ -93,7 +93,7 @@ vi.mock('@/app/product-execution', () => ({
         prepareCues: async () => undefined,
       },
       profile: { initialize: vi.fn() },
-      store: { initialize: vi.fn() },
+      sessionCredentialStore: { initialize: vi.fn() },
       sessions: { getSnapshot: () => ({}), subscribe: () => () => undefined },
       presentation: {
         prepare: async () => undefined,
@@ -135,8 +135,8 @@ vi.mock('@/bootstrap/web-config', () => ({
 vi.mock('@/bootstrap/static-capabilities', () => ({
   detectStaticGameplayCapabilities: () => ({ ok: true, missing: [] }),
 }));
-vi.mock('@/runtime/telemetry/observe-telemetry', () => ({
-  observeTelemetry: () => () => undefined,
+vi.mock('@/runtime/telemetry/session-telemetry-observer', () => ({
+  observeSessionTelemetry: () => () => undefined,
 }));
 
 let disposeApp: (() => void) | undefined;

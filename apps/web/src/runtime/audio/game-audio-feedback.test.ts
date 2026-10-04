@@ -4,13 +4,13 @@ import { afterEach, expect, test, vi } from 'vitest';
 
 import { startGameAudioFeedback } from '@/runtime/audio/game-audio-feedback';
 import { PRODUCT_CUE } from '@/runtime/audio/product-cues';
-import { createProductPreferences } from '@/runtime/preferences/product-preferences';
+import { createPreferencesStore } from '@/runtime/preferences/preferences-store';
 import { commandSuccess, playingGameInput as playingGame } from '@/testing/game-fixtures';
 import {
-  createAudio,
+  createAudioMock,
   createGameSessionHarness,
-  createRecovery,
-  createSession,
+  createRecoveryFake,
+  createSessionMock,
   deferred,
 } from '@/testing/game-harness';
 
@@ -23,9 +23,9 @@ afterEach(() => {
 });
 function setup(now: () => number = () => 10_000) {
   const harness = createGameSessionHarness();
-  const audio = createAudio();
-  const recovery = createRecovery();
-  const preferences = createProductPreferences({ getItem: () => null, setItem: () => {} });
+  const audio = createAudioMock();
+  const recovery = createRecoveryFake();
+  const preferences = createPreferencesStore({ getItem: () => null, setItem: () => {} });
   const feedback = startGameAudioFeedback({
     ...harness,
     audio,
@@ -133,7 +133,7 @@ test.each(
       h.recovery.publish({ status: 'synchronizing' });
       h.recovery.publish({ status: 'idle' });
     }
-    if (reason === 'replacement') h.sessions.replaceSession(createSession());
+    if (reason === 'replacement') h.sessions.replaceSession(createSessionMock());
     if (reason === 'sync') {
       const snapshot = h.session.getSnapshot();
       h.session.getSnapshot.mockReturnValue({
@@ -167,7 +167,7 @@ test('deduplicates repeated promises and distinct successful results for the sam
   response.resolve(commandSuccess());
   await response.promise;
   expect(h.audio.playCue).toHaveBeenCalledExactlyOnceWith(PRODUCT_CUE.SCORE);
-  h.sessions.replaceSession(createSession());
+  h.sessions.replaceSession(createSessionMock());
   h.publish();
   h.observe(Promise.resolve(commandSuccess()));
   await Promise.resolve();
@@ -199,8 +199,8 @@ test('does not enqueue while disabled or after disposal', async () => {
 
 test('uses one subscription per source and releases every subscription on repeated disposal', async () => {
   const h = createGameSessionHarness();
-  const recovery = createRecovery();
-  const preferences = createProductPreferences({ getItem: () => null, setItem: () => {} });
+  const recovery = createRecoveryFake();
+  const preferences = createPreferencesStore({ getItem: () => null, setItem: () => {} });
   const unsubscribers: ReturnType<typeof vi.fn>[] = [];
   const sources = [h.sessions, recovery, preferences];
   const subscriptions = sources.map((source) => {
@@ -214,7 +214,7 @@ test('uses one subscription per source and releases every subscription on repeat
   const addListener = vi.spyOn(document, 'addEventListener');
   const removeListener = vi.spyOn(document, 'removeEventListener');
   const clearInterval = vi.spyOn(window, 'clearInterval');
-  const audio = createAudio();
+  const audio = createAudioMock();
   const feedback = startGameAudioFeedback({
     ...h,
     audio,

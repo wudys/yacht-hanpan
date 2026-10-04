@@ -1,7 +1,7 @@
 import { expect, onTestFinished, test, vi } from 'vitest';
 
 import type { BootstrapProgress, ReadinessReporter } from '@/bootstrap/bootstrap-progress';
-import { loadProductResources } from '@/bootstrap/load-product-resources';
+import { prepareProductResources } from '@/bootstrap/prepare-product-resources';
 
 test('bounds required preparation without starting later optional tracks', async () => {
   vi.useFakeTimers();
@@ -12,7 +12,7 @@ test('bounds required preparation without starting later optional tracks', async
   const failed = vi.fn();
   const onFailure = vi.fn();
   const prefetchScenes = vi.fn(async () => undefined);
-  const loading = loadProductResources({
+  const loading = prepareProductResources({
     bgmEnabled: false,
     prefetchScenes,
     loadModules: async () => undefined,
@@ -43,7 +43,7 @@ test('external cancellation ends preparation without reporting an operational fa
   const prefetchScenes = vi.fn(async () => undefined);
   const updates: BootstrapProgress[] = [];
   let report: ReadinessReporter = () => undefined;
-  const loading = loadProductResources({
+  const loading = prepareProductResources({
     signal: activity.signal,
     bgmEnabled: false,
     prefetchScenes,
@@ -76,7 +76,7 @@ test('publishes completed gates and ignores late progress after a failed attempt
   const updates: BootstrapProgress[] = [];
   let report: ReadinessReporter = () => undefined;
   let rejectPreparation!: (error: Error) => void;
-  const loading = loadProductResources({
+  const loading = prepareProductResources({
     bgmEnabled: false,
     prefetchScenes: async () => undefined,
     loadModules: async () => undefined,
@@ -102,7 +102,7 @@ test('publishes completed gates and ignores late progress after a failed attempt
 
 test('disabled BGM still fetches every scene without blocking resource readiness', async () => {
   const scenes: string[] = [];
-  await loadProductResources({
+  await prepareProductResources({
     bgmEnabled: false,
     prefetchScenes: (requested) => {
       scenes.push(...requested);
@@ -117,7 +117,7 @@ test('disabled BGM still fetches every scene without blocking resource readiness
 
 test('enabled Lobby failure blocks readiness while optional tracks do not', async () => {
   await expect(
-    loadProductResources({
+    prepareProductResources({
       bgmEnabled: true,
       prefetchScenes: async (scenes) => {
         throw new Error(scenes[0]);
@@ -131,7 +131,7 @@ test('enabled Lobby failure blocks readiness while optional tracks do not', asyn
 
 test('dice preparation failure blocks readiness even with BGM disabled', async () => {
   await expect(
-    loadProductResources({
+    prepareProductResources({
       bgmEnabled: false,
       prefetchScenes: async () => undefined,
       loadModules: async () => undefined,
@@ -145,7 +145,7 @@ test('dice preparation failure blocks readiness even with BGM disabled', async (
 
 test('product cues are required even with BGM disabled', async () => {
   await expect(
-    loadProductResources({
+    prepareProductResources({
       bgmEnabled: false,
       prefetchScenes: async () => undefined,
       loadModules: async () => undefined,
@@ -161,7 +161,7 @@ test('reports the failed resource stage without replacing the original exception
   const failure = new Error('PRIVATE resource URL');
   const onFailure = vi.fn();
   await expect(
-    loadProductResources({
+    prepareProductResources({
       bgmEnabled: false,
       prefetchScenes: async () => undefined,
       loadModules: async () => undefined,
@@ -180,7 +180,7 @@ test.each([new TypeError('active failure'), new DOMException('active failure', '
   async (failure) => {
     const onFailure = vi.fn();
     await expect(
-      loadProductResources({
+      prepareProductResources({
         bgmEnabled: false,
         prefetchScenes: async () => undefined,
         loadModules: async () => {
@@ -208,7 +208,7 @@ test.each([true, false])(
     const prefetchScenes = vi.fn((scenes: readonly string[]) =>
       scenes[0] === 'lobby' ? lobby : new Promise<void>(() => undefined),
     );
-    const loading = loadProductResources({
+    const loading = prepareProductResources({
       bgmEnabled,
       prefetchScenes,
       loadModules: async () => undefined,
@@ -236,7 +236,7 @@ test.each([true, false])(
 test('optional music rejection after readiness does not fail preparation', async () => {
   const onFailure = vi.fn();
   await expect(
-    loadProductResources({
+    prepareProductResources({
       bgmEnabled: true,
       prefetchScenes: async (scenes) => {
         if (scenes[0] === 'game') throw new Error('optional music unavailable');

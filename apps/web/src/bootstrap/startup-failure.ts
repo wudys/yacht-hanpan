@@ -1,7 +1,7 @@
 import '@/bootstrap/startup-failure.css';
 
 import { translate } from '@/i18n';
-import { readStoredLocale } from '@/runtime/preferences/product-preferences';
+import { readStoredLocale } from '@/runtime/preferences/preferences-store';
 
 export function showStartupFailure(): () => void {
   const locale = readStoredLocale({ getItem: (key) => window.localStorage.getItem(key) });

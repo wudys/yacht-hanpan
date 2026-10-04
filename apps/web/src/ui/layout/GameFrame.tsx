@@ -16,7 +16,7 @@ import {
   type FrameMetrics,
   isUnsupportedCoarseLandscape,
   type SafeAreaInsets,
-} from '@/ui/layout/metrics';
+} from '@/ui/layout/frame-metrics';
 
 const COARSE_POINTER_QUERY = '(pointer: coarse)';
 

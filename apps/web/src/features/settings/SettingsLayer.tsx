@@ -2,13 +2,13 @@ import { useSyncExternalStore } from 'react';
 
 import { SettingsView } from '@/features/settings/view/SettingsView';
 import { type Locale, translate } from '@/i18n';
-import type { ProductAudioRuntime } from '@/runtime/audio/browser-audio-runtime';
+import type { BrowserAudioRuntime } from '@/runtime/audio/browser-audio-runtime';
 import { PRODUCT_CUE } from '@/runtime/audio/product-cues';
-import type { ProductPreferences } from '@/runtime/preferences/product-preferences';
+import type { PreferencesStore } from '@/runtime/preferences/preferences-store';
 
 type SettingsLayerProps = Readonly<{
-  preferences: ProductPreferences;
-  audio: Pick<ProductAudioRuntime, 'playCue' | 'setSfxEnabled'>;
+  preferences: PreferencesStore;
+  audio: Pick<BrowserAudioRuntime, 'playCue' | 'setSfxEnabled'>;
   onClose: () => void;
   forfeit?: Readonly<{ disabled: boolean; onIntent: () => void }>;
 }>;

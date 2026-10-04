@@ -1,7 +1,7 @@
 import type { ServerClock } from '@repo/game-client-sdk';
 import { useLayoutEffect } from 'react';
 
-import { useDeadlineSeconds } from '@/features/game/game-display-hooks';
+import { useDeadlineSeconds } from '@/features/game/hud/game-deadline-hooks';
 import { GameTimer } from '@/features/game/view/board';
 import { type Locale, translate } from '@/i18n';
 

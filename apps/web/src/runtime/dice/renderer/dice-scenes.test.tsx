@@ -13,11 +13,11 @@ import * as THREE from 'three';
 import { expect, test, vi } from 'vitest';
 
 import { DICE_CANVAS_VIEWPORT_SIZE, layoutSettledDice } from '@/runtime/dice/game-dice-layout';
-import { DiceRollPlayback } from '@/runtime/dice/renderer/DiceRollPlayback';
-import { DiceRollWarmupScene } from '@/runtime/dice/renderer/DiceRollWarmupScene';
+import { DiceRollScene } from '@/runtime/dice/renderer/DiceRollScene';
 import { DiceSettledScene } from '@/runtime/dice/renderer/DiceSettledScene';
+import { DiceWarmupScene } from '@/runtime/dice/renderer/DiceWarmupScene';
+import { CupMesh } from '@/runtime/dice/renderer/parts/CupMesh';
 import { RollStage } from '@/runtime/dice/renderer/parts/RollStage';
-import { DiceCupShell } from '@/runtime/dice/renderer/parts/TimelineCup';
 import type { RollPlayback } from '@/runtime/dice/replay/resolve-playback';
 import { createCupResources } from '@/runtime/dice/resources/cup-resources';
 import type { ProceduralDiceResources } from '@/runtime/dice/resources/procedural-resources';
@@ -114,7 +114,7 @@ test('a tipped open cup blocks light through its opaque outer wall', async () =>
     size: { width: 340, height: 204, top: 0, left: 0 },
   });
   try {
-    await actR3f(async () => root.render(<DiceCupShell resources={resources.cup} />));
+    await actR3f(async () => root.render(<CupMesh resources={resources.cup} />));
     scene.updateMatrixWorld(true);
     const wall = scene.children[0]!.children.find(
       (o) =>
@@ -212,7 +212,7 @@ test('mounts authoritative fallback dice without reporting replay completion', a
     await actR3f(async () => {
       root.render(
         <StrictMode>
-          <DiceRollPlayback
+          <DiceRollScene
             playback={FIRST_PLAYBACK}
             resources={resources}
             onComplete={firstComplete}
@@ -239,7 +239,7 @@ test('mounts authoritative fallback dice without reporting replay completion', a
     await actR3f(async () => {
       root.render(
         <StrictMode>
-          <DiceRollPlayback
+          <DiceRollScene
             playback={FIRST_PLAYBACK}
             resources={resources}
             onComplete={replacementComplete}
@@ -254,7 +254,7 @@ test('mounts authoritative fallback dice without reporting replay completion', a
     await actR3f(async () => {
       root.render(
         <StrictMode>
-          <DiceRollPlayback
+          <DiceRollScene
             playback={nextPlayback}
             resources={resources}
             onComplete={replacementComplete}
@@ -538,7 +538,7 @@ test('reuses prepared resources across verified replays without disposing siblin
     await actR3f(async () =>
       root.render(
         <StrictMode>
-          <DiceRollWarmupScene resources={resources} visible={false} />
+          <DiceWarmupScene resources={resources} visible={false} />
         </StrictMode>,
       ),
     );
@@ -570,7 +570,7 @@ test('reuses prepared resources across verified replays without disposing siblin
       await actR3f(async () =>
         root.render(
           <StrictMode>
-            <DiceRollPlayback
+            <DiceRollScene
               playback={playback(rollId, slots)}
               resources={resources}
               onComplete={complete}
@@ -594,7 +594,7 @@ test('reuses prepared resources across verified replays without disposing siblin
       await actR3f(async () =>
         root.render(
           <StrictMode>
-            <DiceRollPlayback
+            <DiceRollScene
               playback={playback(rollId, slots)}
               resources={resources}
               onComplete={complete}
@@ -614,7 +614,7 @@ test('reuses prepared resources across verified replays without disposing siblin
     expect(complete).toHaveBeenCalledTimes(2);
     await actR3f(async () =>
       root.render(
-        <DiceRollPlayback
+        <DiceRollScene
           playback={playback('cancelled', [0])}
           resources={resources}
           onComplete={complete}

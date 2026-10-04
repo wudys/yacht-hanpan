@@ -2,7 +2,7 @@
 import { beforeEach, expect, test, vi } from 'vitest';
 
 import { createProductExecution } from '@/app/product-execution';
-import { createProductPreferences } from '@/runtime/preferences/product-preferences';
+import { createPreferencesStore } from '@/runtime/preferences/preferences-store';
 import { inactiveTelemetry } from '@/runtime/telemetry/telemetry';
 
 const fixture = vi.hoisted(() => ({
@@ -35,16 +35,16 @@ vi.mock('@/runtime/network/server-readiness', () => ({ createServerReadiness: ()
 vi.mock('@/runtime/room-access/room-access', () => ({
   createRoomAccess: () => ({ dispose: fixture.accessDispose }),
 }));
-vi.mock('@/runtime/room-access/stored-room-restore', () => ({
-  createStoredRoomRestore: () => ({ dispose: fixture.restoreDispose }),
+vi.mock('@/runtime/room-access/stored-room-reentry', () => ({
+  createStoredRoomReentry: () => ({ dispose: fixture.restoreDispose }),
 }));
-vi.mock('@/runtime/session/browser-session-store', () => ({
-  createBrowserSessionStore: ({ signal }: { signal: AbortSignal }) => {
+vi.mock('@/runtime/session/session-credential-store', () => ({
+  createSessionCredentialStore: ({ signal }: { signal: AbortSignal }) => {
     fixture.activity = signal;
     return {};
   },
 }));
-vi.mock('@/runtime/session/session-holder', () => ({
+vi.mock('@/runtime/session/game-session-holder', () => ({
   createGameSessionHolder: () => ({ dispose: fixture.sessionsDispose }),
 }));
 vi.mock('@/runtime/session/session-recovery', () => ({
@@ -71,7 +71,7 @@ function createExecution() {
   return createProductExecution({
     serverUrl: 'https://game.example.com',
     releaseId: 'release',
-    preferences: createProductPreferences({ getItem: () => null, setItem: () => undefined }),
+    preferences: createPreferencesStore({ getItem: () => null, setItem: () => undefined }),
     telemetry: inactiveTelemetry,
   });
 }

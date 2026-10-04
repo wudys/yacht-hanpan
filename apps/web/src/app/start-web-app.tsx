@@ -8,7 +8,7 @@ import { type ActorRefFrom, createActor } from 'xstate';
 import { appLifecycleMachine } from '@/app/app-lifecycle-machine';
 import { createAppRouter } from '@/app/app-router';
 import { createProductExecution } from '@/app/product-execution';
-import { loadProductResources } from '@/bootstrap/load-product-resources';
+import { prepareProductResources } from '@/bootstrap/prepare-product-resources';
 import {
   createProductVisualPreparation,
   type ProductVisualPreparation,
@@ -16,9 +16,9 @@ import {
 import { detectStaticGameplayCapabilities } from '@/bootstrap/static-capabilities';
 import { parseWebConfig } from '@/bootstrap/web-config';
 import { subscribeBrowserConnectivity } from '@/runtime/network/browser-connectivity';
-import { createProductPreferences } from '@/runtime/preferences/product-preferences';
-import { observeTelemetry } from '@/runtime/telemetry/observe-telemetry';
+import { createPreferencesStore } from '@/runtime/preferences/preferences-store';
 import { createReactErrorHandler } from '@/runtime/telemetry/react-errors';
+import { observeSessionTelemetry } from '@/runtime/telemetry/session-telemetry-observer';
 import type { Telemetry } from '@/runtime/telemetry/telemetry';
 import { TelemetryContext } from '@/runtime/telemetry/TelemetryContext';
 
@@ -27,7 +27,7 @@ export function startWebApp(telemetry: Telemetry): () => void {
   const rootElement = document.querySelector<HTMLElement>('#root');
   if (rootElement === null) throw new Error('Web application root is missing');
 
-  const preferences = createProductPreferences({
+  const preferences = createPreferencesStore({
     getItem: (key) => window.localStorage.getItem(key),
     setItem: (key, value) => window.localStorage.setItem(key, value),
   });
@@ -44,7 +44,7 @@ export function startWebApp(telemetry: Telemetry): () => void {
     client,
     profile,
     sessions,
-    store,
+    sessionCredentialStore,
     recovery,
     feedback,
     presentation,
@@ -86,7 +86,12 @@ export function startWebApp(telemetry: Telemetry): () => void {
     });
     visuals = productVisuals;
     const productRenderer = productVisuals.renderer;
-    stopTelemetry = observeTelemetry({ telemetry, sessions, recovery, restore: execution.restore });
+    stopTelemetry = observeSessionTelemetry({
+      telemetry,
+      sessions,
+      recovery,
+      reentry: execution.reentry,
+    });
     const globalActor = createActor(appLifecycleMachine, {
       input: {
         capabilities,
@@ -101,7 +106,7 @@ export function startWebApp(telemetry: Telemetry): () => void {
               telemetry.reportUnexpected(error, { stage: 'storage' });
               throw error;
             }
-            await loadProductResources({
+            await prepareProductResources({
               signal,
               onProgress,
               onFailure: (stage, error) => {
@@ -119,7 +124,7 @@ export function startWebApp(telemetry: Telemetry): () => void {
                 ]),
             });
             if (signal.aborted || activity.aborted) return;
-            store.initialize();
+            sessionCredentialStore.initialize();
             telemetry.trackEvent({
               name: 'bootstrap_result',
               outcome: 'success',
@@ -165,7 +170,7 @@ export function startWebApp(telemetry: Telemetry): () => void {
       renderer: productRenderer,
       clock: client.clock,
       sessions,
-      store,
+      sessionCredentialStore,
       recovery,
       presentation,
     });

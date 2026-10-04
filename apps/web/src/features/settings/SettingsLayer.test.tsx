@@ -5,12 +5,12 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, expect, test, vi } from 'vitest';
 
 import { SettingsLayer } from '@/features/settings/SettingsLayer';
-import { createProductPreferences } from '@/runtime/preferences/product-preferences';
+import { createPreferencesStore } from '@/runtime/preferences/preferences-store';
 
 afterEach(cleanup);
 
 test('keeps failed storage changes selected and reports one inline warning', () => {
-  const preferences = createProductPreferences({
+  const preferences = createPreferencesStore({
     getItem: () => null,
     setItem: () => {
       throw new Error('storage blocked');
@@ -44,7 +44,7 @@ test('keeps failed storage changes selected and reports one inline warning', () 
 });
 
 test('only an explicit OFF to ON confirms; initial state and OFF are silent', () => {
-  const preferences = createProductPreferences({ getItem: () => null, setItem: () => undefined });
+  const preferences = createPreferencesStore({ getItem: () => null, setItem: () => undefined });
   preferences.setLocale('en');
   const audio = { playCue: vi.fn(), setSfxEnabled: vi.fn() };
   render(<SettingsLayer preferences={preferences} audio={audio} onClose={() => undefined} />);
@@ -67,7 +67,7 @@ test('retries the selected locale after storage recovers without repeating its s
       values.set(key, value);
     },
   };
-  const preferences = createProductPreferences(storage);
+  const preferences = createPreferencesStore(storage);
   const audio = { playCue: vi.fn(), setSfxEnabled: vi.fn() };
   render(<SettingsLayer preferences={preferences} audio={audio} onClose={() => undefined} />);
 
@@ -79,12 +79,12 @@ test('retries the selected locale after storage recovers without repeating its s
   storageAvailable = true;
   fireEvent.click(screen.getByRole('button', { name: 'English' }));
   expect(screen.queryByRole('alert')).toBeNull();
-  expect(createProductPreferences(storage).getSnapshot().locale).toBe('en');
+  expect(createPreferencesStore(storage).getSnapshot().locale).toBe('en');
   expect(audio.playCue).toHaveBeenCalledTimes(1);
 });
 
 test('translates immediately from the subscribed locale preference', () => {
-  const preferences = createProductPreferences({ getItem: () => null, setItem: () => undefined });
+  const preferences = createPreferencesStore({ getItem: () => null, setItem: () => undefined });
   preferences.setLocale('ko');
   render(
     <SettingsLayer

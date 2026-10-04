@@ -12,7 +12,7 @@ const PRELOAD_URLS = [
 ] as const;
 
 describe('product font bootstrap', () => {
-  test('starts the self-hosted stylesheet and critical WOFF2 faces from document head', async () => {
+  test('declares the self-hosted stylesheet and critical WOFF2 preloads in document head', async () => {
     const html = await readFile(resolve(import.meta.dirname, '../../index.html'), 'utf8');
 
     const { head } = new DOMParser().parseFromString(html, 'text/html');

@@ -3,8 +3,8 @@ import { describe, expect, test, vi } from 'vitest';
 
 import {
   type BrowserStorage,
-  createBrowserSessionStore,
-} from '@/runtime/session/browser-session-store';
+  createSessionCredentialStore,
+} from '@/runtime/session/session-credential-store';
 
 const CLIENT_ID = '019cc3cb-b67c-7000-8000-000000000010';
 const SECOND_CLIENT_ID = '019cc3cb-b67c-7000-8000-000000000011';
@@ -33,12 +33,12 @@ class MemoryStorage implements BrowserStorage {
   }
 }
 
-describe('createBrowserSessionStore', () => {
+describe('createSessionCredentialStore', () => {
   test('refreshes another execution’s credential without regenerating this client identity', () => {
     const storage = new MemoryStorage();
-    const first = createBrowserSessionStore({ storage });
+    const first = createSessionCredentialStore({ storage });
     const createClientId = vi.fn(() => CLIENT_ID);
-    const second = createBrowserSessionStore({ storage, createClientId });
+    const second = createSessionCredentialStore({ storage, createClientId });
     expect(second.initialize().recentRoom).toEqual({ status: 'ready', room: null });
     first.recordRoom(authority);
     expect(second.initialize().recentRoom).toEqual({ status: 'ready', room: null });
@@ -52,7 +52,7 @@ describe('createBrowserSessionStore', () => {
 
   test('refresh distinguishes a new read failure from the cached empty candidate', () => {
     const storage = new MemoryStorage();
-    const store = createBrowserSessionStore({ storage });
+    const store = createSessionCredentialStore({ storage });
     store.initialize();
     const read = vi.spyOn(storage, 'getItem').mockImplementation(() => {
       throw new Error('denied');
@@ -64,7 +64,7 @@ describe('createBrowserSessionStore', () => {
 
   test('refresh preserves an unsaved in-memory credential and its warning', () => {
     const storage = new MemoryStorage();
-    const store = createBrowserSessionStore({ storage });
+    const store = createSessionCredentialStore({ storage });
     store.initialize();
     const write = vi.spyOn(storage, 'setItem').mockImplementation(() => {
       throw new Error('quota');
@@ -92,7 +92,7 @@ describe('createBrowserSessionStore', () => {
       },
     });
     try {
-      const store = createBrowserSessionStore({ createClientId: () => CLIENT_ID });
+      const store = createSessionCredentialStore({ createClientId: () => CLIENT_ID });
       store.recordRoom(authority);
       accessible = false;
       store.removeRoom(ROOM_ID);
@@ -108,7 +108,7 @@ describe('createBrowserSessionStore', () => {
       };
       store.recordRoom(nextAuthority);
       expect(store.getSnapshot().persistence).toBe('saved');
-      expect(createBrowserSessionStore({ storage }).initialize().recentRoom).toEqual({
+      expect(createSessionCredentialStore({ storage }).initialize().recentRoom).toEqual({
         status: 'ready',
         room: { roomId: nextAuthority.roomId, seatToken: nextAuthority.seatToken },
       });
@@ -120,7 +120,7 @@ describe('createBrowserSessionStore', () => {
   test('ignores late credential writes and cleanup after this execution is replaced', () => {
     const storage = new MemoryStorage();
     const activity = new AbortController();
-    const store = createBrowserSessionStore({ storage, signal: activity.signal });
+    const store = createSessionCredentialStore({ storage, signal: activity.signal });
     store.recordRoom(authority);
     const before = store.initialize().recentRoom;
     const persisted = storage.getItem('recentRoom');
@@ -142,7 +142,7 @@ describe('createBrowserSessionStore', () => {
     storage.setItem('recentRoom', 'malformed');
     const activity = new AbortController();
     activity.abort();
-    const store = createBrowserSessionStore({
+    const store = createSessionCredentialStore({
       storage,
       signal: activity.signal,
       createClientId: () => CLIENT_ID,
@@ -163,7 +163,7 @@ describe('createBrowserSessionStore', () => {
       throw new Error('denied');
     });
     const createClientId = vi.fn(() => CLIENT_ID);
-    const store = createBrowserSessionStore({ storage, createClientId });
+    const store = createSessionCredentialStore({ storage, createClientId });
     expect(store.initialize().recentRoom).toEqual({ status: 'unavailable' });
     expect(store.initialize().recentRoom).toEqual({
       status: 'ready',
@@ -174,7 +174,7 @@ describe('createBrowserSessionStore', () => {
 
   test('reports memory-only credentials without discarding them and publishes stable storage state', () => {
     const storage = new MemoryStorage();
-    const store = createBrowserSessionStore({ storage });
+    const store = createSessionCredentialStore({ storage });
     const listener = vi.fn();
     store.subscribe(listener);
     const initial = store.getSnapshot();
@@ -198,7 +198,7 @@ describe('createBrowserSessionStore', () => {
   test('creates defaults once and reuses their persisted values', () => {
     const storage = new MemoryStorage();
     const createClientId = vi.fn(() => CLIENT_ID);
-    const store = createBrowserSessionStore({ storage, createClientId });
+    const store = createSessionCredentialStore({ storage, createClientId });
 
     expect(store.initialize()).toEqual({
       clientId: CLIENT_ID,
@@ -208,7 +208,7 @@ describe('createBrowserSessionStore', () => {
     expect(store.getClientId()).toBe(CLIENT_ID);
     expect(createClientId).toHaveBeenCalledTimes(1);
 
-    const reloaded = createBrowserSessionStore({
+    const reloaded = createSessionCredentialStore({
       storage,
       createClientId: vi.fn(() => SECOND_CLIENT_ID),
     });
@@ -224,10 +224,10 @@ describe('createBrowserSessionStore', () => {
       storage,
       createClientId: () => CLIENT_ID,
     };
-    const store = createBrowserSessionStore(options);
+    const store = createSessionCredentialStore(options);
     store.initialize();
 
-    expect(createBrowserSessionStore(options).initialize().recentRoom).toEqual({
+    expect(createSessionCredentialStore(options).initialize().recentRoom).toEqual({
       status: 'ready',
       room: null,
     });
@@ -235,7 +235,7 @@ describe('createBrowserSessionStore', () => {
     store.recordRoom(authority);
     const recentRoom = { roomId: ROOM_ID, seatToken: SEAT_TOKEN };
     expect(store.initialize().recentRoom).toEqual({ status: 'ready', room: recentRoom });
-    expect(createBrowserSessionStore(options).initialize().recentRoom).toEqual({
+    expect(createSessionCredentialStore(options).initialize().recentRoom).toEqual({
       status: 'ready',
       room: recentRoom,
     });
@@ -245,14 +245,14 @@ describe('createBrowserSessionStore', () => {
 
     store.removeRoom(ROOM_ID);
     expect(store.initialize().recentRoom).toEqual({ status: 'ready', room: null });
-    expect(createBrowserSessionStore(options).initialize().recentRoom).toEqual({
+    expect(createSessionCredentialStore(options).initialize().recentRoom).toEqual({
       status: 'ready',
       room: null,
     });
   });
 
   test('an older room cleanup cannot erase a newer recovery candidate', () => {
-    const store = createBrowserSessionStore({ storage: new MemoryStorage() });
+    const store = createSessionCredentialStore({ storage: new MemoryStorage() });
     store.recordRoom(authority);
     const nextAuthority = {
       ...authority,
@@ -275,7 +275,7 @@ describe('createBrowserSessionStore', () => {
       'recentRoom',
       JSON.stringify({ roomId: ROOM_ID, seatToken: SEAT_TOKEN, roomCreatedAt: 0 }),
     );
-    const store = createBrowserSessionStore({ storage });
+    const store = createSessionCredentialStore({ storage });
     expect(store.initialize().recentRoom).toEqual({
       status: 'ready',
       room: { roomId: ROOM_ID, seatToken: SEAT_TOKEN },
@@ -285,7 +285,7 @@ describe('createBrowserSessionStore', () => {
 
   test('replaces malformed defaults and discards malformed recovery', () => {
     const storage = new MemoryStorage();
-    const first = createBrowserSessionStore({
+    const first = createSessionCredentialStore({
       storage,
       createClientId: () => CLIENT_ID,
     });
@@ -294,7 +294,7 @@ describe('createBrowserSessionStore', () => {
     storage.corruptAll('malformed');
 
     const replacementClientId = vi.fn(() => SECOND_CLIENT_ID);
-    const recovered = createBrowserSessionStore({
+    const recovered = createSessionCredentialStore({
       storage,
       createClientId: replacementClientId,
     });
@@ -318,7 +318,7 @@ describe('createBrowserSessionStore', () => {
         throw new Error('remove denied');
       },
     };
-    const store = createBrowserSessionStore({
+    const store = createSessionCredentialStore({
       storage,
       createClientId: () => CLIENT_ID,
     });

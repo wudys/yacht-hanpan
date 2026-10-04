@@ -25,7 +25,7 @@ vi.mock('@react-three/fiber', () => ({
 }));
 
 vi.mock('@/runtime/dice/renderer', () => ({
-  DiceRollWarmupScene: () => null,
+  DiceWarmupScene: () => null,
 }));
 
 const hiddenPresentationSnapshot = { phase: 'hidden', resources: null } as const;

@@ -12,7 +12,7 @@ import {
   readinessError,
 } from '@/features/lobby/lobby-errors';
 import { isCompleteRoomCode, normalizeRoomCode } from '@/features/lobby/room-code';
-import type { ProductProfile } from '@/runtime/profile/product-profile';
+import type { ProfileSelectionStore } from '@/runtime/profile/profile-selection-store';
 import type {
   AdmissionResult,
   Cancellation,
@@ -25,7 +25,7 @@ import { reportClientFailure } from '@/runtime/telemetry/error-policy';
 import { clientFailureFields, type Telemetry } from '@/runtime/telemetry/telemetry';
 
 type Operation = 'create' | 'join' | 'cancel';
-type Profile = ReturnType<ProductProfile['getSnapshot']>['selection'];
+type Profile = ReturnType<ProfileSelectionStore['getSnapshot']>['selection'];
 interface LobbyContext {
   admissionOperation: 'create' | 'join';
   joinCode: string;
@@ -60,7 +60,7 @@ export type LobbyEvent =
 export type LobbyServices = Readonly<{
   activity: AbortSignal;
   access: RoomAccess;
-  profile: ProductProfile;
+  profile: ProfileSelectionStore;
 }>;
 interface AdmissionDone {
   event: { output: AdmissionResult };

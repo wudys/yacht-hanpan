@@ -2,7 +2,7 @@ import { afterEach, expect, test, vi } from 'vitest';
 import { createActor, waitFor } from 'xstate';
 
 import { appLifecycleMachine } from '@/app/app-lifecycle-machine';
-import { loadProductResources } from '@/bootstrap/load-product-resources';
+import { prepareProductResources } from '@/bootstrap/prepare-product-resources';
 import { createBrowserAudioRuntime } from '@/runtime/audio/browser-audio-runtime';
 import { renderCueBuffers } from '@/runtime/audio/render-cue-buffers';
 
@@ -190,7 +190,7 @@ test.each(['constructor', 'resume', 'cues'] as const)(
     const runtime = createBrowserAudioRuntime();
     const onUnexpected = vi.fn();
     const loadResources = vi.fn((_progress, signal: AbortSignal) =>
-      loadProductResources({
+      prepareProductResources({
         signal,
         bgmEnabled: false,
         onFailure: (_stage, error) => onUnexpected(error),

@@ -3,7 +3,7 @@ import { simulateRoll } from '@repo/dice-simulation/simulate';
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 
 import { createProductVisualResources } from '@/bootstrap/product-visual-resources';
-import { Anchor, type AnchorProps } from '@/dev/Anchor';
+import { VisualFixture, type VisualFixtureProps } from '@/dev/VisualFixture';
 import DiceCanvasHost from '@/runtime/dice/canvas/DiceCanvasHost';
 import { createRendererReadiness } from '@/runtime/dice/canvas/renderer-readiness';
 import {
@@ -16,7 +16,7 @@ import type { ProceduralDiceResources } from '@/runtime/dice/resources';
 // A repeatable render fixture, not a server or product-state substitute.
 // Default: keep the raw final pose. arrange=1 also exercises the shared Canvas
 // transition, not authoritative session, scoring, or achievement behavior.
-export function ReplayAnchor({
+export function ReplayFixture({
   anchor,
   mode,
   locale,
@@ -24,7 +24,7 @@ export function ReplayAnchor({
   pourStyle,
   count,
   arrange,
-}: Omit<AnchorProps, 'replay'> &
+}: Omit<VisualFixtureProps, 'replay'> &
   Readonly<{ seed: string; pourStyle: string; count: number; arrange: boolean }>) {
   const [ready, setReady] = useState<{
     result: SimulationResult;
@@ -60,7 +60,7 @@ export function ReplayAnchor({
 
   return (
     <>
-      <Anchor
+      <VisualFixture
         anchor={anchor}
         mode={mode}
         locale={locale}

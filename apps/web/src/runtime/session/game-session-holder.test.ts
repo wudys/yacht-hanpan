@@ -2,7 +2,7 @@ import type { GameSession, GameSessionSnapshot, RoomAuthority } from '@repo/game
 import { parsePublicRoom, type PublicRoom } from '@repo/game-protocol/socket';
 import { describe, expect, test, vi } from 'vitest';
 
-import { createGameSessionHolder } from '@/runtime/session/session-holder';
+import { createGameSessionHolder } from '@/runtime/session/game-session-holder';
 import { finishedGame } from '@/testing/game-fixtures';
 
 // This lifecycle test supplies syntactically valid authority values already validated by the SDK.

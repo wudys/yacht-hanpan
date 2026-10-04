@@ -3,18 +3,18 @@ import { expect, test, vi } from 'vitest';
 
 import { createRoomAccess } from '@/runtime/room-access/room-access';
 import type {
-  StoredRoomRestore,
-  StoredRoomRestoreSnapshot,
-} from '@/runtime/room-access/stored-room-restore';
-import type { BrowserSessionStore } from '@/runtime/session/browser-session-store';
-import { createGameSessionHolder } from '@/runtime/session/session-holder';
+  StoredRoomReentry,
+  StoredRoomReentrySnapshot,
+} from '@/runtime/room-access/stored-room-reentry';
+import { createGameSessionHolder } from '@/runtime/session/game-session-holder';
+import type { SessionCredentialStore } from '@/runtime/session/session-credential-store';
 import type { SessionRecovery } from '@/runtime/session/session-recovery';
-import { observeTelemetry } from '@/runtime/telemetry/observe-telemetry';
+import { observeSessionTelemetry } from '@/runtime/telemetry/session-telemetry-observer';
 import { inactiveTelemetry } from '@/runtime/telemetry/telemetry';
 import { authority, playingGame, room, waitingRoom } from '@/testing/game-fixtures';
 
 const profile = { characterId: 'navy-bob', variant: false } as const;
-function setup(restore?: StoredRoomRestore) {
+function setup(providedReentry?: StoredRoomReentry) {
   let snapshot: GameSessionSnapshot = {
     connection: 'idle',
     syncStatus: 'idle',
@@ -44,34 +44,44 @@ function setup(restore?: StoredRoomRestore) {
     cancelRoom: vi.fn(async () => ({ ok: true, data: {}, meta: {} })),
   } as unknown as GameClient;
   const sessions = createGameSessionHolder(client);
-  const store = {
+  const sessionCredentialStore = {
     getClientId: () => 'fixture',
     recordRoom: vi.fn(),
     removeRoom: vi.fn(),
-  } as unknown as BrowserSessionStore;
+  } as unknown as SessionCredentialStore;
   const reentry =
-    restore ??
+    providedReentry ??
     ({
       check: vi.fn(),
       subscribe: () => () => {},
       getSnapshot: () => ({ status: 'idle' }),
-    } as unknown as StoredRoomRestore);
+    } as unknown as StoredRoomReentry);
   const readiness = { wait: vi.fn(async () => ({ ok: true as const })) };
   const activity = new AbortController();
   const access = createRoomAccess({
     activity: activity.signal,
     client,
     sessions,
-    store,
+    sessionCredentialStore,
     readiness,
-    restore: reentry,
+    reentry,
     recovery: { getSnapshot: () => ({ status: 'idle' }), subscribe: () => () => {} },
   });
   const publishGame = () => {
     snapshot = { ...snapshot, connection: 'connected', room, game: playingGame };
     for (const listener of sessionListeners) listener();
   };
-  return { access, activity, client, sessions, session, store, readiness, reentry, publishGame };
+  return {
+    access,
+    activity,
+    client,
+    sessions,
+    session,
+    sessionCredentialStore,
+    readiness,
+    reentry,
+    publishGame,
+  };
 }
 
 test('registers admission before publishing so an observer cannot submit a second HTTP mutation', async () => {
@@ -149,9 +159,9 @@ test('does not emit a new admission when authority is installed during readiness
 });
 
 test('keeps authoritative Game when a storage observer publishes it before cancellation clears authority', async () => {
-  const { access, store, session, sessions, publishGame } = setup();
+  const { access, sessionCredentialStore, session, sessions, publishGame } = setup();
   await access.create(profile, new AbortController().signal);
-  vi.mocked(store.removeRoom).mockImplementation(() => {
+  vi.mocked(sessionCredentialStore.removeRoom).mockImplementation(() => {
     publishGame();
   });
   const response = vi.fn();
@@ -166,7 +176,7 @@ test('keeps authoritative Game when a storage observer publishes it before cance
 });
 
 test('does not remove authority when cancellation is aborted before its HTTP response', async () => {
-  const { access, activity, client, store, sessions } = setup();
+  const { access, activity, client, sessionCredentialStore, sessions } = setup();
   await access.create(profile, new AbortController().signal);
   let complete!: (value: Awaited<ReturnType<GameClient['cancelRoom']>>) => void;
   vi.mocked(client.cancelRoom).mockImplementation(
@@ -181,7 +191,7 @@ test('does not remove authority when cancellation is aborted before its HTTP res
   complete({ ok: true, data: {}, meta: {} } as Awaited<ReturnType<GameClient['cancelRoom']>>);
   expect(await cancellation).toEqual({ status: 'stale' });
   expect(response).not.toHaveBeenCalled();
-  expect(store.removeRoom).not.toHaveBeenCalled();
+  expect(sessionCredentialStore.removeRoom).not.toHaveBeenCalled();
   expect(sessions.getSnapshot().authority).toEqual(authority);
   access.dispose();
   sessions.dispose();
@@ -190,7 +200,7 @@ test('does not remove authority when cancellation is aborted before its HTTP res
 test.each(['dispose', 'abort'] as const)(
   'does not confirm authority failure after access %s',
   async (action) => {
-    const { access, activity, session, sessions, store } = setup();
+    const { access, activity, session, sessions, sessionCredentialStore } = setup();
     vi.mocked(session.connect).mockResolvedValue({
       ok: false,
       error: { kind: 'server', error: { code: 'ROOM_NOT_FOUND', params: {} } },
@@ -201,7 +211,7 @@ test.each(['dispose', 'abort'] as const)(
     if (action === 'dispose') access.dispose();
     else activity.abort();
     access.confirmAuthorityFailure();
-    expect(store.removeRoom).not.toHaveBeenCalled();
+    expect(sessionCredentialStore.removeRoom).not.toHaveBeenCalled();
     expect(clear).not.toHaveBeenCalled();
     expect(sessions.getSnapshot().authority).toEqual(authority);
     access.dispose();
@@ -277,13 +287,13 @@ test('starts the transport needed for matched sync when cancellation begins befo
 test.each(['before', 'after'] as const)(
   'lets a restore observer registered %s access observe success before handoff consumption',
   async (order) => {
-    let state: StoredRoomRestoreSnapshot = { status: 'synchronizing' };
+    let state: StoredRoomReentrySnapshot = { status: 'synchronizing' };
     const listeners = new Set<() => void>();
-    const publish = (next: StoredRoomRestoreSnapshot) => {
+    const publish = (next: StoredRoomReentrySnapshot) => {
       state = next;
       for (const listener of listeners) listener();
     };
-    const restore: StoredRoomRestore = {
+    const reentry: StoredRoomReentry = {
       getSnapshot: () => state,
       subscribe: (listener) => {
         listeners.add(listener);
@@ -299,16 +309,16 @@ test.each(['before', 'after'] as const)(
     };
     const observations: string[] = [];
     const observer = () => {
-      observations.push(restore.getSnapshot().status);
+      observations.push(reentry.getSnapshot().status);
     };
-    if (order === 'before') restore.subscribe(observer);
-    const { access, sessions, publishGame } = setup(restore);
-    if (order === 'after') restore.subscribe(observer);
+    if (order === 'before') reentry.subscribe(observer);
+    const { access, sessions, publishGame } = setup(reentry);
+    if (order === 'after') reentry.subscribe(observer);
     const trackEvent = vi.fn();
-    const stopTelemetry = observeTelemetry({
+    const stopTelemetry = observeSessionTelemetry({
       telemetry: { ...inactiveTelemetry, trackEvent },
       sessions,
-      restore,
+      reentry,
       recovery: { subscribeAttempt: () => () => {} } as unknown as SessionRecovery,
     });
     const accessObserved: string[] = [];
@@ -324,9 +334,9 @@ test.each(['before', 'after'] as const)(
     publish({ status: 'playing' });
     await Promise.resolve();
     expect(accessObserved).toContain('handoff');
-    expect(restore.getSnapshot().status).toBe('playing');
+    expect(reentry.getSnapshot().status).toBe('playing');
     await Promise.resolve();
-    expect(restore.completeHandoff).toHaveBeenCalledOnce();
+    expect(reentry.completeHandoff).toHaveBeenCalledOnce();
     expect(observations).toEqual(['playing', 'idle']);
     expect(trackEvent).toHaveBeenCalledWith({ name: 'play_started', entry: 'resumed' });
     stopTelemetry();
@@ -400,17 +410,17 @@ test('ignores a former session first-connect failure after another session owns 
 test.each(['refreshRequired', 'permanentFailure'] as const)(
   'does not let saved restore %s replace another current Game',
   async (failure) => {
-    let state: StoredRoomRestoreSnapshot = { status: 'idle' };
+    let state: StoredRoomReentrySnapshot = { status: 'idle' };
     const listeners = new Set<() => void>();
-    const restore = {
+    const reentry = {
       check() {},
       getSnapshot: () => state,
       subscribe: (listener: () => void) => {
         listeners.add(listener);
         return () => listeners.delete(listener);
       },
-    } as unknown as StoredRoomRestore;
-    const { access, client, sessions, session, publishGame } = setup(restore);
+    } as unknown as StoredRoomReentry;
+    const { access, client, sessions, session, publishGame } = setup(reentry);
     sessions.installAuthority(authority);
     state = { status: 'synchronizing' };
     for (const listener of listeners) listener();

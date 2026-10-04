@@ -715,6 +715,7 @@ describe('executeGameCommand', () => {
         state.setNow(303_000);
       }
       const before = state.repository.getById(input.roomId);
+      const beforeValue = structuredClone(before);
       const publishedBefore = state.published.length;
       const replace = spyOn(state.repository, 'replace').mockReturnValue(false);
       const artifact = resolvedRollArtifact();
@@ -736,6 +737,7 @@ describe('executeGameCommand', () => {
         committedStateVersion: null,
       });
       expect(state.repository.getById(input.roomId)).toBe(before);
+      expect(state.repository.getById(input.roomId)).toEqual(beforeValue);
       expect(state.dependencies.pending.count(ROOM_ID)).toBe(0);
       expect(state.published).toHaveLength(publishedBefore);
     },
@@ -1172,6 +1174,7 @@ describe('executeGameCommand', () => {
       installFullActionLedger(state.repository);
       await state.advance(62_001);
       const before = playingRecord(state.repository);
+      const beforeValue = structuredClone(before);
       const replace = spyOn(state.repository, 'replace').mockReturnValue(false);
       const result = await executeGameCommand(
         {
@@ -1194,6 +1197,7 @@ describe('executeGameCommand', () => {
       });
       expect(replace).toHaveBeenCalledTimes(1);
       expect(state.repository.getById(roomId(ROOM_ID))).toBe(before);
+      expect(state.repository.getById(roomId(ROOM_ID))).toEqual(beforeValue);
       expect(state.published).toHaveLength(0);
       expect(state.dependencies.pending.count(ROOM_ID)).toBe(0);
     },
@@ -1223,6 +1227,7 @@ describe('executeGameCommand', () => {
     });
     await state.advance(62_001);
     const before = playingRecord(state.repository);
+    const beforeValue = structuredClone(before);
     const replace = spyOn(state.repository, 'replace').mockReturnValue(false);
     let rollCalls = 0;
     const result = await executeGameCommand(
@@ -1245,6 +1250,7 @@ describe('executeGameCommand', () => {
     expect(rollCalls).toBe(1);
     expect(replace).toHaveBeenCalledTimes(1);
     expect(state.repository.getById(roomId(ROOM_ID))).toBe(before);
+    expect(state.repository.getById(roomId(ROOM_ID))).toEqual(beforeValue);
     expect(state.published).toHaveLength(0);
     expect(state.dependencies.pending.count(ROOM_ID)).toBe(0);
   });

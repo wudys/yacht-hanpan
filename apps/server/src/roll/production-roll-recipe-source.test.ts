@@ -1,3 +1,5 @@
+import * as crypto from 'node:crypto';
+
 import { AUTOMATIC_POUR_STYLES, POUR_STYLES } from '@repo/dice-simulation/contract';
 import { describe, expect, spyOn, test } from 'bun:test';
 
@@ -6,12 +8,22 @@ import { createProductionRollRecipeSource } from '@/roll/production-roll-recipe-
 describe('production roll recipe source', () => {
   test('uses only selected A/B/D for automatic rolls', () => {
     expect(AUTOMATIC_POUR_STYLES).toEqual(['classic', 'burst', 'oblique']);
-    const source = createProductionRollRecipeSource();
-    for (let index = 0; index < 64; index += 1) {
-      const selected = source.createPourStyle();
-      expect(AUTOMATIC_POUR_STYLES.some((style) => style === selected)).toBe(true);
-    }
     expect(POUR_STYLES).toEqual(['classic', 'burst', 'oblique']);
+  });
+
+  test.each([
+    [0, 'classic'],
+    [1, 'burst'],
+    [2, 'oblique'],
+  ] as const)('selects automatic style index %i as %s', (index, expected) => {
+    const randomInt = spyOn(crypto, 'randomInt').mockImplementation(() => index);
+    try {
+      expect(createProductionRollRecipeSource().createPourStyle()).toBe(expected);
+      expect(randomInt).toHaveBeenCalledTimes(1);
+      expect(randomInt).toHaveBeenCalledWith(3);
+    } finally {
+      randomInt.mockRestore();
+    }
   });
 
   test('creates independent seeds while the request clock is unchanged', () => {

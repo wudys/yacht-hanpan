@@ -128,6 +128,7 @@ describe('RoomStateCommitter', () => {
     const repository = new InMemoryRoomRepository();
     const current = waitingRecord();
     repository.createExclusive(current);
+    const before = structuredClone(current);
     const replace = spyOn(repository, 'replace').mockReturnValue(false);
     const publishRoomState = () => {
       throw new Error('failed store must not publish');
@@ -148,6 +149,7 @@ describe('RoomStateCommitter', () => {
     ).toEqual({ ok: false, reason: 'storageFailure' });
     expect(replace).toHaveBeenCalledTimes(1);
     expect(repository.getById(ROOM_ID)).toBe(current);
+    expect(repository.getById(ROOM_ID)).toEqual(before);
     expect(current.credentialHashes).toHaveLength(1);
   });
 
@@ -266,6 +268,7 @@ describe('RoomStateCommitter', () => {
 
   test('a failed store neither completes an action nor publishes its candidate view', () => {
     const state = fixture();
+    const before = structuredClone(state.current);
     const replace = spyOn(state.repository, 'replace').mockReturnValue(false);
 
     const result = state.commits.commitGame({
@@ -282,6 +285,7 @@ describe('RoomStateCommitter', () => {
     expect(result).toEqual({ ok: false, reason: 'storageFailure' });
     expect(replace).toHaveBeenCalledTimes(1);
     expect(state.repository.getById(ROOM_ID)).toBe(state.current);
+    expect(state.repository.getById(ROOM_ID)).toEqual(before);
     expect(state.published).toHaveLength(0);
   });
 
@@ -323,6 +327,7 @@ describe('RoomStateCommitter', () => {
     connections.bind(ROOM_ID, 0, previous);
     const transition = resumeSeat(state.current.room, { seatIndex: 0, resumedAt: 3_000 });
     if (!transition.ok) throw new Error('connect fixture failed');
+    const before = structuredClone(state.current);
     const replace = spyOn(state.repository, 'replace').mockReturnValue(false);
 
     const result = state.commits.commitSeatConnection(
@@ -339,6 +344,7 @@ describe('RoomStateCommitter', () => {
     expect(replace).toHaveBeenCalledTimes(1);
     expect(connections.get(ROOM_ID, 0)).toBe(previous);
     expect(state.repository.getById(ROOM_ID)).toBe(state.current);
+    expect(state.repository.getById(ROOM_ID)).toEqual(before);
     expect(state.published).toHaveLength(0);
   });
 

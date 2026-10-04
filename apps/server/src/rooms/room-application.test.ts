@@ -89,16 +89,17 @@ async function fixture(
       close: () => scheduled.clear(),
     },
   });
-  const created = await service.createRoom(
-    parseCreateRoomRequest({
-      clientId: '018f47f2-c2d8-7f4a-8bf4-3f559c39843d',
-      operationId: '4ba1e7d4-c077-4b80-b198-9b1f04c182c8',
-      profile: { characterId: 'navy-bob', variant: false },
-    }),
-    '192.0.2.1',
-  );
+  const createRequest = parseCreateRoomRequest({
+    clientId: '018f47f2-c2d8-7f4a-8bf4-3f559c39843d',
+    operationId: '4ba1e7d4-c077-4b80-b198-9b1f04c182c8',
+    profile: { characterId: 'navy-bob', variant: false },
+  });
+  const created = await service.createRoom(createRequest, '192.0.2.1');
   if (!created.ok) throw new Error('fixture create failed');
   return {
+    created,
+    createRequest,
+    issuedTokenCount: () => issuedTokens,
     service,
     queue,
     rateLimiter,
@@ -168,6 +169,41 @@ function rollArtifact() {
     replayDigest: `${DICE_SIMULATION_CONTRACT.replayDigestVersion}:${'a'.repeat(64)}`,
   });
 }
+
+test('replays create authority until the exact 60-second application retention boundary', async () => {
+  const state = await fixture();
+  try {
+    expect(state.issuedTokenCount()).toBe(1);
+    expect(
+      (
+        await state.service.cancelRoom(
+          parseCancelRoomRequest({
+            roomId: ROOM_ID,
+            seatToken: TOKEN,
+          }),
+        )
+      ).ok,
+    ).toBeTrue();
+    expect(state.repository.counts().rooms).toBe(0);
+
+    state.setNow(60_999);
+    expect(await state.service.createRoom(state.createRequest, '192.0.2.1')).toEqual(state.created);
+    expect(state.issuedTokenCount()).toBe(1);
+    expect(state.repository.counts().rooms).toBe(0);
+
+    state.setNow(61_000);
+    const fresh = await state.service.createRoom(state.createRequest, '192.0.2.1');
+    expect(fresh.ok).toBeTrue();
+    if (!fresh.ok) throw new Error('expired operation did not create a room');
+    expect(fresh.data.authority.seatToken).toBe(JOINER_TOKEN);
+    expect(fresh.data.authority.seatToken).not.toBe(state.created.data.authority.seatToken);
+    expect(state.issuedTokenCount()).toBe(2);
+    expect(state.repository.counts().rooms).toBe(1);
+    expect(state.repository.getById(ROOM_ID)?.room.createdAt).toBe(epochMilliseconds(61_000));
+  } finally {
+    state.service.close();
+  }
+});
 
 test('maintenance reclaims idle IP attempts without another create request', async () => {
   const state = await fixture();

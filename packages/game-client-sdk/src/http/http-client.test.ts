@@ -97,68 +97,100 @@ describe('room HTTP client', () => {
     });
   });
 
-  test('retries an authority mutation once with the same operation id', async () => {
-    const bodies: unknown[] = [];
-    let attempts = 0;
-    const client = createRoomHttpClient({
-      contract: createCompatibilityContract('test-release'),
-      baseUrl: 'https://game.example.test',
-      createOperationId: () => OPERATION_ID,
-      fetch: async (_input, init) => {
-        bodies.push(JSON.parse(String(init?.body)));
-        attempts += 1;
-        if (attempts === 1) throw new TypeError('connection reset after commit');
-        return jsonResponse(
-          {
+  test.each(['create', 'join'] as const)(
+    'retries a %s action with one operation id and gives the next action a new id',
+    async (operation) => {
+      const bodies: string[] = [];
+      let attempts = 0;
+      let operationIds = 0;
+      const issuedIds: string[] = [];
+      const profile = { characterId: 'navy-bob', variant: false } as const;
+      const playing = operation === 'join';
+      const client = createRoomHttpClient({
+        contract: createCompatibilityContract('test-release'),
+        baseUrl: 'https://game.example.test',
+        createOperationId: () => {
+          operationIds += 1;
+          const id = `a6f9fc18-01e4-469c-8382-${String(operationIds).padStart(12, '0')}`;
+          issuedIds.push(id);
+          return id;
+        },
+        fetch: async (_input, init) => {
+          bodies.push(String(init?.body));
+          attempts += 1;
+          if (attempts % 2 === 1) throw new TypeError('connection reset after commit');
+          return jsonResponse({
             ok: true,
             data: {
-              authority: { roomId: ROOM_ID, seatIndex: 0, seatToken: SEAT_TOKEN },
+              authority: { roomId: ROOM_ID, seatIndex: playing ? 1 : 0, seatToken: SEAT_TOKEN },
               view: {
                 room: {
-                  status: 'waiting',
                   roomId: ROOM_ID,
                   roomCode: '123456',
                   createdAt: 1,
-                  expiresAt: 301_000,
-                  seats: [
-                    {
-                      profile: { characterId: 'navy-bob', variant: false },
-                    },
-                  ],
+                  ...(playing
+                    ? { status: 'playing', startedAt: 1_000, seats: [{ profile }, { profile }] }
+                    : { status: 'waiting', expiresAt: 301_000, seats: [{ profile }] }),
                 },
-                game: null,
+                game: playing
+                  ? {
+                      stateVersion: 1,
+                      match: {
+                        status: 'playing',
+                        players: [
+                          { scorecard: {}, timeoutCount: 0 },
+                          { scorecard: {}, timeoutCount: 0 },
+                        ],
+                        currentTurn: {
+                          turnId: REQUEST_ID,
+                          seatIndex: 0,
+                          startedAt: 1_000,
+                          deadlineAt: 61_000,
+                          rollCount: 0,
+                          heldSlots: [],
+                          dice: null,
+                        },
+                      },
+                    }
+                  : null,
                 presence: {
                   roomId: ROOM_ID,
-                  presenceVersion: 0,
-                  seats: [{ status: 'disconnected', reconnectDeadlineAt: null }],
+                  presenceVersion: playing ? 1 : 0,
+                  seats: playing
+                    ? [{ status: 'connected' }, { status: 'connected' }]
+                    : [{ status: 'disconnected', reconnectDeadlineAt: null }],
                 },
               },
             },
             meta: META,
-          },
-          201,
-        );
-      },
-    });
-
-    const result = await client.createRoom({
-      clientId: CLIENT_ID,
-      profile: { characterId: 'navy-bob', variant: false },
-    });
-
-    expect(result.ok).toBeTrue();
-    expect(attempts).toBe(2);
-    expect(bodies).toEqual(
-      [0, 1].map(() => ({
-        contract: createCompatibilityContract('test-release'),
-        body: {
-          clientId: CLIENT_ID,
-          operationId: OPERATION_ID,
-          profile: { characterId: 'navy-bob', variant: false },
+          });
         },
-      })),
-    );
-  });
+      });
+      const invoke = () =>
+        operation === 'create'
+          ? client.createRoom({ clientId: CLIENT_ID, profile })
+          : client.joinRoom({ clientId: CLIENT_ID, roomCode: '123456', profile });
+
+      expect(await invoke()).toMatchObject({ ok: true });
+      expect(operationIds).toBe(1);
+      expect(attempts).toBe(2);
+      expect(bodies[1]).toEqual(bodies[0]);
+      expect(JSON.parse(bodies[0]!)).toEqual({
+        contract: createCompatibilityContract('test-release'),
+        body: { clientId: CLIENT_ID, operationId: issuedIds[0], profile },
+      });
+
+      expect(await invoke()).toMatchObject({ ok: true });
+      expect(operationIds).toBe(2);
+      expect(attempts).toBe(4);
+      expect(bodies[3]).toEqual(bodies[2]);
+      expect(JSON.parse(bodies[2]!)).toEqual({
+        contract: createCompatibilityContract('test-release'),
+        body: { clientId: CLIENT_ID, operationId: issuedIds[1], profile },
+      });
+      expect(issuedIds[1]).not.toBe(issuedIds[0]);
+    },
+  );
 
   test('puts room identifiers in paths instead of duplicating them in bodies', async () => {
     const urls: string[] = [];

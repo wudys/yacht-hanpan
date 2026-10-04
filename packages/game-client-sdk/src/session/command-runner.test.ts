@@ -105,7 +105,7 @@ function successData(receipt: Readonly<{ stateVersion: number; roll?: typeof ROL
 
 describe('command runner', () => {
   test('retries a byte-equivalent logical command with one actionId', async () => {
-    const commands: GameCommand[] = [];
+    const commands: string[] = [];
     let currentGame = playingGame();
     let attempt = 0;
     let actionIds = 0;
@@ -117,7 +117,7 @@ describe('command runner', () => {
       },
       getGame: () => currentGame,
       emit: (command, acknowledge) => {
-        commands.push(command);
+        commands.push(JSON.stringify(command));
         attempt += 1;
         currentGame = playingGame(3, 'de305d54-75b4-431b-adb2-eb6b9e546099');
         if (attempt === 3) {
@@ -135,8 +135,8 @@ describe('command runner', () => {
     expect(result).toMatchObject({ data: { stateVersion: 3, roll: ROLL } });
     expect(actionIds).toBe(1);
     expect(commands).toHaveLength(3);
-    expect(commands.every((command) => command === commands[0])).toBeTrue();
-    expect(JSON.parse(JSON.stringify(commands[0]))).toEqual({
+    expect(commands).toEqual([commands[0]!, commands[0]!, commands[0]!]);
+    expect(JSON.parse(commands[0]!)).toEqual({
       type: GAME_COMMAND_TYPE.ROLL_DICE,
       actionId: ACTION_ID,
       turnId: TURN_ID,
@@ -211,32 +211,41 @@ describe('command runner', () => {
     expect(syncs).toBe(2);
   });
 
-  test('rejects a contradictory actionId and resyncs', async () => {
-    let syncs = 0;
-    const runner = createCommandRunner({
-      retryPolicy: { acknowledgementTimeoutMs: 10, maximumAttempts: 1, retryDelayMs: 0 },
-      createActionId: () => ACTION_ID,
-      getGame: playingGame,
-      emit: (_command, acknowledge) =>
-        acknowledge({
-          ok: true,
-          data: successData({ stateVersion: 3, roll: ROLL }),
-          meta: { ...META, actionId: 'de305d54-75b4-431b-adb2-eb6b9e546099' },
-        }),
-      synchronize: async () => {
-        syncs += 1;
-        return { ok: true };
-      },
-      applySuccess: () => 'applied',
-      applyRecovery: () => 'applied',
-    });
+  test.each(['success', 'failure'] as const)(
+    'rejects a contradictory actionId in a %s ACK without applying success and resyncs',
+    async (response) => {
+      let syncs = 0;
+      let successes = 0;
+      const runner = createCommandRunner({
+        retryPolicy: { acknowledgementTimeoutMs: 10, maximumAttempts: 1, retryDelayMs: 0 },
+        createActionId: () => ACTION_ID,
+        getGame: playingGame,
+        emit: (_command, acknowledge) =>
+          acknowledge({
+            ...(response === 'success'
+              ? { ok: true, data: successData({ stateVersion: 3, roll: ROLL }) }
+              : { ok: false, error: { code: PUBLIC_ERROR_CODE.STALE_TURN, params: {} } }),
+            meta: { ...META, actionId: 'de305d54-75b4-431b-adb2-eb6b9e546099' },
+          }),
+        synchronize: async () => {
+          syncs += 1;
+          return { ok: true };
+        },
+        applySuccess: () => {
+          successes += 1;
+          return 'applied';
+        },
+        applyRecovery: () => 'applied',
+      });
 
-    expect(await runner.rollDice()).toMatchObject({
-      ok: false,
-      error: { kind: 'protocol', code: CLIENT_ERROR_CODE.INVALID_RESPONSE },
-    });
-    expect(syncs).toBe(1);
-  });
+      expect(await runner.rollDice()).toMatchObject({
+        ok: false,
+        error: { kind: 'protocol', code: CLIENT_ERROR_CODE.INVALID_RESPONSE },
+      });
+      expect(syncs).toBe(1);
+      expect(successes).toBe(0);
+    },
+  );
 
   test.each([
     ['roll', { stateVersion: 3 }],
@@ -288,14 +297,14 @@ describe('command runner', () => {
     'coalesces %s INTERNAL_ERROR retries across turn changes',
     async (kind) => {
       let currentGame = playingGame();
-      const commands: GameCommand[] = [];
+      const commands: string[] = [];
       let retryAcknowledge: ((value: unknown) => void) | undefined;
       const runner = createCommandRunner({
         retryPolicy: { acknowledgementTimeoutMs: 20, maximumAttempts: 1, retryDelayMs: 0 },
         createActionId: () => ACTION_ID,
         getGame: () => currentGame,
         emit: (command, acknowledge) => {
-          commands.push(command);
+          commands.push(JSON.stringify(command));
           if (commands.length === 1) {
             acknowledge({
               ok: false,
@@ -330,7 +339,7 @@ describe('command runner', () => {
       const repeated = result.retry.run();
       expect(first).toBe(repeated);
       expect(commands).toHaveLength(2);
-      expect(commands[1]).toBe(commands[0]);
+      expect(commands[1]).toEqual(commands[0]);
       retryAcknowledge?.({
         ok: true,
         data: successData({ stateVersion: 3, ...(kind === 'roll' ? { roll: ROLL } : {}) }),

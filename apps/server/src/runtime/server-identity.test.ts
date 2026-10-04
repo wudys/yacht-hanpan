@@ -1,4 +1,6 @@
-import { describe, expect, test } from 'bun:test';
+import * as crypto from 'node:crypto';
+
+import { describe, expect, spyOn, test } from 'bun:test';
 import { validate as validateUuid, version as uuidVersion } from 'uuid';
 
 import { createProductionIdentity } from '@/runtime/server-identity';
@@ -23,9 +25,18 @@ describe('production semantic identity', () => {
     expect(uuidVersion(token)).toBe(4);
   });
 
-  test('generates six-digit room codes with leading zeroes', () => {
-    for (let index = 0; index < 100; index += 1) {
-      expect(identity.createRoomCodeCandidate()).toMatch(/^\d{6}$/u);
+  test.each([
+    [0, '000000'],
+    [123, '000123'],
+    [999_999, '999999'],
+  ] as const)('formats random room code %i as %s', (value, expected) => {
+    const randomInt = spyOn(crypto, 'randomInt').mockImplementation(() => value);
+    try {
+      expect(identity.createRoomCodeCandidate()).toBe(expected);
+      expect(randomInt).toHaveBeenCalledTimes(1);
+      expect(randomInt).toHaveBeenCalledWith(0, 1_000_000);
+    } finally {
+      randomInt.mockRestore();
     }
   });
 });

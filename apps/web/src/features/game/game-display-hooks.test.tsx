@@ -4,7 +4,11 @@
 import { act, cleanup, renderHook } from '@testing-library/react';
 import { afterEach, expect, test, vi } from 'vitest';
 
-import { useDeadlineSeconds } from '@/features/game/game-display-hooks';
+import {
+  useDeadlineReadiness,
+  useDeadlineSeconds,
+  useDelayedRollSpinner,
+} from '@/features/game/game-display-hooks';
 
 afterEach(() => {
   cleanup();
@@ -63,4 +67,83 @@ test('samples the server clock without rendering again until the displayed secon
   expect(result.current).toBeNull();
   expect(vi.getTimerCount()).toBe(0);
   unmount();
+});
+
+test('updates deadline eligibility only at valid, expired or unknown clock boundaries', () => {
+  vi.useFakeTimers();
+  let serverNow: number | null = 0;
+  const clock = { now: () => serverNow };
+  const rendered = vi.fn();
+  const { result, rerender, unmount } = renderHook(
+    ({ deadlineAt }) => {
+      const { ready } = useDeadlineReadiness(clock, deadlineAt);
+      rendered(ready);
+      return ready;
+    },
+    { initialProps: { deadlineAt: 6_000 as number | null } },
+  );
+  expect(result.current).toBe(true);
+  rendered.mockClear();
+  act(() => {
+    serverNow = 5_000;
+    vi.advanceTimersByTime(250);
+  });
+  expect(rendered).not.toHaveBeenCalled();
+  act(() => {
+    serverNow = 6_000;
+    vi.advanceTimersByTime(250);
+  });
+  expect(result.current).toBe(false);
+  expect(rendered).toHaveBeenCalledOnce();
+  rerender({ deadlineAt: 8_000 });
+  expect(result.current).toBe(true);
+  act(() => {
+    serverNow = null;
+    vi.advanceTimersByTime(250);
+  });
+  expect(result.current).toBe(false);
+  act(() => {
+    serverNow = 7_000;
+    vi.advanceTimersByTime(250);
+  });
+  expect(result.current).toBe(true);
+  rerender({ deadlineAt: null });
+  expect(result.current).toBe(false);
+  expect(vi.getTimerCount()).toBe(0);
+  rerender({ deadlineAt: 9_000 });
+  unmount();
+  expect(vi.getTimerCount()).toBe(0);
+});
+
+test('resets the delayed spinner on pending completion, session replacement and unmount', () => {
+  vi.useFakeTimers();
+  const first = {};
+  const second = {};
+  const { result, rerender, unmount } = renderHook(
+    ({ pending, identity }) => useDelayedRollSpinner(pending, identity),
+    { initialProps: { pending: true, identity: first as object | null } },
+  );
+  act(() => {
+    vi.advanceTimersByTime(599);
+  });
+  expect(result.current).toBe(false);
+  rerender({ pending: true, identity: second });
+  act(() => {
+    vi.advanceTimersByTime(1);
+  });
+  expect(result.current).toBe(false);
+  act(() => {
+    vi.advanceTimersByTime(599);
+  });
+  expect(result.current).toBe(true);
+  rerender({ pending: false, identity: second });
+  expect(result.current).toBe(false);
+  expect(vi.getTimerCount()).toBe(0);
+  rerender({ pending: true, identity: second });
+  rerender({ pending: true, identity: null });
+  expect(result.current).toBe(false);
+  expect(vi.getTimerCount()).toBe(0);
+  rerender({ pending: true, identity: first });
+  unmount();
+  expect(vi.getTimerCount()).toBe(0);
 });

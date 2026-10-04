@@ -1,11 +1,16 @@
 import { requireGameAsset } from '@repo/game-assets';
 import { type DieFace as DieFaceValue } from '@repo/yacht-rules';
-import type { ReactNode } from 'react';
+import { memo, type ReactNode, useMemo } from 'react';
 
+import { GamePresence } from '@/features/game/view/board/GamePresence';
+import { GameTimer } from '@/features/game/view/board/GameTimer';
 import { PlayerSummary, type PlayerSummaryProps } from '@/features/game/view/board/PlayerSummary';
 import type { DiceSlotViewModel, GameViewModel } from '@/features/game/view/game-view-model';
 import { type CategoryLabels, ScoreGrid, type ScoreGridMode } from '@/features/game/view/score';
 import { Button, IconButton } from '@/ui/button';
+
+const MemoPlayerSummary = memo(PlayerSummary);
+const MemoScoreGrid = memo(ScoreGrid);
 
 export type GameBoardProps = Readonly<{
   model: Pick<GameViewModel, 'turn' | 'scoreRows' | 'actions'>;
@@ -41,9 +46,12 @@ export type GameBoardProps = Readonly<{
   rollRailHidden?: boolean;
   physicsArea?: ReactNode;
   interactionLocked?: boolean;
+  rollPending?: boolean;
   rollProgress?: ReactNode;
   summaryEmphasized?: boolean;
   timerWarning?: boolean;
+  timerContent?: ReactNode;
+  presenceContent?: ReactNode;
   onRoll?: () => void;
   onSetDieHeld?: (slot: DiceSlotViewModel['slot'], isHeld: boolean) => void;
   onSelectScore?: (categoryId: GameViewModel['scoreRows'][number]['categoryId']) => void;
@@ -64,6 +72,22 @@ const DIE_PIPS: Readonly<Record<DieFaceValue, readonly number[]>> = {
   6: [0, 2, 3, 5, 6, 8],
 };
 
+const DieFace = memo(function DieFace({ value }: Readonly<{ value: DieFaceValue }>) {
+  const pips = DIE_PIPS[value];
+
+  return (
+    <span className='held-die-face' data-die-face={value} aria-hidden='true'>
+      {Array.from({ length: 9 }, (_, position) => (
+        <span
+          className={pips.includes(position) ? 'held-die-face__pip' : undefined}
+          data-die-pip={pips.includes(position) ? 'true' : undefined}
+          key={position}
+        />
+      ))}
+    </span>
+  );
+});
+
 export function GameBoard({
   model,
   rollAction,
@@ -78,9 +102,12 @@ export function GameBoard({
   rollRailHidden = rolling,
   physicsArea,
   interactionLocked = false,
+  rollPending = false,
   rollProgress,
   summaryEmphasized = false,
   timerWarning = false,
+  timerContent,
+  presenceContent,
   onRoll,
   onSetDieHeld,
   onSelectScore,
@@ -90,6 +117,34 @@ export function GameBoard({
   onOpenBonus,
   onOpenSettings,
 }: GameBoardProps) {
+  const summaryLabels = useMemo(
+    () => ({
+      total: labels.total,
+      bonus: labels.bonus,
+      bonusStatus: labels.bonusStatus,
+      bonusInfo: labels.bonusInfo,
+      turnState: labels.turnState,
+      scoreboard: labels.scoreboard,
+    }),
+    [
+      labels.total,
+      labels.bonus,
+      labels.bonusStatus,
+      labels.bonusInfo,
+      labels.turnState,
+      labels.scoreboard,
+    ],
+  );
+  const scoreLabels = useMemo(
+    () => ({
+      upper: labels.upper,
+      lower: labels.lower,
+      highestUpper: labels.highestUpper,
+      highestLower: labels.highestLower,
+      emptyValue: labels.emptyScore,
+    }),
+    [labels.upper, labels.lower, labels.highestUpper, labels.highestLower, labels.emptyScore],
+  );
   const { turn } = model;
   const { dice = [] } = turn ?? {};
   const heldDice = (turn?.heldSlots ?? []).map((slot) => dice[slot]!);
@@ -110,12 +165,16 @@ export function GameBoard({
     >
       <header className='game-board__top' data-game-band='top'>
         <strong className='game-board__turn'>{labels.turn}</strong>
-        <span className='game-board__presence' role={labels.presence ? 'status' : undefined}>
-          {labels.presence}
-        </span>
-        <strong className='game-board__timer' data-timer-warning={timerWarning}>
-          {labels.timer}
-        </strong>
+        {presenceContent === undefined ? (
+          <GamePresence message={labels.presence} />
+        ) : (
+          presenceContent
+        )}
+        {timerContent === undefined ? (
+          <GameTimer label={labels.timer} warning={timerWarning} />
+        ) : (
+          timerContent
+        )}
         <IconButton
           label={labels.settings}
           icon={<img src={requireGameAsset('ui.settings').url} alt='' />}
@@ -162,15 +221,22 @@ export function GameBoard({
           aria-hidden={rollRailHidden || undefined}
         >
           {rollAction.readOnly ? (
-            <div className='roll-status' role='status'>
-              <span className='roll-status__label'>{rollProgress ?? rollAction.label}</span>
+            <div className='roll-status' role='status' aria-busy={rollPending || undefined}>
+              <span className='roll-status__label'>{rollAction.label}</span>
+              {rollProgress !== null && rollProgress !== undefined ? (
+                <span className='ui-button__progress' aria-hidden='true'>
+                  {rollProgress}
+                </span>
+              ) : null}
             </div>
           ) : (
             <Button
               label={rollAction.label}
               disabled={!model.actions.canRoll}
               interactionLocked={interactionLocked}
+              busy={rollPending}
               progress={rollProgress}
+              preserveLabelOnProgress
               onClick={onRoll}
             />
           )}
@@ -179,9 +245,9 @@ export function GameBoard({
       </section>
 
       <div className='game-board__scoring-panel'>
-        <PlayerSummary
+        <MemoPlayerSummary
           player={summaryPlayer}
-          labels={labels}
+          labels={summaryLabels}
           isViewerTurn={turn?.isViewerTurn ?? false}
           bonusEarned={bonusEarned}
           emphasized={summaryEmphasized}
@@ -194,18 +260,12 @@ export function GameBoard({
           {turn?.showFirstRollGuide ? (
             <p className='game-board__first-roll-guide'>{labels.firstRollGuide}</p>
           ) : null}
-          <ScoreGrid
+          <MemoScoreGrid
             rows={model.scoreRows}
             categories={categories}
             activeGroup={activeGroup}
             mode={scoreMode}
-            labels={{
-              upper: labels.upper,
-              lower: labels.lower,
-              highestUpper: labels.highestUpper,
-              highestLower: labels.highestLower,
-              emptyValue: labels.emptyScore,
-            }}
+            labels={scoreLabels}
             interactionLocked={interactionLocked}
             onGroupChange={onScoreGroupChange}
             onSelect={onSelectScore}
@@ -214,21 +274,5 @@ export function GameBoard({
         </section>
       </div>
     </main>
-  );
-}
-
-function DieFace({ value }: Readonly<{ value: DieFaceValue }>) {
-  const pips = DIE_PIPS[value];
-
-  return (
-    <span className='held-die-face' data-die-face={value} aria-hidden='true'>
-      {Array.from({ length: 9 }, (_, position) => (
-        <span
-          className={pips.includes(position) ? 'held-die-face__pip' : undefined}
-          data-die-pip={pips.includes(position) ? 'true' : undefined}
-          key={position}
-        />
-      ))}
-    </span>
   );
 }

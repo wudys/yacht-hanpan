@@ -1,11 +1,18 @@
 import type { ServerClock } from '@repo/game-client-sdk';
-import type { DieSlot } from '@repo/yacht-rules';
-import { type ReactNode, useEffect, useState, useSyncExternalStore } from 'react';
+import type { CategoryId, DieSlot } from '@repo/yacht-rules';
+import {
+  memo,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 
 import {
-  useDeadlineSeconds,
-  useDelayedRollProgress,
-  useOpponentPresenceNotice,
+  useDeadlineReadiness,
+  useDelayedRollSpinner,
   useViewerTurnSummaryEmphasis,
 } from '@/features/game/game-display-hooks';
 import {
@@ -18,6 +25,8 @@ import {
   createGameScorePresentation,
   createResultPresentation,
 } from '@/features/game/game-presentation';
+import { GameDeadlineDisplay } from '@/features/game/GameDeadlineDisplay';
+import { GamePresenceNotice, GamePresenceProvider } from '@/features/game/GamePresenceNotice';
 import { GameRecoveryFrame } from '@/features/game/GameRecoveryFrame';
 import { SettledDiceControls } from '@/features/game/SettledDiceControls';
 import { useGameCommands } from '@/features/game/use-game-commands';
@@ -30,6 +39,7 @@ import {
   ScoreTable,
 } from '@/features/game/view';
 import { AchievementSequence } from '@/features/game/view/AchievementSequence';
+import { GameRollSpinner } from '@/features/game/view/board/GameRollSpinner';
 import { SettingsLayer } from '@/features/settings/SettingsLayer';
 import { type Locale, translate } from '@/i18n';
 import type { ProductAudioRuntime } from '@/runtime/audio/browser-audio-runtime';
@@ -56,6 +66,8 @@ type GameScreenProps = Readonly<{
   preferences: ProductPreferences;
   presentation: DicePresentation;
 }>;
+
+const MemoSettledDiceControls = memo(SettledDiceControls);
 
 const VISUALLY_HIDDEN_STYLE = {
   position: 'absolute',
@@ -111,16 +123,42 @@ export default function GameScreen({
   >(null);
   const game = holderSnapshot.sessionSnapshot?.game ?? null;
   const presence = holderSnapshot.sessionSnapshot?.presence ?? null;
+  const viewerSeatIndex = holderSnapshot.authority?.seatIndex;
+  const model = useMemo(
+    () =>
+      game !== null && viewerSeatIndex !== undefined
+        ? deriveGameViewModel(game, viewerSeatIndex)
+        : null,
+    [game, viewerSeatIndex],
+  );
+  const scorePresentation = useMemo(
+    () => (model === null ? null : createGameScorePresentation(holderSnapshot.room, model, locale)),
+    [holderSnapshot.room, model, locale],
+  );
+  const summaryIsViewer = model?.turn?.isViewerTurn ?? true;
+  const summaryScore = summaryIsViewer ? scorePresentation?.viewer : scorePresentation?.opponent;
+  const summaryPlayer = useMemo(
+    () => ({
+      imageUrl: summaryScore?.imageUrl,
+      imageAlt: translate(locale, summaryIsViewer ? 'game.you' : 'game.opponent'),
+      selfLabel: summaryIsViewer ? translate(locale, 'game.you') : undefined,
+    }),
+    [locale, summaryIsViewer, summaryScore?.imageUrl],
+  );
   const opponentSeatPresence =
     holderSnapshot.authority === null || presence === null || presence.seats.length !== 2
       ? null
       : presence.seats[holderSnapshot.authority.seatIndex === 0 ? 1 : 0];
-  const opponentPresence = useOpponentPresenceNotice(opponentSeatPresence);
   const finished = game?.match.status === 'finished';
   useScreenTelemetry(game ? (finished ? 'result' : 'game') : null);
   const deadlineAt = game?.match.status === 'playing' ? game.match.currentTurn.deadlineAt : null;
-  const secondsRemaining = useDeadlineSeconds(clock, deadlineAt);
-  const rollProgress = useDelayedRollProgress(pendingCommandKind);
+  const { ready: deadlineReady, recheck: recheckDeadline } = useDeadlineReadiness(
+    clock,
+    deadlineAt,
+  );
+  const rollPending = pendingCommandKind === 'roll';
+  const rollSpinnerVisible = useDelayedRollSpinner(rollPending, holderSnapshot.session);
+  const rollProgress = rollSpinnerVisible ? <GameRollSpinner /> : undefined;
   const viewerTurnIdentity =
     holderSnapshot.authority !== null &&
     game?.match.status === 'playing' &&
@@ -150,16 +188,85 @@ export default function GameScreen({
     recoverySnapshot.status === 'idle' &&
     viewerTurnIdentity !== null &&
     recordedCategoryNoticeTurnIdentity === viewerTurnIdentity;
-  const inputScopes = deriveGameInputScopes({
-    phase: presentationSnapshot.phase,
-    hasPendingCommand: pendingCommandKind !== null,
-    connected: holderSnapshot.sessionSnapshot?.connection === 'connected',
-    secondsRemaining,
-    layer,
-    recoveryActive: recoverySnapshot.status !== 'idle',
-    hasCommandNotice: rateLimited || commandRetryError !== null,
-    recordedCategoryNoticeOpen,
-  });
+  const { phase } = presentationSnapshot;
+  const hasPendingCommand = pendingCommandKind !== null;
+  const connected = holderSnapshot.sessionSnapshot?.connection === 'connected';
+  const recoveryActive = recoverySnapshot.status !== 'idle';
+  const hasCommandNotice = rateLimited || commandRetryError !== null;
+  const inputScopes = useMemo(
+    () =>
+      deriveGameInputScopes({
+        phase,
+        hasPendingCommand,
+        connected,
+        deadlineReady,
+        layer,
+        recoveryActive,
+        hasCommandNotice,
+        recordedCategoryNoticeOpen,
+      }),
+    [
+      phase,
+      hasPendingCommand,
+      connected,
+      deadlineReady,
+      layer,
+      recoveryActive,
+      hasCommandNotice,
+      recordedCategoryNoticeOpen,
+    ],
+  );
+  const interaction = useMemo(
+    () => (model === null ? null : deriveGameInteraction(model, inputScopes)),
+    [model, inputScopes],
+  );
+  const boardModel = interaction?.boardModel;
+  const boardPresentation = useMemo(
+    () => (boardModel === undefined ? null : createGameBoardPresentation(boardModel, locale)),
+    [boardModel, locale],
+  );
+  const turn = model?.turn;
+  const canHold = interaction?.canHold ?? false;
+  const canScore = interaction?.canScore ?? false;
+  const canExplainRecordedCategory = interaction?.canExplainRecordedCategory ?? false;
+  const setDieHeld = useCallback(
+    (slot: DieSlot, isHeld: boolean) => {
+      if (canHold && turn?.dice[slot]?.held !== isHeld) submitDieHeld(slot, isHeld);
+    },
+    [canHold, turn?.dice, submitDieHeld],
+  );
+  const onSelectScore = useCallback(
+    (categoryId: CategoryId) => {
+      if (canScore) selectScore(categoryId);
+    },
+    [canScore, selectScore],
+  );
+  const onBlockedScore = useCallback(() => {
+    if (canExplainRecordedCategory && viewerTurnIdentity !== null) {
+      setRecordedCategoryNoticeTurnIdentity(viewerTurnIdentity);
+    }
+  }, [canExplainRecordedCategory, viewerTurnIdentity]);
+  const onScoreGroupChange = useCallback(
+    (group: 'upper' | 'lower') => {
+      if (inputScopes.canNavigateBoardLayers && group !== activeGroup) {
+        setActiveGroup(group);
+        audio.playCue(PRODUCT_CUE.SELECT);
+      }
+    },
+    [activeGroup, audio, inputScopes.canNavigateBoardLayers],
+  );
+  const onOpenScoreboard = useCallback(() => {
+    if (inputScopes.canNavigateBoardLayers) {
+      audio.playCue(PRODUCT_CUE.CLICK);
+      setLayer('scoreboard');
+    }
+  }, [audio, inputScopes.canNavigateBoardLayers]);
+  const onOpenBonus = useCallback(() => {
+    if (inputScopes.canToggleBonus) {
+      audio.playCue(PRODUCT_CUE.CLICK);
+      setLayer(layer === 'bonus' ? 'board' : 'bonus');
+    }
+  }, [audio, inputScopes.canToggleBonus, layer]);
 
   const click = () => audio.playCue(PRODUCT_CUE.CLICK);
   const closeLayer = () => {
@@ -169,22 +276,34 @@ export default function GameScreen({
   };
 
   const withRecovery = (content: ReactNode): ReactNode => (
-    <GameRecoveryFrame
+    <GamePresenceProvider
+      identity={holderSnapshot.session}
+      status={opponentSeatPresence?.status ?? null}
+      reconnectDeadlineAt={
+        opponentSeatPresence?.status === 'disconnected'
+          ? opponentSeatPresence.reconnectDeadlineAt
+          : null
+      }
+      persistence={persistence}
       locale={locale}
-      interactionLocked={inputScopes.recoveryBlocked}
-      commandRetryError={commandRetryError}
-      rateLimited={rateLimited}
-      snapshot={recoverySnapshot}
-      onDismissRateLimit={() => {
-        audio.playCue(PRODUCT_CUE.CLICK);
-        dismissRateLimit();
-      }}
-      onPermanentFailure={returnToLobby}
-      onRefresh={() => globalThis.location.reload()}
-      onRetryCommand={retryCommand}
     >
-      {content}
-    </GameRecoveryFrame>
+      <GameRecoveryFrame
+        locale={locale}
+        interactionLocked={inputScopes.recoveryBlocked}
+        commandRetryError={commandRetryError}
+        rateLimited={rateLimited}
+        snapshot={recoverySnapshot}
+        onDismissRateLimit={() => {
+          audio.playCue(PRODUCT_CUE.CLICK);
+          dismissRateLimit();
+        }}
+        onPermanentFailure={returnToLobby}
+        onRefresh={() => globalThis.location.reload()}
+        onRetryCommand={retryCommand}
+      >
+        {content}
+      </GameRecoveryFrame>
+    </GamePresenceProvider>
   );
 
   if (
@@ -192,7 +311,13 @@ export default function GameScreen({
     holderSnapshot.session === null ||
     game === null ||
     presence === null ||
-    presence.seats.length !== 2
+    presence.seats.length !== 2 ||
+    model === null ||
+    scorePresentation === null ||
+    summaryScore === undefined ||
+    interaction === null ||
+    boardModel === undefined ||
+    boardPresentation === null
   ) {
     return withRecovery(
       <main data-screen='game' data-game-view='board' aria-busy='true'>
@@ -202,15 +327,8 @@ export default function GameScreen({
     );
   }
 
-  const { authority, room } = holderSnapshot;
-  const model = deriveGameViewModel(game, authority.seatIndex);
-  const { viewer, opponent, categories, scoreLabels } = createGameScorePresentation(
-    room,
-    model,
-    locale,
-  );
-  const summaryIsViewer = model.turn?.isViewerTurn ?? true;
-  const summaryScore = summaryIsViewer ? viewer : opponent;
+  const { authority } = holderSnapshot;
+  const { viewer, opponent, categories, scoreLabels } = scorePresentation;
 
   if (game.match.status === 'finished') {
     const resultPresentation = createResultPresentation(
@@ -233,10 +351,6 @@ export default function GameScreen({
     );
   }
 
-  const interaction = deriveGameInteraction(model, inputScopes);
-  const { boardModel } = interaction;
-  const boardPresentation = createGameBoardPresentation(boardModel, locale);
-  const { turn } = model;
   if (layer === 'scoreboard') {
     return withRecovery(
       <div
@@ -267,13 +381,6 @@ export default function GameScreen({
       </div>,
     );
   }
-
-  const setDieHeld = (slot: DieSlot, isHeld: boolean) => {
-    if (interaction.canHold) {
-      if (turn?.dice[slot]?.held === isHeld) return;
-      submitDieHeld(slot, isHeld);
-    }
-  };
 
   return withRecovery(
     <div
@@ -318,39 +425,32 @@ export default function GameScreen({
           }
           model={boardModel}
           rollAction={boardPresentation.rollAction}
-          summaryPlayer={{
-            imageUrl: summaryScore.imageUrl,
-            imageAlt: translate(locale, summaryIsViewer ? 'game.you' : 'game.opponent'),
-            selfLabel: summaryIsViewer ? translate(locale, 'game.you') : undefined,
-          }}
+          summaryPlayer={summaryPlayer}
           bonusEarned={summaryScore.upperBonus > 0}
           categories={categories}
           activeGroup={activeGroup}
           summaryEmphasized={summaryEmphasized}
-          timerWarning={secondsRemaining !== null && secondsRemaining <= 5}
+          timerContent={
+            <GameDeadlineDisplay
+              clock={clock}
+              deadlineAt={deadlineAt}
+              locale={locale}
+              onReadinessSample={recheckDeadline}
+            />
+          }
+          presenceContent={<GamePresenceNotice />}
           labels={{
             ...boardPresentation.labels,
-            timer: `${secondsRemaining ?? '—'}${translate(locale, 'game.seconds')}`,
+            timer: '',
             total: `${translate(locale, 'game.total')} ${summaryScore.total}`,
             bonus: translate(locale, 'game.bonus'),
             bonusStatus: translate(
               locale,
               summaryScore.upperBonus > 0 ? 'game.bonusEarned' : 'game.bonusNotEarned',
             ),
-            presence:
-              persistence === 'memoryOnly' && opponentPresence !== 'disconnected'
-                ? translate(locale, 'session.storageFailure')
-                : opponentPresence === null
-                  ? undefined
-                  : translate(
-                      locale,
-                      opponentPresence === 'disconnected'
-                        ? 'game.opponentDisconnected'
-                        : 'game.opponentReconnected',
-                    ),
           }}
           diceStage={
-            <SettledDiceControls
+            <MemoSettledDiceControls
               dice={turn?.dice ?? []}
               label={boardPresentation.labels.diceStage}
               canHold={model.actions.canHold}
@@ -359,39 +459,17 @@ export default function GameScreen({
             />
           }
           interactionLocked={inputScopes.boardInteractionLocked}
+          rollPending={rollPending}
           rollProgress={rollProgress}
           onRoll={() => {
             if (interaction.canRoll) roll();
           }}
           onSetDieHeld={setDieHeld}
-          onSelectScore={(categoryId) => {
-            if (interaction.canScore) {
-              selectScore(categoryId);
-            }
-          }}
-          onBlockedScore={() => {
-            if (interaction.canExplainRecordedCategory && viewerTurnIdentity !== null) {
-              setRecordedCategoryNoticeTurnIdentity(viewerTurnIdentity);
-            }
-          }}
-          onScoreGroupChange={(group) => {
-            if (inputScopes.canNavigateBoardLayers && group !== activeGroup) {
-              setActiveGroup(group);
-              audio.playCue(PRODUCT_CUE.SELECT);
-            }
-          }}
-          onOpenScoreboard={() => {
-            if (inputScopes.canNavigateBoardLayers) {
-              click();
-              setLayer('scoreboard');
-            }
-          }}
-          onOpenBonus={() => {
-            if (inputScopes.canToggleBonus) {
-              click();
-              setLayer(layer === 'bonus' ? 'board' : 'bonus');
-            }
-          }}
+          onSelectScore={onSelectScore}
+          onBlockedScore={onBlockedScore}
+          onScoreGroupChange={onScoreGroupChange}
+          onOpenScoreboard={onOpenScoreboard}
+          onOpenBonus={onOpenBonus}
           onOpenSettings={() => {
             if (inputScopes.canNavigateBoardLayers) {
               click();

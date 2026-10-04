@@ -6,7 +6,7 @@ const ready = {
   phase: 'settled',
   hasPendingCommand: false,
   connected: true,
-  secondsRemaining: 30,
+  deadlineReady: true,
   layer: 'board',
   recoveryActive: false,
   hasCommandNotice: false,
@@ -98,9 +98,8 @@ describe('Game input scopes', () => {
   });
 
   test.each([
-    { connected: false, secondsRemaining: 30 },
-    { connected: true, secondsRemaining: null },
-    { connected: true, secondsRemaining: 0 },
+    { connected: false, deadlineReady: true },
+    { connected: true, deadlineReady: false },
   ])('unavailable gameplay timing or connection does not imply a layer lock', (state) => {
     expect(deriveGameInputScopes({ ...ready, ...state })).toMatchObject({
       commandBlocked: true,

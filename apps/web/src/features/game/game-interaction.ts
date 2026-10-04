@@ -7,7 +7,7 @@ export function deriveGameInputScopes({
   phase,
   hasPendingCommand,
   connected,
-  secondsRemaining,
+  deadlineReady,
   layer,
   recoveryActive,
   hasCommandNotice,
@@ -16,7 +16,7 @@ export function deriveGameInputScopes({
   phase: DicePresentationSnapshot['phase'];
   hasPendingCommand: boolean;
   connected: boolean;
-  secondsRemaining: number | null;
+  deadlineReady: boolean;
   layer: GameLayer;
   recoveryActive: boolean;
   hasCommandNotice: boolean;
@@ -28,12 +28,7 @@ export function deriveGameInputScopes({
     phase === 'rolling' ||
     phase === 'revealing' ||
     phase === 'achievement';
-  const commandBlocked =
-    recoveryBlocked ||
-    hasPendingCommand ||
-    !connected ||
-    secondsRemaining === null ||
-    secondsRemaining === 0;
+  const commandBlocked = recoveryBlocked || hasPendingCommand || !connected || !deadlineReady;
   const gameplayCommandBlocked = commandBlocked || presentationBlocked;
   return {
     commandBlocked,

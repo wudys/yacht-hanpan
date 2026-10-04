@@ -251,6 +251,10 @@
 .roll-action-rail .ui-button,
 .roll-status {
   position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   height: var(--product-hit-min);
   border-radius: 999px;
   font-size: 15px;
@@ -272,6 +276,37 @@
 .roll-action-rail .ui-button__label,
 .roll-status__label {
   position: relative;
+}
+
+.roll-action-rail .ui-button__progress {
+  position: relative;
+  z-index: 1;
+  order: -1;
+}
+
+.roll-action-rail .ui-button[aria-busy='true'] {
+  filter: brightness(0.94);
+  transition-duration: 0s;
+}
+
+.roll-action-rail .ui-button[aria-busy='true']::before {
+  box-shadow: inset 0 2px 4px #77561e;
+}
+
+.game-roll-spinner {
+  display: block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid #77561e;
+  border-top-color: #fff1c8;
+  border-radius: 50%;
+  animation: game-roll-spin 700ms linear infinite;
+}
+
+@keyframes game-roll-spin {
+  to {
+    transform: rotate(1turn);
+  }
 }
 
 .roll-status::before,

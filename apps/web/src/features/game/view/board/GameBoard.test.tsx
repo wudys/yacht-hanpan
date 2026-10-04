@@ -240,3 +240,24 @@ test('shows the opponent scorecard immediately on an opponent pre-roll turn', ()
   expect(choiceCell).toContain('>7<');
   expect(choiceCell).not.toContain('>19<');
 });
+
+test('uses injected HUD content and distinguishes an empty presence slot from the fallback', () => {
+  const props = {
+    model,
+    categories,
+    labels: { ...labels, presence: 'Fallback connection notice' },
+    rollAction: { label: 'Roll again', readOnly: false },
+    summaryPlayer: { imageAlt: 'You' },
+    bonusEarned: false,
+    activeGroup: 'upper' as const,
+  };
+  const view = renderToStaticMarkup(<GameBoard {...props} />);
+  expect(view).toContain('Fallback connection notice');
+  expect(view).toContain('52 seconds');
+  const utils = renderToStaticMarkup(
+    <GameBoard {...props} presenceContent={null} timerContent={<strong>Injected timer</strong>} />,
+  );
+  expect(utils).not.toContain('Fallback connection notice');
+  expect(utils).not.toContain('52 seconds');
+  expect(utils).toContain('Injected timer');
+});

@@ -1085,6 +1085,88 @@ test('does not mark the timer warning without a server clock sample', () => {
   expect(screen.getByText('—s').getAttribute('data-timer-warning')).toBe('false');
 });
 
+test.each([61_000, null])(
+  'locks commands on clock boundary %s without a session update',
+  (serverNow) => {
+    vi.useFakeTimers();
+    try {
+      const harness = createHarness(playingGame, 60_000);
+      render(<GameScreen {...harness} locale={LOCALE.EN} />);
+      const roll = screen.getByRole('button', { name: 'Roll again' });
+      const die = screen.getByRole('button', { name: 'Dice area 1: 2' });
+      act(() => {
+        harness.setServerNow(serverNow);
+        vi.advanceTimersByTime(250);
+      });
+      expect(roll.getAttribute('aria-disabled')).toBe('true');
+      expect(die.hasAttribute('disabled')).toBe(true);
+      fireEvent.click(roll);
+      fireEvent.click(die);
+      fireEvent.click(getPreviewScoreButtons()[0]!);
+      expect(harness.session.rollDice).not.toHaveBeenCalled();
+      expect(harness.session.setDieHeld).not.toHaveBeenCalled();
+      expect(harness.session.selectScoreCategory).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
+      const forfeit = screen.getByRole('button', { name: 'Forfeit' });
+      expect(forfeit.getAttribute('aria-disabled')).toBe('true');
+      fireEvent.click(forfeit);
+      expect(harness.session.forfeitMatch).not.toHaveBeenCalled();
+      act(() => {
+        harness.setServerNow(60_000);
+        vi.advanceTimersByTime(250);
+      });
+      expect(forfeit.getAttribute('aria-disabled')).toBe('false');
+      fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+      expect(roll.getAttribute('aria-disabled')).toBe('false');
+      fireEvent.click(die);
+      expect(harness.session.setDieHeld).toHaveBeenCalledWith(0, true);
+    } finally {
+      cleanup();
+      vi.useRealTimers();
+    }
+  },
+);
+
+test.each([61_000, null])(
+  'keeps a remounted timer and input gate consistent when its poll runs first: %s',
+  (serverNow) => {
+    vi.useFakeTimers();
+    const polling = vi.spyOn(window, 'setInterval');
+    try {
+      const harness = createHarness(playingGame, 60_000);
+      render(<GameScreen {...harness} locale={LOCALE.EN} />);
+      fireEvent.click(screen.getByRole('button', { name: 'Scoreboard' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+      const remountedTimerPoll = polling.mock.calls.at(-1)?.[0];
+      if (typeof remountedTimerPoll !== 'function')
+        throw new Error('Expected a timer poll callback');
+      act(() => {
+        harness.setServerNow(serverNow);
+        remountedTimerPoll();
+      });
+      expect(screen.getByText(serverNow === null ? '—s' : '0s')).not.toBeNull();
+      const roll = screen.getByRole('button', { name: 'Roll again' });
+      expect(roll.getAttribute('aria-disabled')).toBe('true');
+      fireEvent.click(roll);
+      expect(harness.session.rollDice).not.toHaveBeenCalled();
+      expect(screen.getByRole('button', { name: 'Dice area 1: 2' }).hasAttribute('disabled')).toBe(
+        true,
+      );
+      fireEvent.click(getPreviewScoreButtons()[0]!);
+      expect(harness.session.selectScoreCategory).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
+      const forfeit = screen.getByRole('button', { name: 'Forfeit' });
+      expect(forfeit.getAttribute('aria-disabled')).toBe('true');
+      fireEvent.click(forfeit);
+      expect(harness.session.forfeitMatch).not.toHaveBeenCalled();
+    } finally {
+      polling.mockRestore();
+      cleanup();
+      vi.useRealTimers();
+    }
+  },
+);
+
 test('shows authoritative upper progress and the fixed bonus award', () => {
   const harness = createHarness();
   render(<GameScreen {...harness} locale={LOCALE.EN} />);

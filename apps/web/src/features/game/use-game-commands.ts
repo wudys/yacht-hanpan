@@ -2,7 +2,7 @@ import type { GameSession } from '@repo/game-client-sdk';
 import type { ClientError } from '@repo/game-client-sdk/errors';
 import type { CommandResult, CommandRetry } from '@repo/game-client-sdk/session';
 import { PUBLIC_ERROR_CODE } from '@repo/game-protocol';
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
 import type { ProductAudioRuntime } from '@/runtime/audio/browser-audio-runtime';
 import type { GameAudioFeedback } from '@/runtime/audio/game-audio-feedback';
@@ -72,84 +72,90 @@ export function useGameCommands(
     }
   }, [commandRetryNotice, visibleCommandRetryNotice]);
 
-  const finishCommand = (): void => {
-    pendingRef.current = false;
-    if (mountedRef.current) setPendingCommandKind(null);
-  };
-  function runCommand(
-    kind: PendingCommandKind,
-    command: (session: GameSession) => Promise<CommandResult> | null,
-    cue?: ProductCue,
-  ): boolean {
-    const submitted = sessions.getSnapshot();
-    const { session } = submitted;
-    if (session === null || pendingRef.current) return false;
-    const submittedSyncRevision = submitted.sessionSnapshot?.syncRevision;
-    pendingRef.current = true;
-    setPendingCommandKind(kind);
-    let operation: Promise<CommandResult> | null;
-    try {
-      operation = command(session);
-    } catch (error) {
-      telemetry.reportUnexpected(error, { operation: kind, stage: 'invoke' });
-      finishCommand();
-      return false;
-    }
-    if (operation === null) {
-      finishCommand();
-      return false;
-    }
-    if (cue)
-      feedback.observeCommand({
-        session,
-        result: operation,
-        cue,
-        syncRevision: submittedSyncRevision,
-      });
-    void operation.then(
-      (result) => {
-        if (!result.ok) {
-          const current = sessions.getSnapshot();
-          if (mountedRef.current && current.session === session) {
-            // synchronize publishes its failure before resolving; the snapshot observer
-            // owns that error. Command-only acknowledgement failures are reported here.
-            if (result.error !== current.sessionSnapshot?.error)
-              reportClientFailure(telemetry, result.error, { operation: kind, stage: 'response' });
-            if (
-              result.error.kind === 'server' &&
-              result.error.error.code === PUBLIC_ERROR_CODE.RATE_LIMITED
-            ) {
-              if (isCommandNoticeCurrent(session, current, recovery.getSnapshot().status)) {
-                setRateLimitNotice({
-                  session,
+  const runCommand = useCallback(
+    (
+      kind: PendingCommandKind,
+      command: (session: GameSession) => Promise<CommandResult> | null,
+      cue?: ProductCue,
+    ): boolean => {
+      const finishCommand = (): void => {
+        pendingRef.current = false;
+        if (mountedRef.current) setPendingCommandKind(null);
+      };
+      const submitted = sessions.getSnapshot();
+      const { session } = submitted;
+      if (session === null || pendingRef.current) return false;
+      const submittedSyncRevision = submitted.sessionSnapshot?.syncRevision;
+      pendingRef.current = true;
+      setPendingCommandKind(kind);
+      let operation: Promise<CommandResult> | null;
+      try {
+        operation = command(session);
+      } catch (error) {
+        telemetry.reportUnexpected(error, { operation: kind, stage: 'invoke' });
+        finishCommand();
+        return false;
+      }
+      if (operation === null) {
+        finishCommand();
+        return false;
+      }
+      if (cue)
+        feedback.observeCommand({
+          session,
+          result: operation,
+          cue,
+          syncRevision: submittedSyncRevision,
+        });
+      void operation.then(
+        (result) => {
+          if (!result.ok) {
+            const current = sessions.getSnapshot();
+            if (mountedRef.current && current.session === session) {
+              // synchronize publishes its failure before resolving; the snapshot observer
+              // owns that error. Command-only acknowledgement failures are reported here.
+              if (result.error !== current.sessionSnapshot?.error)
+                reportClientFailure(telemetry, result.error, {
+                  operation: kind,
+                  stage: 'response',
                 });
-              }
-            } else {
-              const retry = result.retry ?? null;
               if (
-                retry !== null &&
-                retry.isAvailable() &&
-                isCommandNoticeCurrent(session, current, recovery.getSnapshot().status)
+                result.error.kind === 'server' &&
+                result.error.error.code === PUBLIC_ERROR_CODE.RATE_LIMITED
               ) {
-                setCommandRetryNotice({ error: result.error, kind, retry, session, cue });
-              } else if (retry === null) {
-                recovery.reportCommandError(result.error);
+                if (isCommandNoticeCurrent(session, current, recovery.getSnapshot().status)) {
+                  setRateLimitNotice({
+                    session,
+                  });
+                }
+              } else {
+                const retry = result.retry ?? null;
+                if (
+                  retry !== null &&
+                  retry.isAvailable() &&
+                  isCommandNoticeCurrent(session, current, recovery.getSnapshot().status)
+                ) {
+                  setCommandRetryNotice({ error: result.error, kind, retry, session, cue });
+                } else if (retry === null) {
+                  recovery.reportCommandError(result.error);
+                }
               }
             }
+            finishCommand();
+            return;
           }
           finishCommand();
-          return;
-        }
-        finishCommand();
-      },
-      (error: unknown) => {
-        if (mountedRef.current && sessions.getSnapshot().session === session)
-          telemetry.reportUnexpected(error, { operation: kind, stage: 'promise' });
-        finishCommand();
-      },
-    );
-    return true;
-  }
+        },
+        (error: unknown) => {
+          if (mountedRef.current && sessions.getSnapshot().session === session)
+            telemetry.reportUnexpected(error, { operation: kind, stage: 'promise' });
+          finishCommand();
+        },
+      );
+      return true;
+    },
+    [feedback, recovery, sessions, telemetry],
+  );
 
   function retryCommand(): void {
     const notice = visibleCommandRetryNotice;
@@ -171,17 +177,23 @@ export function useGameCommands(
     if (runCommand('roll', (session) => session.rollDice())) audio.playCue(PRODUCT_CUE.ROLL_CLICK);
   }
 
-  function setDieHeld(slot: Parameters<GameSession['setDieHeld']>[0], isHeld: boolean): void {
-    runCommand(
-      'hold',
-      (session) => session.setDieHeld(slot, isHeld),
-      isHeld ? PRODUCT_CUE.HOLD : PRODUCT_CUE.RELEASE,
-    );
-  }
+  const setDieHeld = useCallback(
+    (slot: Parameters<GameSession['setDieHeld']>[0], isHeld: boolean): void => {
+      runCommand(
+        'hold',
+        (session) => session.setDieHeld(slot, isHeld),
+        isHeld ? PRODUCT_CUE.HOLD : PRODUCT_CUE.RELEASE,
+      );
+    },
+    [runCommand],
+  );
 
-  function selectScore(categoryId: Parameters<GameSession['selectScoreCategory']>[0]): void {
-    runCommand('score', (session) => session.selectScoreCategory(categoryId), PRODUCT_CUE.SCORE);
-  }
+  const selectScore = useCallback(
+    (categoryId: Parameters<GameSession['selectScoreCategory']>[0]): void => {
+      runCommand('score', (session) => session.selectScoreCategory(categoryId), PRODUCT_CUE.SCORE);
+    },
+    [runCommand],
+  );
 
   function forfeit(): void {
     if (runCommand('forfeit', (session) => session.forfeitMatch()))

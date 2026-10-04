@@ -1,9 +1,9 @@
 import { DEFAULT_CUP_GEOMETRY, DIE_GEOMETRY, ROLL_AREA } from '@repo/dice-simulation/contract';
 import * as THREE from 'three';
 
-import { DiceCupShell } from '@/runtime/dice/renderer/parts/DiceCupModel';
 import { DieVisual } from '@/runtime/dice/renderer/parts/DieVisual';
 import { RollStage } from '@/runtime/dice/renderer/parts/RollStage';
+import { DiceCupShell } from '@/runtime/dice/renderer/parts/TimelineCup';
 import type { ProceduralDiceResources } from '@/runtime/dice/resources/procedural-resources';
 
 type DiceRollWarmupSceneProps = Readonly<{

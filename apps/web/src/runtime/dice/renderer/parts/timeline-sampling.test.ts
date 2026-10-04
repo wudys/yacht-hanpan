@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import {
   cupExitOpacityAt,
   sampleCupFrames,
-  sampleFrames,
+  sampleDieFrames,
 } from '@/runtime/dice/renderer/parts/timeline-sampling';
 
 describe('dice timeline sampling', () => {
@@ -15,24 +15,24 @@ describe('dice timeline sampling', () => {
   ];
 
   it('hides missing or not-yet-started timelines and holds endpoint poses', () => {
-    expect(sampleFrames([], 0)).toMatchObject({ visible: false, p: [0, 0, 0], q: [0, 0, 0, 1] });
-    expect(sampleFrames(frames, -1).visible).toBe(false);
-    expect(sampleFrames(frames, 0)).toMatchObject({
+    expect(sampleDieFrames([], 0)).toMatchObject({ visible: false, p: [0, 0, 0], q: [0, 0, 0, 1] });
+    expect(sampleDieFrames(frames, -1).visible).toBe(false);
+    expect(sampleDieFrames(frames, 0)).toMatchObject({
       visible: true,
       p: frames[0].p,
       q: frames[0].q,
     });
-    expect(sampleFrames(frames, 100)).toMatchObject({
+    expect(sampleDieFrames(frames, 100)).toMatchObject({
       visible: true,
       p: frames[0].p,
       q: frames[0].q,
     });
-    expect(sampleFrames(frames, 300)).toMatchObject({
+    expect(sampleDieFrames(frames, 300)).toMatchObject({
       visible: true,
       p: frames[1].p,
       q: frames[1].q,
     });
-    expect(sampleFrames(frames, 400)).toMatchObject({
+    expect(sampleDieFrames(frames, 400)).toMatchObject({
       visible: true,
       p: frames[1].p,
       q: frames[1].q,
@@ -40,7 +40,7 @@ describe('dice timeline sampling', () => {
   });
 
   it('interpolates position and spherical rotation between physical poses', () => {
-    const sample = sampleFrames(frames, 200);
+    const sample = sampleDieFrames(frames, 200);
     expect(sample.visible).toBe(true);
     expect(sample.p).toEqual([1, 1, 2]);
     expect(sample.q[0]).toBe(0);

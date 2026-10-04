@@ -1,4 +1,4 @@
-import { LobbyLayer } from '@/features/lobby/layers/LobbyLayer';
+import { LobbyLayer } from '@/features/lobby/layer/LobbyLayer';
 import { LOBBY_ICONS } from '@/features/lobby/lobby-assets';
 import { type Locale, translate } from '@/i18n';
 import type { WaitingRoomSummary } from '@/runtime/room-access/room-access';

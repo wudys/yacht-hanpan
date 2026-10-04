@@ -4,7 +4,7 @@ import {
   ROOM_STATUS,
 } from '@/rooms/domain/room-constants';
 import { type Room } from '@/rooms/domain/room-model';
-import { isTrustedTimestamp } from '@/rooms/domain/room-validation';
+import { isValidTimestamp } from '@/rooms/domain/room-validation';
 
 export interface EvaluateCleanupInput {
   readonly checkedAt: unknown;
@@ -18,7 +18,7 @@ type CleanupEvaluation =
   | { readonly ok: false; readonly code: typeof ROOM_REJECTION_CODE.INVALID_TIMESTAMP };
 
 export function evaluateCleanup(room: Room, input: EvaluateCleanupInput): CleanupEvaluation {
-  if (!isTrustedTimestamp(input.checkedAt)) {
+  if (!isValidTimestamp(input.checkedAt)) {
     return { ok: false, code: ROOM_REJECTION_CODE.INVALID_TIMESTAMP };
   }
   if (room.status === ROOM_STATUS.WAITING) {

@@ -14,7 +14,7 @@ import {
 import { createDieInCup, createRollWorld, createTray } from './physics-environment';
 import { rotateVectorByQuat } from './result-recognition';
 import { createRollPhysicsConfig } from './roll-physics';
-import { DIE_COLLIDER_RADIUS, DIE_SIZE, rollArea } from './roll-simulation-constants';
+import { DIE_COLLIDER_RADIUS, DIE_SIZE, trayGeometry } from './roll-simulation-constants';
 
 beforeAll(initializeDeterministicRapierForBun);
 
@@ -31,7 +31,7 @@ test.each([false, true])('preserves material rebound at a direct wall strike (CC
       createCupMotion('wall-rebound', 'classic'),
       physics,
     );
-    body.setTranslation({ x: 0, y: 1, z: rollArea.centerZ }, true);
+    body.setTranslation({ x: 0, y: 1, z: trayGeometry.centerZ }, true);
     body.setRotation({ x: 0, y: 0, z: 0, w: 1 }, true);
     body.setLinvel({ x: 6, y: 0, z: 0 }, true);
     body.setAngvel({ x: 0, y: 0, z: 0 }, true);
@@ -104,9 +104,9 @@ test('keeps the complete rotating die within one logical pixel of the visible wa
           rotated.reduce((sum, v) => sum + Math.abs(v[axis]), 0);
       maxPenetration = Math.max(
         maxPenetration,
-        Math.abs(frame.p[0]) + support(0) - rollArea.halfWidth,
-        rollArea.topZ - frame.p[2] + support(2),
-        frame.p[2] + support(2) - rollArea.bottomZ,
+        Math.abs(frame.p[0]) + support(0) - trayGeometry.halfWidth,
+        trayGeometry.topZ - frame.p[2] + support(2),
+        frame.p[2] + support(2) - trayGeometry.bottomZ,
       );
     }
   expect(maxPenetration).toBeLessThan(DIE_SIZE / 32);
@@ -234,11 +234,11 @@ test('pairs each physical side wall with its inward direction and excludes the c
       const p = collider.translation();
       return { x: p.x, y: p.y, z: p.z, inwardX, inwardZ };
     });
-    for (const wall of positions) expect(wall.y).toBeCloseTo(rollArea.wallCenterY, 4);
-    const left = positions.find((wall) => wall.x < -rollArea.halfWidth)!;
-    const right = positions.find((wall) => wall.x > rollArea.halfWidth)!;
-    const top = positions.find((wall) => wall.z < rollArea.topZ)!;
-    const bottom = positions.find((wall) => wall.z > rollArea.bottomZ)!;
+    for (const wall of positions) expect(wall.y).toBeCloseTo(trayGeometry.wallCenterY, 4);
+    const left = positions.find((wall) => wall.x < -trayGeometry.halfWidth)!;
+    const right = positions.find((wall) => wall.x > trayGeometry.halfWidth)!;
+    const top = positions.find((wall) => wall.z < trayGeometry.topZ)!;
+    const bottom = positions.find((wall) => wall.z > trayGeometry.bottomZ)!;
     expect([left.inwardX, left.inwardZ]).toEqual([1, 0]);
     expect([right.inwardX, right.inwardZ]).toEqual([-1, 0]);
     expect([top.inwardX, top.inwardZ]).toEqual([0, 1]);
@@ -253,9 +253,13 @@ test('blocks the rounded lower tray corners without narrowing the straight side 
   try {
     const { walls } = createTray(world, createRollPhysicsConfig());
     for (const side of [-1, 1]) {
-      const corner = { x: side * (rollArea.halfWidth - 0.02), y: 0, z: rollArea.bottomZ - 0.02 };
+      const corner = {
+        x: side * (trayGeometry.halfWidth - 0.02),
+        y: 0,
+        z: trayGeometry.bottomZ - 0.02,
+      };
       expect(walls.some(({ collider }) => collider.containsPoint(corner))).toBe(true);
-      const lane = { x: corner.x, y: 0, z: rollArea.centerZ };
+      const lane = { x: corner.x, y: 0, z: trayGeometry.centerZ };
       expect(walls.some(({ collider }) => collider.containsPoint(lane))).toBe(false);
     }
   } finally {
@@ -279,6 +283,6 @@ test.each([13, 20, 28, 29, 40, 48])(
       },
     );
     expect(raw).toBeDefined();
-    expect(raw!.dice[0].p[1]).toBeLessThan(rollArea.ceilingY - rollArea.ceilingHalfHeight);
+    expect(raw!.dice[0].p[1]).toBeLessThan(trayGeometry.ceilingY - trayGeometry.ceilingHalfHeight);
   },
 );

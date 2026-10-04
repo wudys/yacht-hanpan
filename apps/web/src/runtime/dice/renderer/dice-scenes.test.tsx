@@ -16,8 +16,8 @@ import { DICE_CANVAS_VIEWPORT_SIZE, layoutSettledDice } from '@/runtime/dice/gam
 import { DiceRollPlayback } from '@/runtime/dice/renderer/DiceRollPlayback';
 import { DiceRollWarmupScene } from '@/runtime/dice/renderer/DiceRollWarmupScene';
 import { DiceSettledScene } from '@/runtime/dice/renderer/DiceSettledScene';
-import { DiceCupShell } from '@/runtime/dice/renderer/parts/DiceCupModel';
 import { RollStage } from '@/runtime/dice/renderer/parts/RollStage';
+import { DiceCupShell } from '@/runtime/dice/renderer/parts/TimelineCup';
 import type { RollPlayback } from '@/runtime/dice/replay/resolve-playback';
 import { createCupResources } from '@/runtime/dice/resources/cup-resources';
 import type { ProceduralDiceResources } from '@/runtime/dice/resources/procedural-resources';

@@ -320,7 +320,7 @@ test('lets Loading own offline feedback before retaining Lobby behind the global
   expect(globalLayers.getByRole('alertdialog').getAttribute('data-global-failure')).toBe('offline');
   expect(interactionSurface.getAttribute('aria-hidden')).toBe('true');
 
-  act(() => globalActor.send({ type: 'NETWORK.CHANGED', status: 'connected' }));
+  act(() => globalActor.send({ type: 'NETWORK.CHANGED', status: 'online' }));
   expect(globalLayers.queryByRole('alertdialog')).toBeNull();
   expect(screen.getByRole('heading', { name: '로비' })).toBe(lobbyHeading);
   expect(interactionSurface.getAttribute('aria-hidden')).toBeNull();

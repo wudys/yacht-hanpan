@@ -158,7 +158,7 @@ test('accepts a renderer runtime failure only after readiness and keeps it termi
   actor.send({ type: 'BOOTSTRAP.START' });
   await waitFor(actor, (snapshot) => snapshot.matches('ready'));
   actor.send({ type: 'RUNTIME.CAPABILITY_FAILED' });
-  actor.send({ type: 'NETWORK.CHANGED', status: 'connected' });
+  actor.send({ type: 'NETWORK.CHANGED', status: 'online' });
   actor.send({ type: 'BOOTSTRAP.RETRY' });
 
   expect(actor.getSnapshot().matches('runtimeFailure')).toBe(true);

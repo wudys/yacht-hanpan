@@ -13,7 +13,7 @@ export const DIE_COLLIDER_RADIUS = DIE_GEOMETRY.colliderRadius;
 export const FLOOR_Y = TRAY_GEOMETRY.floorY;
 export const FLOOR_TOP_Y = TRAY_FLOOR_TOP_Y;
 
-export const rollArea = TRAY_GEOMETRY;
+export const trayGeometry = TRAY_GEOMETRY;
 
 export function rollAreaMeta() {
   return { ...ROLL_AREA };

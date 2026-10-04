@@ -668,7 +668,7 @@ export function createLobbyMachine(
   });
 }
 export type LobbySnapshot = SnapshotFrom<ReturnType<typeof createLobbyMachine>>;
-export type LobbyView =
+export type LobbyViewState =
   | 'replaced'
   | 'home'
   | 'profile'
@@ -688,7 +688,7 @@ export type LobbyView =
   | 'createNotice'
   | 'connectionFailed';
 
-export function selectLobbyView({ value }: Pick<LobbySnapshot, 'value'>): LobbyView {
+export function selectLobbyView({ value }: Pick<LobbySnapshot, 'value'>): LobbyViewState {
   if (typeof value === 'string') return value === 'handoff' ? 'matching' : value;
   if ('admitted' in value) return value.admitted;
   const unhandled: never = value;

@@ -3,7 +3,7 @@ import { assign, fromPromise, setup } from 'xstate';
 import type { BootstrapProgress } from '@/bootstrap/bootstrap-progress';
 import type { StaticCapabilityResult } from '@/bootstrap/static-capabilities';
 
-export type AppNetworkStatus = 'idle' | 'connected' | 'offline';
+export type AppNetworkStatus = 'idle' | 'online' | 'offline';
 
 export interface AppLifecycleRuntime {
   readonly capabilities: StaticCapabilityResult;

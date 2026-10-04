@@ -6,10 +6,10 @@ import type { ServerClock } from '@repo/game-client-sdk';
 import { PUBLIC_ERROR_CODE } from '@repo/game-protocol';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
-import { JoinRoomLayer } from '@/features/lobby/layers/JoinRoomLayer';
-import { LobbyLayer, LobbyNoticeLayer, PendingIndicator } from '@/features/lobby/layers/LobbyLayer';
-import { ProfileLayer } from '@/features/lobby/layers/ProfileLayer';
-import { type CopyStatus, WaitingRoomLayer } from '@/features/lobby/layers/WaitingRoomLayer';
+import { JoinRoomLayer } from '@/features/lobby/layer/JoinRoomLayer';
+import { LobbyLayer, LobbyNoticeLayer, PendingIndicator } from '@/features/lobby/layer/LobbyLayer';
+import { ProfileLayer } from '@/features/lobby/layer/ProfileLayer';
+import { type CopyStatus, WaitingRoomLayer } from '@/features/lobby/layer/WaitingRoomLayer';
 import { lobbyError, lobbyErrorKey } from '@/features/lobby/lobby-errors';
 import { useLobbyAdmission } from '@/features/lobby/use-lobby-admission';
 import { LobbyView } from '@/features/lobby/view/LobbyView';

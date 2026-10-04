@@ -1,4 +1,4 @@
-import { LobbyLayer, PendingIndicator } from '@/features/lobby/layers/LobbyLayer';
+import { LobbyLayer, PendingIndicator } from '@/features/lobby/layer/LobbyLayer';
 import { LOBBY_ICONS } from '@/features/lobby/lobby-assets';
 import { type LobbyError, lobbyErrorKey } from '@/features/lobby/lobby-errors';
 import { RoomCodeInput } from '@/features/lobby/RoomCodeInput';

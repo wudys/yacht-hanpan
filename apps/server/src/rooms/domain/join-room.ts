@@ -3,7 +3,7 @@ import { isCharacterId } from '@repo/game-assets/characters';
 import { PRESENCE_STATUS, ROOM_REJECTION_CODE, ROOM_STATUS } from '@/rooms/domain/room-constants';
 import type { PlayingRoom, Room, RoomTransition } from '@/rooms/domain/room-model';
 import { roomRejected } from '@/rooms/domain/room-transitions';
-import { isTrustedTimestamp } from '@/rooms/domain/room-validation';
+import { isValidTimestamp } from '@/rooms/domain/room-validation';
 import { epochMilliseconds } from '@/rooms/domain/time';
 
 export interface JoinRoomInput {
@@ -21,7 +21,7 @@ export function joinRoom(room: Room, input: JoinRoomInput): JoinRoomResult {
   if (!isCharacterId(input.characterId) || typeof input.variant !== 'boolean') {
     return roomRejected(room, ROOM_REJECTION_CODE.INVALID_PROFILE);
   }
-  if (!isTrustedTimestamp(input.joinedAt) || input.joinedAt < room.createdAt) {
+  if (!isValidTimestamp(input.joinedAt) || input.joinedAt < room.createdAt) {
     return roomRejected(room, ROOM_REJECTION_CODE.INVALID_TIMESTAMP);
   }
   if (room.status !== ROOM_STATUS.WAITING) {

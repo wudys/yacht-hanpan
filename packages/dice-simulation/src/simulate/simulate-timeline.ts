@@ -9,7 +9,7 @@ import {
 import { assertRapierReady } from '../rapier/state';
 import { createCupFrame, createCupMotion, cupTransformAt } from './internal/cup-motion';
 import { CUP_EXIT_TAIL_MS } from './internal/cup-motion-progress';
-import { cupInteriorMeta, DEFAULT_CUP_SPEC } from './internal/cup-spec';
+import { cupInteriorDimensions, DEFAULT_CUP_SPEC } from './internal/cup-spec';
 import {
   applyCupPourAssist,
   areDiceOutsideCup,
@@ -246,7 +246,7 @@ export function simulateRollTimeline(
         releaseAtMs: cup.releaseAtMs,
         exitAtMs: cup.exitAtMs,
         stageX: cup.stageX,
-        ...cupInteriorMeta(),
+        ...cupInteriorDimensions(),
         frames: cupFrames,
       },
       rollArea: rollAreaMeta(),

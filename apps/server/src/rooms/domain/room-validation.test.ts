@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 
-import { isRoomCode, isTrustedTimestamp } from '@/rooms/domain/room-validation';
+import { isRoomCode, isValidTimestamp } from '@/rooms/domain/room-validation';
 
 describe('room value validation', () => {
   it.each(['000000', '012345', '999999'])('accepts six ASCII digits: %s', (value) => {
@@ -14,14 +14,14 @@ describe('room value validation', () => {
     },
   );
 
-  it.each([0, 1, 1_000, Number.MAX_SAFE_INTEGER])('accepts trusted timestamp %p', (value) => {
-    expect(isTrustedTimestamp(value)).toBe(true);
+  it.each([0, 1, 1_000, Number.MAX_SAFE_INTEGER])('accepts valid timestamp %p', (value) => {
+    expect(isValidTimestamp(value)).toBe(true);
   });
 
   it.each([-1, 1.5, Number.MAX_SAFE_INTEGER + 1, Number.NaN, Number.POSITIVE_INFINITY, '0', null])(
-    'rejects trusted timestamp %p',
+    'rejects valid timestamp %p',
     (value) => {
-      expect(isTrustedTimestamp(value)).toBe(false);
+      expect(isValidTimestamp(value)).toBe(false);
     },
   );
 });

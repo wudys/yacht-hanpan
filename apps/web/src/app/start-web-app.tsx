@@ -147,7 +147,7 @@ export function startWebApp(telemetry: Telemetry): () => void {
     });
     globalActor.start();
     unsubscribeConnectivity = subscribeBrowserConnectivity((online) => {
-      globalActor.send({ type: 'NETWORK.CHANGED', status: online ? 'connected' : 'offline' });
+      globalActor.send({ type: 'NETWORK.CHANGED', status: online ? 'online' : 'offline' });
     });
     unsubscribeRenderer = productRenderer.subscribe(() => {
       if (productRenderer.getSnapshot().status === 'runtimeFailed') {

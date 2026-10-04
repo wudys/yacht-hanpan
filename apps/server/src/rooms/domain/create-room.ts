@@ -7,7 +7,7 @@ import {
   WAITING_ROOM_LIFETIME_MS,
 } from '@/rooms/domain/room-constants';
 import type { RoomCreationResult, RoomId } from '@/rooms/domain/room-model';
-import { isRoomCode, isTrustedTimestamp } from '@/rooms/domain/room-validation';
+import { isRoomCode, isValidTimestamp } from '@/rooms/domain/room-validation';
 import { epochMilliseconds } from '@/rooms/domain/time';
 
 export interface CreateRoomInput {
@@ -26,8 +26,8 @@ export function createRoom(input: CreateRoomInput): RoomCreationResult {
     return { ok: false, code: ROOM_REJECTION_CODE.INVALID_PROFILE };
   }
   if (
-    !isTrustedTimestamp(input.createdAt) ||
-    !isTrustedTimestamp(input.createdAt + WAITING_ROOM_LIFETIME_MS)
+    !isValidTimestamp(input.createdAt) ||
+    !isValidTimestamp(input.createdAt + WAITING_ROOM_LIFETIME_MS)
   ) {
     return { ok: false, code: ROOM_REJECTION_CODE.INVALID_TIMESTAMP };
   }

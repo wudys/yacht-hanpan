@@ -14,7 +14,7 @@ const CUP_COLORS = {
   inner: '#24614d',
 } as const;
 
-export function DiceCupModel({ cup, resources }: { cup: CupMotion; resources: CupResources }) {
+export function TimelineCup({ cup, resources }: { cup: CupMotion; resources: CupResources }) {
   const group = useRef<THREE.Group>(null);
   const shellGroup = useRef<THREE.Group>(null);
   const shellMaterials = useRef<THREE.Material[]>([]);

@@ -8,7 +8,7 @@ import {
 import type { FinishedRoom, PlayingRoom, Room, RoomTransition } from '@/rooms/domain/room-model';
 import type { FinishedRoomState, PlayingRoomState } from '@/rooms/domain/room-state';
 import { roomRejected, roomUnchanged } from '@/rooms/domain/room-transitions';
-import { isTrustedTimestamp } from '@/rooms/domain/room-validation';
+import { isValidTimestamp } from '@/rooms/domain/room-validation';
 import { epochMilliseconds } from '@/rooms/domain/time';
 
 export interface MarkGameFinishedInput {
@@ -39,7 +39,7 @@ export function markGameFinished(
   room: Room,
   input: MarkGameFinishedInput,
 ): RoomTransition<FinishedRoom, Room> {
-  if (!isTrustedTimestamp(input.finishedAt)) {
+  if (!isValidTimestamp(input.finishedAt)) {
     return roomRejected(room, ROOM_REJECTION_CODE.INVALID_TIMESTAMP);
   }
   if (room.status === ROOM_STATUS.FINISHED) return roomUnchanged(room);

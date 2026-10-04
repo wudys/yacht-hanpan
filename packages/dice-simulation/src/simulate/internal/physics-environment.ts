@@ -16,8 +16,8 @@ import {
   DIE_COLLIDER_RADIUS,
   DIE_SIZE,
   FLOOR_Y,
-  rollArea,
   STEP,
+  trayGeometry,
 } from './roll-simulation-constants';
 import { seededNumber } from './seed-expander';
 
@@ -54,43 +54,51 @@ export function createTray(world: World, physics: RollPhysicsConfig): PhysicsTra
   const floorCollider = createFixedCollider(
     world,
     RAPIER.ColliderDesc.cuboid(
-      rollArea.halfWidth + rollArea.wallThickness,
-      rollArea.floorHalfHeight,
-      rollArea.halfDepth + rollArea.wallThickness,
+      trayGeometry.halfWidth + trayGeometry.wallThickness,
+      trayGeometry.floorHalfHeight,
+      trayGeometry.halfDepth + trayGeometry.wallThickness,
     )
-      .setTranslation(0, FLOOR_Y, rollArea.centerZ)
+      .setTranslation(0, FLOOR_Y, trayGeometry.centerZ)
       .setRestitution(physics.floorRestitution)
       .setFriction(physics.floorFriction),
   );
   createFixedCollider(
     world,
     RAPIER.ColliderDesc.cuboid(
-      rollArea.halfWidth + rollArea.wallThickness,
-      rollArea.ceilingHalfHeight,
-      rollArea.halfDepth + rollArea.wallThickness,
+      trayGeometry.halfWidth + trayGeometry.wallThickness,
+      trayGeometry.ceilingHalfHeight,
+      trayGeometry.halfDepth + trayGeometry.wallThickness,
     )
-      .setTranslation(0, rollArea.ceilingY, rollArea.centerZ)
+      .setTranslation(0, trayGeometry.ceilingY, trayGeometry.centerZ)
       .setRestitution(0.08)
       .setFriction(0.62),
   );
   const leftWall = createFixedCollider(
     world,
-    RAPIER.ColliderDesc.cuboid(rollArea.wallThickness, rollArea.wallHalfHeight, rollArea.halfDepth)
+    RAPIER.ColliderDesc.cuboid(
+      trayGeometry.wallThickness,
+      trayGeometry.wallHalfHeight,
+      trayGeometry.halfDepth,
+    )
       .setTranslation(
-        -rollArea.halfWidth - rollArea.wallThickness,
-        rollArea.wallCenterY,
-        rollArea.centerZ,
+        -trayGeometry.halfWidth - trayGeometry.wallThickness,
+        trayGeometry.wallCenterY,
+        trayGeometry.centerZ,
       )
       .setRestitution(physics.wallRestitution)
       .setFriction(physics.wallFriction),
   );
   const rightWall = createFixedCollider(
     world,
-    RAPIER.ColliderDesc.cuboid(rollArea.wallThickness, rollArea.wallHalfHeight, rollArea.halfDepth)
+    RAPIER.ColliderDesc.cuboid(
+      trayGeometry.wallThickness,
+      trayGeometry.wallHalfHeight,
+      trayGeometry.halfDepth,
+    )
       .setTranslation(
-        rollArea.halfWidth + rollArea.wallThickness,
-        rollArea.wallCenterY,
-        rollArea.centerZ,
+        trayGeometry.halfWidth + trayGeometry.wallThickness,
+        trayGeometry.wallCenterY,
+        trayGeometry.centerZ,
       )
       .setRestitution(physics.wallRestitution)
       .setFriction(physics.wallFriction),
@@ -98,22 +106,26 @@ export function createTray(world: World, physics: RollPhysicsConfig): PhysicsTra
   const topWall = createFixedCollider(
     world,
     RAPIER.ColliderDesc.cuboid(
-      rollArea.halfWidth + rollArea.wallThickness,
-      rollArea.wallHalfHeight,
-      rollArea.wallThickness,
+      trayGeometry.halfWidth + trayGeometry.wallThickness,
+      trayGeometry.wallHalfHeight,
+      trayGeometry.wallThickness,
     )
-      .setTranslation(0, rollArea.wallCenterY, rollArea.topZ - rollArea.wallThickness)
+      .setTranslation(0, trayGeometry.wallCenterY, trayGeometry.topZ - trayGeometry.wallThickness)
       .setRestitution(physics.wallRestitution * 0.9)
       .setFriction(physics.wallFriction),
   );
   const bottomWall = createFixedCollider(
     world,
     RAPIER.ColliderDesc.cuboid(
-      rollArea.halfWidth + rollArea.wallThickness,
-      rollArea.wallHalfHeight,
-      rollArea.wallThickness,
+      trayGeometry.halfWidth + trayGeometry.wallThickness,
+      trayGeometry.wallHalfHeight,
+      trayGeometry.wallThickness,
     )
-      .setTranslation(0, rollArea.wallCenterY, rollArea.bottomZ + rollArea.wallThickness)
+      .setTranslation(
+        0,
+        trayGeometry.wallCenterY,
+        trayGeometry.bottomZ + trayGeometry.wallThickness,
+      )
       .setRestitution(physics.wallRestitution * 0.9)
       .setFriction(physics.wallFriction),
   );
@@ -130,7 +142,7 @@ export function createTray(world: World, physics: RollPhysicsConfig): PhysicsTra
 }
 
 function createLowerCornerWalls(world: World, physics: RollPhysicsConfig): TrayWall[] {
-  const radius = rollArea.bottomCornerRadius;
+  const radius = trayGeometry.bottomCornerRadius;
   const walls: TrayWall[] = [];
   // Three tangent segments plus the straight walls approximate each quarter-circle
   // within 0.16 logical px. Only the lower corners are rounded: the rack edge is flat.
@@ -138,12 +150,17 @@ function createLowerCornerWalls(world: World, physics: RollPhysicsConfig): TrayW
     for (const angle of [Math.PI / 8, Math.PI / 4, (Math.PI * 3) / 8]) {
       const nx = side * Math.cos(angle);
       const nz = Math.sin(angle);
-      const x = side * (rollArea.halfWidth - radius) + nx * (radius + rollArea.wallThickness);
-      const z = rollArea.bottomZ - radius + nz * (radius + rollArea.wallThickness);
+      const x =
+        side * (trayGeometry.halfWidth - radius) + nx * (radius + trayGeometry.wallThickness);
+      const z = trayGeometry.bottomZ - radius + nz * (radius + trayGeometry.wallThickness);
       const collider = createFixedCollider(
         world,
-        RAPIER.ColliderDesc.cuboid(rollArea.wallThickness, rollArea.wallHalfHeight, radius * 2)
-          .setTranslation(x, rollArea.wallCenterY, z)
+        RAPIER.ColliderDesc.cuboid(
+          trayGeometry.wallThickness,
+          trayGeometry.wallHalfHeight,
+          radius * 2,
+        )
+          .setTranslation(x, trayGeometry.wallCenterY, z)
           .setRotation(quatFromEuler(0, -Math.atan2(nz, nx), 0))
           .setRestitution(physics.wallRestitution * 0.9)
           .setFriction(physics.wallFriction),

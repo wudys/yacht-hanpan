@@ -90,7 +90,7 @@ export function createGameSession(options: CreateGameSessionOptions): GameSessio
   let connectPromise: Promise<SessionOperationResult> | null = null;
   let connectionAttempt: AbortController | null = null;
   const lifecycle = new AbortController();
-  let view = createView();
+  let snapshot = createSnapshot();
   const subscribers = new Set<() => void>();
   const executionId = uuidV4();
   let firstAuthentication = true;
@@ -113,7 +113,7 @@ export function createGameSession(options: CreateGameSessionOptions): GameSessio
   });
 
   const publish = (): void => {
-    view = createView();
+    snapshot = createSnapshot();
     for (const subscriber of subscribers) subscriber();
   };
 
@@ -189,7 +189,7 @@ export function createGameSession(options: CreateGameSessionOptions): GameSessio
   const synchronizeIfConnected = (): void => {
     if (connection === 'connected') void synchronize();
   };
-  function replaceSession(): void {
+  function handleSessionReplaced(): void {
     if (lifecycle.signal.aborted) return;
     connection = 'replaced';
     lastError = null;
@@ -202,7 +202,7 @@ export function createGameSession(options: CreateGameSessionOptions): GameSessio
   }
 
   const unsubscriptions = [
-    socket.onReplaced(replaceSession),
+    socket.onReplaced(handleSessionReplaced),
     socket.onConnected(() => {
       if (lifecycle.signal.aborted) return;
       connection = 'connected';
@@ -220,7 +220,7 @@ export function createGameSession(options: CreateGameSessionOptions): GameSessio
       if (lifecycle.signal.aborted) return;
       const error = normalizeConnectionError(value);
       if (error.kind === 'server' && error.error.code === PUBLIC_ERROR_CODE.SESSION_REPLACED) {
-        replaceSession();
+        handleSessionReplaced();
         return;
       }
       connectionSync = null;
@@ -276,7 +276,7 @@ export function createGameSession(options: CreateGameSessionOptions): GameSessio
     signal: lifecycle.signal,
   });
 
-  function createView(): GameSessionSnapshot {
+  function createSnapshot(): GameSessionSnapshot {
     return {
       room: state.view?.room ?? null,
       connection,
@@ -322,7 +322,7 @@ export function createGameSession(options: CreateGameSessionOptions): GameSessio
       }
       const error = normalizeConnectionError(value);
       if (error.kind === 'server' && error.error.code === PUBLIC_ERROR_CODE.SESSION_REPLACED) {
-        replaceSession();
+        handleSessionReplaced();
         return { ok: false, error };
       }
       connection = 'disconnected';
@@ -370,10 +370,10 @@ export function createGameSession(options: CreateGameSessionOptions): GameSessio
       unsubscriptions.forEach((unsubscribe) => unsubscribe());
       socket.dispose();
       subscribers.clear();
-      view = createView();
+      snapshot = createSnapshot();
     },
     synchronize,
-    getSnapshot: () => view,
+    getSnapshot: () => snapshot,
     subscribe: (listener) => {
       if (lifecycle.signal.aborted) return () => {};
       subscribers.add(listener);

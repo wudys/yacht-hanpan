@@ -1,6 +1,6 @@
 import type { CharacterId } from '@repo/game-assets/characters';
 
-import { LobbyLayer } from '@/features/lobby/layers/LobbyLayer';
+import { LobbyLayer } from '@/features/lobby/layer/LobbyLayer';
 import { characterChoices, LOBBY_ICONS } from '@/features/lobby/lobby-assets';
 import { CharacterChoiceGrid } from '@/features/lobby/view/CharacterChoiceGrid';
 import { type Locale, translate } from '@/i18n';

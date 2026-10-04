@@ -17,7 +17,7 @@ import type {
   WaitingRoom,
 } from '@/rooms/domain/room-model';
 import { roomChanged, roomRejected, roomUnchanged } from '@/rooms/domain/room-transitions';
-import { isTrustedTimestamp } from '@/rooms/domain/room-validation';
+import { isValidTimestamp } from '@/rooms/domain/room-validation';
 import { epochMilliseconds } from '@/rooms/domain/time';
 
 export interface DisconnectSeatInput {
@@ -40,7 +40,7 @@ export function disconnectSeat(
 ): RoomTransition<PlayingRoom, PlayingRoom>;
 export function disconnectSeat(room: Room, input: DisconnectSeatInput): RoomTransition;
 export function disconnectSeat(room: Room, input: DisconnectSeatInput): RoomTransition {
-  if (!isTrustedTimestamp(input.detectedAt) || input.detectedAt < room.createdAt) {
+  if (!isValidTimestamp(input.detectedAt) || input.detectedAt < room.createdAt) {
     return roomRejected(room, ROOM_REJECTION_CODE.INVALID_TIMESTAMP);
   }
   if (room.status === ROOM_STATUS.FINISHED) {
@@ -51,7 +51,7 @@ export function disconnectSeat(room: Room, input: DisconnectSeatInput): RoomTran
   }
   if (
     room.status === ROOM_STATUS.PLAYING &&
-    !isTrustedTimestamp(input.detectedAt + RECONNECT_GRACE_MS)
+    !isValidTimestamp(input.detectedAt + RECONNECT_GRACE_MS)
   ) {
     return roomRejected(room, ROOM_REJECTION_CODE.INVALID_TIMESTAMP);
   }
@@ -89,7 +89,7 @@ export function resumeSeat(
 ): Extract<RoomTransition<FinishedRoom, FinishedRoom>, { readonly ok: false }>;
 export function resumeSeat(room: Room, input: ResumeSeatInput): RoomTransition;
 export function resumeSeat(room: Room, input: ResumeSeatInput): RoomTransition {
-  if (!isTrustedTimestamp(input.resumedAt) || input.resumedAt < room.createdAt) {
+  if (!isValidTimestamp(input.resumedAt) || input.resumedAt < room.createdAt) {
     return roomRejected(room, ROOM_REJECTION_CODE.INVALID_TIMESTAMP);
   }
   if (room.status === ROOM_STATUS.FINISHED) {

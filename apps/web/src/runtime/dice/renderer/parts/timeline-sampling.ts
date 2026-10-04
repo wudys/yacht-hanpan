@@ -7,7 +7,7 @@ export interface TimelineSample {
   q: [number, number, number, number];
 }
 
-export function sampleFrames(frames: readonly DieFrame[], timeMs: number): TimelineSample {
+export function sampleDieFrames(frames: readonly DieFrame[], timeMs: number): TimelineSample {
   if (frames.length === 0 || timeMs < 0) {
     return {
       visible: false,

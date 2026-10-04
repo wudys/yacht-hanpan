@@ -47,7 +47,7 @@ test('locks and retains a non-game route while offline, then restores it online'
   fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
   expect(reload).toHaveBeenCalledOnce();
 
-  act(() => actor.send({ type: 'NETWORK.CHANGED', status: 'connected' }));
+  act(() => actor.send({ type: 'NETWORK.CHANGED', status: 'online' }));
   expect(screen.queryByRole('alertdialog')).toBeNull();
   expect(interactionSurface.getAttribute('inert')).toBeNull();
   expect(screen.getByRole('button', { name: 'Preserved route' })).toBe(route);
@@ -129,7 +129,7 @@ test('keeps a post-ready runtime failure visible above route and network changes
   expect(reload).not.toHaveBeenCalled();
 
   act(() => actor.send({ type: 'NETWORK.CHANGED', status: 'offline' }));
-  act(() => actor.send({ type: 'NETWORK.CHANGED', status: 'connected' }));
+  act(() => actor.send({ type: 'NETWORK.CHANGED', status: 'online' }));
   await waitFor(() => expect(screen.getByRole('alertdialog')).toBe(modal));
   view.unmount();
   actor.stop();
@@ -151,7 +151,7 @@ test('replacement ends the route and keeps one short reload action despite later
     '다른 곳에서 이 게임에 접속했어요.',
   );
   fireEvent.keyDown(document, { key: 'Escape' });
-  act(() => actor.send({ type: 'NETWORK.CHANGED', status: 'connected' }));
+  act(() => actor.send({ type: 'NETWORK.CHANGED', status: 'online' }));
   expect(screen.getByRole('alertdialog')).not.toBeNull();
   fireEvent.click(screen.getByRole('button', { name: '시작 화면으로' }));
   expect(reload).toHaveBeenCalledOnce();

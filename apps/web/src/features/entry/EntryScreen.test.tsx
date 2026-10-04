@@ -145,7 +145,7 @@ test('keeps the global offline action accessible above privacy and retains its i
   expect(screen.queryByRole('dialog', { hidden: true })).toBeNull();
   expect(screen.getByTestId('global-interaction-surface').getAttribute('inert')).toBe('');
 
-  act(() => actor.send({ type: 'NETWORK.CHANGED', status: 'connected' }));
+  act(() => actor.send({ type: 'NETWORK.CHANGED', status: 'online' }));
   expect(screen.getByTestId('global-interaction-surface').hasAttribute('inert')).toBe(false);
   expect(screen.getByRole('button', { name: 'Privacy Policy' })).toBe(trigger);
 });
@@ -166,7 +166,7 @@ test.each([true, false])(
     const globalHost = screen.getByTestId('global-layer-host');
     expect(globalHost.closest('[inert]')).toBeNull();
     act(() => actor.send({ type: 'NETWORK.CHANGED', status: 'offline' }));
-    act(() => actor.send({ type: 'NETWORK.CHANGED', status: 'connected' }));
+    act(() => actor.send({ type: 'NETWORK.CHANGED', status: 'online' }));
     fireEvent.click(within(privacy).getByRole('button', { name: 'OK' }));
     expect(trigger.closest('[inert]')).toBeNull();
   },

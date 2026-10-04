@@ -3,12 +3,12 @@ import { useEffect, useRef } from 'react';
 
 import type { RollStageLayout } from '@/runtime/dice/game-dice-layout';
 import { DiceSettledScene } from '@/runtime/dice/renderer/DiceSettledScene';
-import { DiceCupModel } from '@/runtime/dice/renderer/parts/DiceCupModel';
 import {
   RollPlaybackClockProvider,
   useRollPlaybackClock,
 } from '@/runtime/dice/renderer/parts/playback-clock';
 import { RollStage } from '@/runtime/dice/renderer/parts/RollStage';
+import { TimelineCup } from '@/runtime/dice/renderer/parts/TimelineCup';
 import { TimelineDie } from '@/runtime/dice/renderer/parts/TimelineDie';
 import type { RollPlayback } from '@/runtime/dice/replay/resolve-playback';
 import type { ProceduralDiceResources } from '@/runtime/dice/resources/procedural-resources';
@@ -43,7 +43,7 @@ export function DiceRollPlayback({
         onComplete={onComplete}
       />
       <RollStage rollArea={timeline.rollArea} layout={layout}>
-        <DiceCupModel cup={timeline.cup} resources={resources.cup} />
+        <TimelineCup cup={timeline.cup} resources={resources.cup} />
         {timeline.dice.map((die) => (
           <TimelineDie key={`${timeline.rollId}-${die.slot}`} die={die} resources={resources} />
         ))}

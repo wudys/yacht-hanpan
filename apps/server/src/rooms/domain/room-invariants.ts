@@ -6,7 +6,7 @@ import {
   WAITING_ROOM_LIFETIME_MS,
 } from '@/rooms/domain/room-constants';
 import type { PlayingSeats, Room, Seat } from '@/rooms/domain/room-model';
-import { isRoomCode, isTrustedTimestamp } from '@/rooms/domain/room-validation';
+import { isRoomCode, isValidTimestamp } from '@/rooms/domain/room-validation';
 
 export function assertRoomInvariant(room: Room): void {
   invariant(room.id.length > 0, 'room id must not be empty');
@@ -95,7 +95,7 @@ function assertStartedAt(createdAt: number, startedAt: number): void {
 }
 
 function assertTimestamp(value: number, label: string): void {
-  invariant(isTrustedTimestamp(value), `${label} must be a trusted timestamp`);
+  invariant(isValidTimestamp(value), `${label} must be a valid timestamp`);
 }
 
 function invariant(condition: boolean, message: string): asserts condition {

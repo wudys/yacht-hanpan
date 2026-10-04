@@ -3,7 +3,7 @@ import { expect, onTestFinished, test, vi } from 'vitest';
 import type { BootstrapProgress, ReadinessReporter } from '@/bootstrap/bootstrap-progress';
 import { loadProductResources } from '@/bootstrap/load-product-resources';
 
-test('bounds required preparation and aborts its resources without canceling optional tracks', async () => {
+test('bounds required preparation without starting later optional tracks', async () => {
   vi.useFakeTimers();
   onTestFinished(() => {
     vi.useRealTimers();
@@ -30,7 +30,7 @@ test('bounds required preparation and aborts its resources without canceling opt
   expect(failed).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ name: 'TimeoutError' }));
   expect(resourceSignal?.aborted).toBe(true);
   expect(onFailure).not.toHaveBeenCalled();
-  expect(prefetchScenes.mock.calls).toEqual([[['lobby']], [['game', 'result']]]);
+  expect(prefetchScenes.mock.calls).toEqual([[['lobby']]]);
   await loading;
   expect(vi.getTimerCount()).toBe(0);
 });
@@ -40,25 +40,35 @@ test('external cancellation ends preparation without reporting an operational fa
   let complete!: () => void;
   let resourceSignal: AbortSignal | undefined;
   const onFailure = vi.fn();
+  const prefetchScenes = vi.fn(async () => undefined);
+  const updates: BootstrapProgress[] = [];
+  let report: ReadinessReporter = () => undefined;
   const loading = loadProductResources({
     signal: activity.signal,
     bgmEnabled: false,
-    prefetchScenes: async () => undefined,
+    prefetchScenes,
     loadModules: async () => undefined,
     prepareProductAudio: async () => undefined,
-    prepareVisuals: (_report, signal) => {
+    prepareVisuals: (reportProgress, signal) => {
+      report = reportProgress;
       resourceSignal = signal;
       return new Promise<void>((resolve) => {
         complete = resolve;
       });
     },
     onFailure,
+    onProgress: (progress) => updates.push(progress),
   });
   const rejected = loading.catch((error: unknown) => error);
   activity.abort();
   expect(resourceSignal?.aborted).toBe(true);
   expect(await rejected).toBe(activity.signal.reason);
+  const updateCount = updates.length;
+  report('gpu', 1);
   complete();
+  await Promise.resolve();
+  expect(updates).toHaveLength(updateCount);
+  expect(prefetchScenes.mock.calls).toEqual([[['lobby']]]);
   expect(onFailure).not.toHaveBeenCalled();
 });
 
@@ -186,3 +196,56 @@ test.each([new TypeError('active failure'), new DOMException('active failure', '
     expect(onFailure).toHaveBeenCalledExactlyOnceWith('modules', failure);
   },
 );
+
+test.each([true, false])(
+  'defers optional music until required readiness with BGM %s',
+  async (bgmEnabled) => {
+    let completeVisuals!: () => void;
+    let completeLobby!: () => void;
+    const lobby = new Promise<void>((resolve) => {
+      completeLobby = resolve;
+    });
+    const prefetchScenes = vi.fn((scenes: readonly string[]) =>
+      scenes[0] === 'lobby' ? lobby : new Promise<void>(() => undefined),
+    );
+    const loading = loadProductResources({
+      bgmEnabled,
+      prefetchScenes,
+      loadModules: async () => undefined,
+      prepareProductAudio: async () => undefined,
+      prepareVisuals: () =>
+        new Promise<void>((resolve) => {
+          completeVisuals = resolve;
+        }),
+    });
+    expect(prefetchScenes.mock.calls).toEqual([
+      [['lobby'], ...(bgmEnabled ? [expect.any(AbortSignal)] : [])],
+    ]);
+    completeVisuals();
+    if (bgmEnabled) {
+      await Promise.resolve();
+      expect(prefetchScenes).toHaveBeenCalledTimes(1);
+      completeLobby();
+    }
+    await loading;
+    expect(prefetchScenes.mock.calls.at(-1)).toEqual([['game', 'result']]);
+    // Unresolved optional tracks, including disabled Lobby, do not delay readiness.
+  },
+);
+
+test('optional music rejection after readiness does not fail preparation', async () => {
+  const onFailure = vi.fn();
+  await expect(
+    loadProductResources({
+      bgmEnabled: true,
+      prefetchScenes: async (scenes) => {
+        if (scenes[0] === 'game') throw new Error('optional music unavailable');
+      },
+      loadModules: async () => undefined,
+      prepareProductAudio: async () => undefined,
+      prepareVisuals: async () => undefined,
+      onFailure,
+    }),
+  ).resolves.toBeUndefined();
+  expect(onFailure).not.toHaveBeenCalled();
+});

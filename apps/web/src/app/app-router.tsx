@@ -9,7 +9,7 @@ import {
   Outlet,
   useRouterState,
 } from '@tanstack/react-router';
-import { lazy, Suspense, useSyncExternalStore } from 'react';
+import { lazy, Suspense, useCallback, useSyncExternalStore } from 'react';
 import type { ActorRefFrom } from 'xstate';
 
 import { appLifecycleMachine } from '@/app/app-lifecycle-machine';
@@ -115,19 +115,19 @@ function RootLayout() {
 
 function EntryRoute() {
   const { audio, globalActor, preferences } = entryRoute.useRouteContext();
-  const { locale } = useSyncExternalStore(preferences.subscribe, preferences.getSnapshot);
+  const locale = useRouteLocale(preferences);
   return <EntryScreen audio={audio} globalActor={globalActor} locale={locale} />;
 }
 
 function LoadingRoute() {
   const { audio, globalActor, preferences } = loadingRoute.useRouteContext();
-  const { locale } = useSyncExternalStore(preferences.subscribe, preferences.getSnapshot);
+  const locale = useRouteLocale(preferences);
   return <LoadingScreen audio={audio} globalActor={globalActor} locale={locale} />;
 }
 
 function LobbyRoute() {
   const { activity, access, audio, preferences, clock, profile } = lobbyRoute.useRouteContext();
-  const { locale } = useSyncExternalStore(preferences.subscribe, preferences.getSnapshot);
+  const locale = useRouteLocale(preferences);
   return (
     <Suspense fallback={null}>
       <LobbyScreen
@@ -146,7 +146,7 @@ function LobbyRoute() {
 function GameRoute() {
   const { audio, feedback, preferences, clock, sessions, store, recovery, presentation } =
     gameRoute.useRouteContext();
-  const { locale } = useSyncExternalStore(preferences.subscribe, preferences.getSnapshot);
+  const locale = useRouteLocale(preferences);
   return (
     <Suspense fallback={null}>
       <GameScreen
@@ -162,4 +162,9 @@ function GameRoute() {
       />
     </Suspense>
   );
+}
+
+function useRouteLocale(preferences: ProductPreferences) {
+  const getLocale = useCallback(() => preferences.getSnapshot().locale, [preferences]);
+  return useSyncExternalStore(preferences.subscribe, getLocale);
 }

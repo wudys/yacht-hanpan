@@ -1,5 +1,5 @@
 import { requireGameAsset } from '@repo/game-assets';
-import { type CSSProperties, type ReactNode, useEffect, useSyncExternalStore } from 'react';
+import { type CSSProperties, memo, type ReactNode, useEffect, useSyncExternalStore } from 'react';
 import type { ActorRefFrom } from 'xstate';
 
 import type { appLifecycleMachine } from '@/app/app-lifecycle-machine';
@@ -15,6 +15,7 @@ import { GameFrame } from '@/ui/layout';
 
 const wrapperPatternUrl = requireGameAsset('brand.wrapper-pattern').url;
 const wrapperLogoUrl = requireGameAsset('brand.logo').url;
+const MemoizedDiceCanvas = memo(PersistentDiceCanvas);
 const webShellStyle = {
   '--web-wrapper-pattern-image': `url("${wrapperPatternUrl}")`,
 } as CSSProperties;
@@ -63,7 +64,7 @@ export function AppShell({
           locale={locale}
           routePath={routePath}
         >
-          <PersistentDiceCanvas renderer={renderer} presentation={presentation} />
+          <MemoizedDiceCanvas renderer={renderer} presentation={presentation} />
           {children}
         </GlobalLayerHost>
       </GameFrame>

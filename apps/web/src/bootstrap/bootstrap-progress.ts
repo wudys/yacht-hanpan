@@ -49,7 +49,9 @@ export function createBootstrapProgress(
   }
   publish();
   return (phase, count) => {
-    completed[phase] = Math.max(0, Math.min(total[phase], count));
+    const normalized = Math.max(0, Math.min(total[phase], count));
+    if (completed[phase] === normalized) return;
+    completed[phase] = normalized;
     publish();
   };
 }

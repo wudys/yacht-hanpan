@@ -70,7 +70,6 @@ export async function loadProductResources(
     const lobbyAudio = options.bgmEnabled
       ? required('bgm', () => options.prefetchScenes(['lobby'], preparation.signal))
       : options.prefetchScenes(['lobby']);
-    void options.prefetchScenes(['game', 'result']).catch(() => undefined);
     if (!options.bgmEnabled) void lobbyAudio.catch(() => undefined);
     const ready = Promise.all([
       Promise.all([
@@ -84,6 +83,7 @@ export async function loadProductResources(
     ]);
     await Promise.race([ready, aborted]);
     preparation.signal.throwIfAborted();
+    void options.prefetchScenes(['game', 'result']).catch(() => undefined);
   } catch (error) {
     preparation.abort(error);
     throw error;

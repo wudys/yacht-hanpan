@@ -5,17 +5,26 @@ import { createGameClient } from '@repo/game-client-sdk';
 import { RouterProvider } from '@tanstack/react-router';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { StrictMode } from 'react';
+import type { WebGLRenderer } from 'three';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { type ActorRefFrom, createActor } from 'xstate';
 
 import { appLifecycleMachine } from '@/app/app-lifecycle-machine';
 import { createAppRouter } from '@/app/app-router';
 import { CAPABILITY_FAILURE_CODE } from '@/bootstrap/static-capabilities';
+import { EntryScreen } from '@/features/entry/EntryScreen';
+import GameScreen from '@/features/game/GameScreen';
+import { LoadingScreen } from '@/features/loading/LoadingScreen';
+import LobbyScreen from '@/features/lobby/LobbyScreen';
 import { LOCALE, translate } from '@/i18n';
 import type { ProductAudioRuntime } from '@/runtime/audio/browser-audio-runtime';
-import { createRendererReadiness } from '@/runtime/dice/canvas/renderer-readiness';
+import DiceCanvasHost from '@/runtime/dice/canvas/DiceCanvasHost';
+import { createRendererReadiness as createReadiness } from '@/runtime/dice/canvas/renderer-readiness';
 import { createDicePresentation } from '@/runtime/dice/dice-presentation';
-import { createProductPreferences } from '@/runtime/preferences/product-preferences';
+import {
+  createProductPreferences,
+  type ProductPreferenceStorage,
+} from '@/runtime/preferences/product-preferences';
 import { createProductProfile } from '@/runtime/profile/product-profile';
 import { createRoomAccess } from '@/runtime/room-access/room-access';
 import { createStoredRoomRestore } from '@/runtime/room-access/stored-room-restore';
@@ -24,6 +33,63 @@ import { createGameSessionHolder } from '@/runtime/session/session-holder';
 import { createSessionRecovery } from '@/runtime/session/session-recovery';
 
 const activeActors = new Set<ActorRefFrom<typeof appLifecycleMachine>>();
+const canvasFixture = vi.hoisted(() => ({ rootCount: (): number => -1 }));
+
+// Keep the Canvas host and R3F root real; replace only the unavailable jsdom GPU device.
+vi.mock('@react-three/fiber', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@react-three/fiber')>();
+  canvasFixture.rootCount = () => actual._roots.size;
+  return {
+    ...actual,
+    createRoot(canvas: HTMLCanvasElement) {
+      const root = actual.createRoot(canvas);
+      const configure = root.configure.bind(root);
+      root.configure = (options) =>
+        configure({
+          ...options,
+          gl: {
+            render: vi.fn(),
+            compile: vi.fn(),
+            clear: vi.fn(),
+            setPixelRatio: vi.fn(),
+            setSize: vi.fn(),
+            setClearAlpha: vi.fn(),
+            shadowMap: {},
+            xr: {
+              isPresenting: false,
+              addEventListener: vi.fn(),
+              removeEventListener: vi.fn(),
+              setAnimationLoop: vi.fn(),
+            },
+            renderLists: { dispose: vi.fn() },
+            forceContextLoss: vi.fn(),
+          } as unknown as WebGLRenderer,
+        });
+      return root;
+    },
+  };
+});
+vi.mock('@/runtime/dice/canvas/DiceCanvasHost', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/runtime/dice/canvas/DiceCanvasHost')>();
+  return { ...actual, default: vi.fn(actual.default) };
+});
+
+vi.mock('@/features/entry/EntryScreen', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/features/entry/EntryScreen')>();
+  return { ...actual, EntryScreen: vi.fn(actual.EntryScreen) };
+});
+vi.mock('@/features/loading/LoadingScreen', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/features/loading/LoadingScreen')>();
+  return { ...actual, LoadingScreen: vi.fn(actual.LoadingScreen) };
+});
+vi.mock('@/features/lobby/LobbyScreen', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/features/lobby/LobbyScreen')>();
+  return { ...actual, default: vi.fn(actual.default) };
+});
+vi.mock('@/features/game/GameScreen', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/features/game/GameScreen')>();
+  return { ...actual, default: vi.fn(actual.default) };
+});
 
 beforeEach(() => {
   vi.stubGlobal('matchMedia', () => ({
@@ -105,6 +171,10 @@ function createTestAudioRuntime(): ProductAudioRuntime {
 function renderApp(
   loadResources: () => Promise<void> = () => Promise.resolve(),
   audio: ProductAudioRuntime = createTestAudioRuntime(),
+  preferenceStorage: ProductPreferenceStorage = {
+    getItem: () => null,
+    setItem: () => undefined,
+  },
 ) {
   const globalActor = createActor(appLifecycleMachine, {
     input: {
@@ -122,7 +192,7 @@ function renderApp(
     serverUrl: 'http://localhost:3002',
     releaseId: 'app-test',
   });
-  const preferences = createProductPreferences({ getItem: () => null, setItem: () => undefined });
+  const preferences = createProductPreferences(preferenceStorage);
   const sessions = createGameSessionHolder(client);
   const readiness = { wait: vi.fn(async () => ({ ok: true as const })) };
   const reentry = createStoredRoomRestore({ client, sessions, store, readiness });
@@ -137,6 +207,7 @@ function renderApp(
     restore: reentry,
     recovery,
   });
+  const renderer = createReadiness();
   const router = createAppRouter({
     activity,
     access,
@@ -145,7 +216,7 @@ function renderApp(
     globalActor,
     profile: createProductProfile({ getItem: () => null, setItem: () => undefined }),
     preferences,
-    renderer: createRendererReadiness(),
+    renderer,
     clock: client.clock,
     sessions,
     store,
@@ -162,7 +233,7 @@ function renderApp(
       <RouterProvider router={router} />
     </StrictMode>,
   );
-  return { ...view, audio, globalActor, router, preferences, readiness };
+  return { ...view, audio, globalActor, router, preferences, readiness, renderer };
 }
 
 test('does not wake the server during Entry, Loading or an idle Lobby', async () => {
@@ -238,6 +309,108 @@ test('updates current route copy when the shared locale preference changes', asy
   expect(
     await screen.findByRole('button', { name: translate(LOCALE.EN, 'app.startAction') }),
   ).not.toBeNull();
+});
+
+test.each([
+  ['/entry', EntryScreen],
+  ['/loading', LoadingScreen],
+  ['/lobby', LobbyScreen],
+  ['/game', GameScreen],
+] as const)(
+  'only re-renders the %s screen for a locale preference change',
+  async (path, routeScreen) => {
+    let storageAvailable = true;
+    const { router, preferences } = renderApp(undefined, undefined, {
+      getItem: () => null,
+      setItem: () => {
+        if (!storageAvailable) throw new Error('storage blocked');
+      },
+    });
+    await screen.findByRole('button', { name: '게임 시작' });
+    await act(async () => {
+      await router.navigate({ to: path });
+    });
+    await vi.waitFor(() => expect(vi.mocked(routeScreen).mock.lastCall?.[0].locale).toBe('ko'));
+    await act(async () => undefined);
+    const executionCount = () => vi.mocked(routeScreen).mock.calls.length;
+    const initialRenders = executionCount();
+    act(() => {
+      preferences.setBgmEnabled(false);
+    });
+    const bgmRenders = executionCount() - initialRenders;
+    const beforeSfx = executionCount();
+    act(() => {
+      preferences.setSfxEnabled(false);
+    });
+    const sfxRenders = executionCount() - beforeSfx;
+    const beforeFailure = executionCount();
+    storageAvailable = false;
+    act(() => {
+      preferences.setLocale('ko');
+    });
+    expect(preferences.getSnapshot().storageFailed).toBe(true);
+    const failureRenders = executionCount() - beforeFailure;
+    const beforeRecovery = executionCount();
+    storageAvailable = true;
+    act(() => {
+      preferences.setLocale('ko');
+    });
+    expect(preferences.getSnapshot().storageFailed).toBe(false);
+    const recoveryRenders = executionCount() - beforeRecovery;
+    const beforeLocale = executionCount();
+    act(() => {
+      preferences.setLocale('en');
+    });
+    expect(vi.mocked(routeScreen).mock.lastCall?.[0].locale).toBe('en');
+    const localeRenders = executionCount() - beforeLocale;
+    expect({ bgmRenders, sfxRenders, failureRenders, recoveryRenders }).toEqual({
+      bgmRenders: 0,
+      sfxRenders: 0,
+      failureRenders: 0,
+      recoveryRenders: 0,
+    });
+    expect(localeRenders).toBeGreaterThan(0);
+  },
+);
+
+test('keeps preference changes outside the persistent Canvas React tree and existing R3F root', async () => {
+  let storageAvailable = true;
+  const { preferences, renderer } = renderApp(undefined, undefined, {
+    getItem: () => null,
+    setItem: () => {
+      if (!storageAvailable) throw new Error('storage blocked');
+    },
+  });
+  await screen.findByRole('button', { name: '게임 시작' });
+  act(() => {
+    void renderer.prepare();
+  });
+  const canvas = await screen.findByTestId('dice-canvas');
+  await vi.waitFor(() => expect(canvasFixture.rootCount()).toBe(1));
+  await act(async () => undefined);
+  const initialRenders = vi.mocked(DiceCanvasHost).mock.calls.length;
+  act(() => {
+    preferences.setBgmEnabled(false);
+  });
+  act(() => {
+    preferences.setSfxEnabled(false);
+  });
+  act(() => {
+    preferences.setLocale('en');
+  });
+  storageAvailable = false;
+  act(() => {
+    preferences.setLocale('en');
+  });
+  expect(preferences.getSnapshot().storageFailed).toBe(true);
+  storageAvailable = true;
+  act(() => {
+    preferences.setLocale('en');
+  });
+  expect(preferences.getSnapshot().storageFailed).toBe(false);
+  expect(screen.getByTestId('dice-canvas')).toBe(canvas);
+  expect(canvasFixture.rootCount()).toBe(1);
+  expect(vi.mocked(DiceCanvasHost).mock.calls.length - initialRenders).toBe(0);
 });
 
 test('applies independent BGM and SFX preferences to the existing audio runtime', async () => {

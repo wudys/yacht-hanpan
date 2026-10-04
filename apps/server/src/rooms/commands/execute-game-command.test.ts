@@ -609,7 +609,7 @@ describe('executeGameCommand', () => {
       expect(scored.committedStateVersion).toBe(2);
       expect(state.published).toHaveLength(1);
       expect(state.published[0]).toMatchObject({
-        view: { game: { stateVersion: 2, match: { status: 'finished' } } },
+        update: { view: { game: { stateVersion: 2, match: { status: 'finished' } } } },
       });
       expect(state.repository.getById(roomId(ROOM_ID))?.match).toMatchObject({
         status: 'finished',
@@ -667,7 +667,7 @@ describe('executeGameCommand', () => {
       expect(result.result).toMatchObject({ ok: true, data: { receipt: { stateVersion: 2 } } });
       expect(result.committedStateVersion).toBe(2);
       expect(state.published).toHaveLength(1);
-      expect(state.published[0]).toMatchObject({ view: { game: { stateVersion: 2 } } });
+      expect(state.published[0]).toMatchObject({ update: { view: { game: { stateVersion: 2 } } } });
       const stored = state.repository.getById(roomId(ROOM_ID));
       if (type === GAME_COMMAND_TYPE.SELECT_SCORE_CATEGORY) {
         expect(stored?.match?.players[seatIndex].scorecard).toMatchObject({ ones: 1 });
@@ -761,7 +761,7 @@ describe('executeGameCommand', () => {
     expect(first.committedStateVersion).toBe(2);
     expect(state.published[0]).toMatchObject({
       kind: 'game',
-      view: { game: { stateVersion: 2 } },
+      update: { view: { game: { stateVersion: 2 } } },
     });
     expect(state.repository.getById(roomId(ROOM_ID))?.match).toMatchObject({
       status: 'finished',
@@ -1153,7 +1153,7 @@ describe('executeGameCommand', () => {
       expect(state.published).toHaveLength(overdue ? 1 : 0);
       if (overdue) {
         expect(state.published[0]).toMatchObject({
-          view: { game: { stateVersion: 2, match: { status: 'playing' } } },
+          update: { view: { game: { stateVersion: 2, match: { status: 'playing' } } } },
         });
       } else {
         expect(after).toBe(before);
@@ -1340,8 +1340,7 @@ describe('executeGameCommand', () => {
       expect(first.committedStateVersion).toBe(2);
       expect(state.published[0]).toMatchObject({
         kind: 'game',
-        view: { game: { stateVersion: 2 } },
-        roll: artifact,
+        update: { view: { game: { stateVersion: 2 } }, roll: artifact },
       });
       expect(duplicate).toEqual({ result: first.result, committedStateVersion: null });
       expect(executorCalls).toBe(1);
@@ -1419,8 +1418,7 @@ describe('executeGameCommand', () => {
     expect(state.published).toHaveLength(1);
     expect(state.published[0]).toMatchObject({
       kind: 'game',
-      view: { game: { stateVersion: 2 } },
-      roll: artifact,
+      update: { view: { game: { stateVersion: 2 } }, roll: artifact },
     });
   });
 
@@ -1607,10 +1605,12 @@ describe('executeGameCommand', () => {
     expect(state.published).toHaveLength(1);
     expect(state.published[0]).toMatchObject({
       kind: 'game',
-      view: {
-        game: {
-          stateVersion: 2,
-          match: { currentTurn: { heldSlots: [0] } },
+      update: {
+        view: {
+          game: {
+            stateVersion: 2,
+            match: { currentTurn: { heldSlots: [0] } },
+          },
         },
       },
     });
@@ -1636,7 +1636,9 @@ describe('executeGameCommand', () => {
     );
     expect(score.result).toMatchObject({ ok: true, data: { receipt: { stateVersion: 3 } } });
     expect(score.committedStateVersion).toBe(3);
-    expect(state.published.map((update) => Number(update.view.game.stateVersion))).toEqual([2, 3]);
+    expect(state.published.map((update) => Number(update.update.view.game!.stateVersion))).toEqual([
+      2, 3,
+    ]);
     expect(state.repository.getById(roomId(ROOM_ID))?.match).toMatchObject({
       status: 'playing',
       players: [{ scorecard: { ones: 1 } }, { scorecard: {} }],
@@ -1710,7 +1712,7 @@ describe('executeGameCommand', () => {
     expect(result.result.ok).toBeFalse();
     expect(result.committedStateVersion).toBe(2);
     expect(state.published).toHaveLength(1);
-    expect(state.published[0]).toMatchObject({ view: { game: { stateVersion: 2 } } });
+    expect(state.published[0]).toMatchObject({ update: { view: { game: { stateVersion: 2 } } } });
     expect(state.repository.getById(roomId(ROOM_ID))?.match).toMatchObject({
       status: 'playing',
       players: [
@@ -1739,7 +1741,7 @@ describe('executeGameCommand', () => {
     expect(result.result).toMatchObject({ ok: true, data: { receipt: { stateVersion: 2 } } });
     expect(result.committedStateVersion).toBe(2);
     expect(state.published).toHaveLength(1);
-    expect(state.published[0]).toMatchObject({ view: { game: { stateVersion: 2 } } });
+    expect(state.published[0]).toMatchObject({ update: { view: { game: { stateVersion: 2 } } } });
     expect(state.repository.getById(roomId(ROOM_ID))?.match).toMatchObject({
       status: 'finished',
       result: { reason: 'explicitForfeit', winnerSeatIndex: CREATOR_SEAT_INDEX },
@@ -1799,7 +1801,7 @@ describe('executeGameCommand', () => {
     expect(result.committedStateVersion).toBe(2);
     expect(state.published).toHaveLength(1);
     expect(state.published[0]).toMatchObject({
-      view: { game: { stateVersion: 2, match: { status: 'playing' } } },
+      update: { view: { game: { stateVersion: 2, match: { status: 'playing' } } } },
     });
     let scheduled: (() => void | Promise<void>) | undefined;
     const updates: unknown[] = [];
@@ -1829,7 +1831,9 @@ describe('executeGameCommand', () => {
     await scheduled?.();
     expect(updates).toEqual([
       expect.objectContaining({
-        view: expect.objectContaining({ game: expect.objectContaining({ stateVersion: 3 }) }),
+        update: expect.objectContaining({
+          view: expect.objectContaining({ game: expect.objectContaining({ stateVersion: 3 }) }),
+        }),
       }),
     ]);
     expect(state.repository.getById(roomId(ROOM_ID))?.match).toMatchObject({

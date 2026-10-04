@@ -10,7 +10,7 @@ import { executeDisconnectSeat } from '@/rooms/connections/disconnect-seat';
 import { hashSeatToken, verifySeatToken } from '@/rooms/connections/seat-token';
 import { createRoom } from '@/rooms/domain/create-room';
 import { joinRoom } from '@/rooms/domain/join-room';
-import { createMatch, forfeitMatch, turnId } from '@/rooms/domain/match';
+import { applyRollResult, createMatch, forfeitMatch, turnId } from '@/rooms/domain/match';
 import { resumeSeat } from '@/rooms/domain/presence';
 import { markGameFinished } from '@/rooms/domain/room-lifecycle';
 import { roomId } from '@/rooms/domain/room-model';
@@ -111,10 +111,12 @@ describe('RoomStateCommitter', () => {
     expect(publications).toMatchObject([
       {
         kind: 'started',
-        view: {
-          room: { status: 'playing' },
-          game: { stateVersion: 1 },
-          presence: { presenceVersion: 1 },
+        update: {
+          view: {
+            room: { status: 'playing' },
+            game: { stateVersion: 1 },
+            presence: { presenceVersion: 1 },
+          },
         },
       },
     ]);
@@ -220,7 +222,10 @@ describe('RoomStateCommitter', () => {
         verifySeatToken('commit-fixture-joiner', result.record.credentialHashes[1]),
       ).toBeTrue();
       expect(state.published).toMatchObject([
-        { kind: 'game', view: { game: { stateVersion: 2 }, presence: { presenceVersion: 1 } } },
+        {
+          kind: 'game',
+          update: { view: { game: { stateVersion: 2 }, presence: { presenceVersion: 1 } } },
+        },
       ]);
       expect(candidate.presenceVersion).toBe(90);
       expect(candidate.actionLedger).toBe(extraLedger);
@@ -298,8 +303,8 @@ describe('RoomStateCommitter', () => {
       clock: { now: () => 3_000 },
       publishRoomState: (publication) => {
         expect(state.repository.getById(ROOM_ID)?.stateVersion).toBe(2);
-        expect(Number(publication.view.game?.stateVersion)).toBe(2);
-        expect(Number(publication.view.presence.presenceVersion)).toBe(1);
+        expect(Number(publication.update.view.game?.stateVersion)).toBe(2);
+        expect(Number(publication.update.view.presence.presenceVersion)).toBe(1);
         observations.push('publication');
       },
     });
@@ -360,7 +365,7 @@ describe('RoomStateCommitter', () => {
       publishRoomState: (publication) => {
         expect(connections.get(ROOM_ID, 0)?.connectionId).toBe('new-socket');
         expect(state.repository.getById(ROOM_ID)?.presenceVersion).toBe(2);
-        expect(Number(publication.view.game?.stateVersion)).toBe(1);
+        expect(Number(publication.update.view.game?.stateVersion)).toBe(1);
         state.published.push(publication);
       },
     });
@@ -484,6 +489,89 @@ describe('RoomStateCommitter', () => {
     expect(replace).not.toHaveBeenCalled();
     expect(state.repository.getById(ROOM_ID)).toBe(state.current);
     expect(state.published).toHaveLength(0);
+  });
+
+  test('publishes a detached committed roll DTO without changing stored state or returned ACK data', () => {
+    const state = fixture();
+    const roll = parseResolvedRollArtifact({
+      type: 'roll:resolved',
+      replay: {
+        mode: 'seeded-physics',
+        rollId: '8184fc0a-4e59-455d-a7c1-579a9ee96403',
+        seed: 'ab'.repeat(16),
+        pourStyle: POUR_STYLE.CLASSIC,
+        rolledSlots: [0, 1, 2, 3, 4],
+        contract: createCompatibilityContract('test-release'),
+      },
+      outcome: { authoritativeValuesBySlot: [0, 1, 2, 3, 4].map((slot) => ({ slot, value: 1 })) },
+    });
+    const applied = applyRollResult(state.current.match, {
+      plan: {
+        turnId: state.current.match.currentTurn.id,
+        seatIndex: 0,
+        rollCountBefore: 0,
+        rollingSlots: [0, 1, 2, 3, 4],
+      },
+      facesBySlot: roll.outcome.authoritativeValuesBySlot,
+    });
+    if (!applied.ok) throw new Error('roll fixture failed');
+    let published: unknown;
+    const commits = new RoomStateCommitter({
+      repository: state.repository,
+      clock: { now: () => 3_000 },
+      publishRoomState: (publication) => {
+        expect(publication).toHaveProperty('update');
+        const { update } = publication;
+        published = structuredClone(update);
+        expect(update.type).toBe('roll:committed');
+        expect(state.repository.getById(ROOM_ID)?.stateVersion).toBe(2);
+        if (update.type !== 'roll:committed' || update.view.game === null)
+          throw new Error('expected committed roll');
+        if (
+          update.view.game.match.status !== 'playing' ||
+          update.view.game.match.currentTurn.dice === null
+        )
+          throw new Error('expected rolled turn');
+        Reflect.set(update.view.game.match.currentTurn.dice[0]!, 'value', 6);
+        Reflect.set(update.view.game, 'stateVersion', 99);
+        Reflect.set(update.view.room, 'roomCode', '999999');
+        Reflect.set(update.roll.outcome.authoritativeValuesBySlot[0]!, 'value', 6);
+      },
+    });
+    const result = commits.commitGame({
+      current: state.current,
+      state: { room: state.current.room, match: applied.match },
+      completedAction: {
+        seatIndex: 0,
+        actionId: 'a635fe2c-c4c8-4382-80d7-c35c5d5d455d',
+        fingerprint: 'fixture-roll',
+        result: { ok: true, roll },
+      },
+    });
+    expect(result.ok).toBeTrue();
+    if (!result.ok) throw new Error('expected committed roll');
+    expect(Number(result.view.game.stateVersion)).toBe(2);
+    expect(String(result.view.room.roomCode)).toBe('001204');
+    expect(result.view.game.match).toMatchObject({
+      currentTurn: { dice: Array.from({ length: 5 }, () => ({ value: 1 })) },
+    });
+    expect(result.actionResult).toMatchObject({ ok: true, stateVersion: 2, roll });
+    expect(roll.outcome.authoritativeValuesBySlot[0]?.value).toBe(1);
+    const stored = state.repository.getById(ROOM_ID);
+    expect(stored?.stateVersion).toBe(2);
+    expect(String(stored?.room.code)).toBe('001204');
+    expect(stored?.match).toMatchObject({
+      currentTurn: { diceState: { dice: Array.from({ length: 5 }, () => ({ value: 1 })) } },
+    });
+    expect(stored?.actionLedger[0]).toMatchObject({
+      status: 'completed',
+      result: { ok: true, stateVersion: 2, roll },
+    });
+    expect(published).toMatchObject({
+      type: 'roll:committed',
+      view: { game: { stateVersion: 2 } },
+      roll,
+    });
   });
 
   test('a publisher failure retains the committed state and completed receipt', () => {

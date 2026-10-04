@@ -178,7 +178,7 @@ describe('executeConnectSeat', () => {
       previousConnectionId: null,
     });
     expect(state.published).toHaveLength(1);
-    expect(state.published[0]?.view.presence).toMatchObject({
+    expect(state.published[0]?.update.view.presence).toMatchObject({
       presenceVersion: 1,
       seats: [{ status: 'connected' }],
     });

@@ -212,8 +212,9 @@ function publishRoomState(
 ): void {
   if (socketServer === null) return;
   try {
-    const { roomId, view } = publication;
+    const { roomId } = publication;
     if (publication.kind === 'removed') {
+      const { view } = publication;
       const finalUpdate =
         view.game?.match.status === 'finished'
           ? parseCommittedRoomUpdate({ type: ROOM_UPDATE_TYPE.STATE_COMMITTED, view })
@@ -221,15 +222,7 @@ function publishRoomState(
       socketServer.closeRoom(roomId, finalUpdate);
       return;
     }
-    const roll = publication.kind === 'game' ? publication.roll : undefined;
-    socketServer.publishRoomUpdate(
-      roomId,
-      parseCommittedRoomUpdate({
-        type: roll ? ROOM_UPDATE_TYPE.ROLL_COMMITTED : ROOM_UPDATE_TYPE.STATE_COMMITTED,
-        view,
-        ...(roll ? { roll } : {}),
-      }),
-    );
+    socketServer.publishRoomUpdate(roomId, publication.update);
   } catch (error) {
     reportUnexpected(reporter, error, 'room.publish');
     logger.error('room.publication.failed', { roomId: publication.roomId, error });

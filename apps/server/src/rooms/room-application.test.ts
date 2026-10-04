@@ -61,7 +61,7 @@ async function fixture(
       createTurnId: () => '018f47f2-c2d8-7f4a-8bf4-3f559c398441',
     },
     publishRoomState: (publication) => {
-      if (publication.kind === 'started') started.push(publication.view);
+      if (publication.kind === 'started') started.push(publication.update.view);
       published.push({ publication, runAt: scheduled.get(publication.roomId)?.runAt ?? null });
     },
     pending,
@@ -412,7 +412,7 @@ test('publishes game commits with their next deadline already scheduled', async 
     expect((await score).result.ok).toBeTrue();
     expect(await next).toBe(63_001);
     expect(state.published.at(-1)).toMatchObject({
-      publication: { kind: 'game', view: { game: { stateVersion: 3 } } },
+      publication: { kind: 'game', update: { view: { game: { stateVersion: 3 } } } },
       runAt: 63_001,
     });
   } finally {
@@ -624,7 +624,7 @@ test('finished and removed rooms cancel their deadline and make an old wake harm
     });
     expect(finished.result.ok).toBeTrue();
     expect(state.published.at(-1)).toMatchObject({
-      publication: { kind: 'game', view: { room: { status: 'finished' } } },
+      publication: { kind: 'game', update: { view: { room: { status: 'finished' } } } },
       runAt: null,
     });
     await wake.task();

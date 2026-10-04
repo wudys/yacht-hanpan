@@ -449,7 +449,7 @@ describe('reconcileRoomDeadlines', () => {
         clock: { now: () => now },
         publishRoomState: (publication) => {
           scheduler.reconcile(publication.roomId);
-          if (publication.kind === 'game') updates.push(publication.view.game);
+          if (publication.kind === 'game') updates.push(publication.update.view.game);
         },
       }),
     });
@@ -501,7 +501,7 @@ describe('reconcileRoomDeadlines', () => {
         clock: { now: () => now },
         publishRoomState: (publication) => {
           scheduler.reconcile(publication.roomId);
-          if (publication.kind === 'game') updates.push(publication.view.game.stateVersion);
+          if (publication.kind === 'game') updates.push(publication.update.view.game!.stateVersion);
         },
       }),
     });
@@ -591,7 +591,7 @@ describe('reconcileRoomDeadlines', () => {
         clock: { now: () => now },
         publishRoomState: (publication) => {
           scheduler.reconcile(publication.roomId);
-          if (publication.kind === 'game') updates.push(publication.view.game.stateVersion);
+          if (publication.kind === 'game') updates.push(publication.update.view.game!.stateVersion);
         },
       }),
     });

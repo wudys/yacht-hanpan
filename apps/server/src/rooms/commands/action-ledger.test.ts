@@ -18,6 +18,55 @@ const TURN_ID = 'c847f81e-8ee0-43ef-b09a-f8ef14612246';
 
 describe('action ledger', () => {
   test.each([0, 1] as const)(
+    'admits the last identity for seat %d with mixed retained results',
+    (seatIndex) => {
+      const peerSeatIndex = seatIndex === 0 ? 1 : 0;
+      const entries: readonly ActionLedgerEntry[] = Object.freeze(
+        Array.from({ length: MAX_ACTION_LEDGER_ENTRIES - 1 }, (_, index) => {
+          const identity = {
+            seatIndex: index % 2 === 0 ? peerSeatIndex : seatIndex,
+            actionId: `retained-${index}`,
+            fingerprint: 'f'.repeat(64),
+          };
+          const entry: ActionLedgerEntry =
+            index % 3 === 0
+              ? { ...identity, status: 'tombstone' }
+              : index % 3 === 1
+                ? { ...identity, status: 'retryable' }
+                : {
+                    ...identity,
+                    status: 'completed',
+                    expiresAt: 301_000,
+                    result: { ok: true, stateVersion: 2 },
+                  };
+          return Object.freeze(entry);
+        }),
+      );
+      const last = { seatIndex, actionId: 'last', fingerprint: 'a'.repeat(64) };
+      const reserved = reserveRetryableAction(entries, last);
+      const completed = completeAction(entries, {
+        ...last,
+        completedAt: 1_000,
+        result: { ok: true, stateVersion: 3 },
+      });
+      expect(reserved).toHaveLength(MAX_ACTION_LEDGER_ENTRIES);
+      expect(completed).toHaveLength(MAX_ACTION_LEDGER_ENTRIES);
+      expect(reserved?.slice(0, -1).every((entry, index) => entry === entries[index])).toBeTrue();
+      expect(completed?.slice(0, -1).every((entry, index) => entry === entries[index])).toBeTrue();
+      expect(entries).toHaveLength(MAX_ACTION_LEDGER_ENTRIES - 1);
+      expect(reserveRetryableAction(entries, { ...last, seatIndex: peerSeatIndex })).toBeNull();
+      expect(
+        completeAction(entries, {
+          ...last,
+          seatIndex: peerSeatIndex,
+          completedAt: 1_000,
+          result: { ok: true, stateVersion: 3 },
+        }),
+      ).toBeNull();
+    },
+  );
+
+  test.each([0, 1] as const)(
     'protects the other seat when seat %d reaches its retained bound',
     (seatIndex) => {
       const entries: readonly ActionLedgerEntry[] = Array.from({ length: 1_024 }, (_, index) => ({

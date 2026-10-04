@@ -142,9 +142,12 @@ function isExpiredActionResult(entry: ActionLedgerEntry, checkedAt: number): boo
 }
 
 function hasActionCapacity(entries: readonly ActionLedgerEntry[], seatIndex: SeatIndex): boolean {
-  return (
-    entries.length < MAX_ACTION_LEDGER_ENTRIES &&
-    entries.filter((entry) => entry.seatIndex === seatIndex).length <
-      MAX_ACTION_LEDGER_ENTRIES_PER_SEAT
-  );
+  if (entries.length >= MAX_ACTION_LEDGER_ENTRIES) return false;
+  let seatEntryCount = 0;
+  for (const entry of entries) {
+    if (entry.seatIndex !== seatIndex) continue;
+    seatEntryCount += 1;
+    if (seatEntryCount >= MAX_ACTION_LEDGER_ENTRIES_PER_SEAT) return false;
+  }
+  return true;
 }

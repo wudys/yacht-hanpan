@@ -1,7 +1,7 @@
 import {
+  type CommittedRoomUpdate,
   type GameSnapshot,
   parseCommittedRoomUpdate,
-  type ResolvedRollArtifact,
   ROOM_UPDATE_TYPE,
   type RoomView,
 } from '@repo/game-protocol/socket';
@@ -39,9 +39,9 @@ import type { Clock } from '@/runtime/clock';
 type GameRoomView = RoomView & Readonly<{ game: GameSnapshot }>;
 
 export type RoomStatePublication =
-  | Readonly<{ kind: 'started'; roomId: RoomId; view: GameRoomView }>
-  | Readonly<{ kind: 'game'; roomId: RoomId; view: GameRoomView; roll?: ResolvedRollArtifact }>
-  | Readonly<{ kind: 'presence'; roomId: RoomId; view: RoomView }>;
+  | Readonly<{ kind: 'started'; roomId: RoomId; update: CommittedRoomUpdate }>
+  | Readonly<{ kind: 'game'; roomId: RoomId; update: CommittedRoomUpdate }>
+  | Readonly<{ kind: 'presence'; roomId: RoomId; update: CommittedRoomUpdate }>;
 
 // undefined rejects Promise-returning implementations: publication finishes before queue release.
 export type RoomStatePublisher = (publication: RoomStatePublication) => undefined;
@@ -194,7 +194,10 @@ export class RoomStateCommitter {
       this.#dependencies.publishRoomState({
         kind: 'presence',
         roomId: committed.record.room.id,
-        view: committed.view,
+        update: parseCommittedRoomUpdate({
+          type: ROOM_UPDATE_TYPE.STATE_COMMITTED,
+          view: committed.view,
+        }),
       });
     }
     return committed;
@@ -216,7 +219,10 @@ export class RoomStateCommitter {
       this.#dependencies.publishRoomState({
         kind: 'presence',
         roomId: committed.record.room.id,
-        view: committed.view,
+        update: parseCommittedRoomUpdate({
+          type: ROOM_UPDATE_TYPE.STATE_COMMITTED,
+          view: committed.view,
+        }),
       });
     }
     return committed;
@@ -237,18 +243,16 @@ export class RoomStateCommitter {
   ): (GameCommitSuccess & Readonly<{ actionResult?: LogicalActionResult }>) | StorageFailure {
     const view = projectRoomView(record);
     const roll = actionResult?.ok ? actionResult.roll : undefined;
-    if (roll !== undefined) {
-      // Validate the artifact against this whole view before any storage effect.
-      parseCommittedRoomUpdate({ type: ROOM_UPDATE_TYPE.ROLL_COMMITTED, view, roll });
-    }
+    // Validate coherence before storage and give publication its own detached DTO.
+    const update = parseCommittedRoomUpdate(
+      roll === undefined
+        ? { type: ROOM_UPDATE_TYPE.STATE_COMMITTED, view }
+        : { type: ROOM_UPDATE_TYPE.ROLL_COMMITTED, view, roll },
+    );
     if (!this.#dependencies.repository.replace(roomId, record)) {
       return { ok: false, reason: 'storageFailure' };
     }
-    this.#dependencies.publishRoomState(
-      kind === 'started'
-        ? { kind, roomId: record.room.id, view }
-        : { kind, roomId: record.room.id, view, ...(roll ? { roll } : {}) },
-    );
+    this.#dependencies.publishRoomState({ kind, roomId: record.room.id, update });
     return {
       ok: true,
       record,

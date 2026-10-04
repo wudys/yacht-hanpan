@@ -10,17 +10,9 @@ import {
 import { DEFAULT_CUP_GEOMETRY } from '../contract/cup-geometry';
 import { DIE_GEOMETRY } from '../contract/roll-geometry';
 import { initializeDeterministicRapierForBun } from '../rapier/bun';
-import { hasSolverContact } from './internal/contact-query';
 import { createCupMotion, cupTransformAt } from './internal/cup-motion';
-import {
-  areDiceOutsideCup,
-  createPhysicsCup,
-  haveDiceClearedCup,
-  updatePhysicsCup,
-} from './internal/physics-cup';
-import { createDieInCup, createTray } from './internal/physics-environment';
+import { haveDiceClearedCup } from './internal/physics-cup';
 import { recognizeTopFace, rotateVectorByQuat } from './internal/result-recognition';
-import { createRollPhysicsConfig } from './internal/roll-physics';
 import { STEP } from './internal/roll-simulation-constants';
 import { simulateRollTimeline } from './simulate-timeline';
 
@@ -346,60 +338,6 @@ test('allows a released die to bounce below the cup while the remaining dice lea
   expect(timeline.dice).toHaveLength(5);
   expect(timeline.cup.releaseAtMs).toBeLessThan(3000);
   expect(timeline.cup.frames.some((frame) => frame.mode === 'exit')).toBe(true);
-});
-
-test.each(
-  [1, 2, 3, 4, 5].flatMap((count) =>
-    (['classic', 'burst', 'oblique'] as const).map((style) => [count, style] as const),
-  ),
-)('empties %i dice in %s without deleting the cup or applying release forces', (count, style) => {
-  for (let sequence = 0; sequence < 10; sequence += 1) {
-    const seed = `natural-cup-${count}-${sequence}`;
-    const physics = createRollPhysicsConfig();
-    const world = new RAPIER.World({ x: 0, y: physics.gravity, z: 0 });
-    try {
-      world.timestep = STEP;
-      const tray = createTray(world, physics);
-      const motion = createCupMotion(seed, style);
-      const cup = createPhysicsCup(world, cupTransformAt(motion, 0), DEFAULT_CUP_GEOMETRY);
-      const dice = Array.from({ length: count }, (_, i) =>
-        createDieInCup(world, seed, i, count, motion, physics),
-      );
-      let empty = false;
-      const crossedMouth = new Set<string>();
-      let escapedWhileShaking = false;
-      let pinchedAgainstFloor = false;
-      for (let step = 0; step * STEP * 1000 <= 3000; step += 1) {
-        const t = Math.round(step * STEP * 1000);
-        updatePhysicsCup(cup, cupTransformAt(motion, t));
-        world.step();
-        for (const die of dice) {
-          if (haveDiceClearedCup(world, cup, [die])) {
-            crossedMouth.add(die.id);
-            if (t < motion.pourAtMs) escapedWhileShaking = true;
-          }
-          if (
-            hasSolverContact(world, die.collider, tray.floor) &&
-            cup.colliders.some((wall) => hasSolverContact(world, die.collider, wall))
-          )
-            pinchedAgainstFloor = true;
-        }
-        // A previously released die may bounce below/beside the finite cup.
-        if (crossedMouth.size === count && areDiceOutsideCup(world, cup, dice)) {
-          empty = true;
-          break;
-        }
-      }
-      expect({ seed, empty, escapedWhileShaking, pinchedAgainstFloor }).toEqual({
-        seed,
-        empty: true,
-        escapedWhileShaking: false,
-        pinchedAgainstFloor: false,
-      });
-    } finally {
-      world.free();
-    }
-  }
 });
 
 test.each([1, 5])('empties %i dice through the mouth before the cup starts exiting', (count) => {

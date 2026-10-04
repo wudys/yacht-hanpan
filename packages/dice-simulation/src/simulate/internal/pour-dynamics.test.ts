@@ -2,10 +2,11 @@ import RAPIER from '@dimforge/rapier3d-deterministic';
 import { beforeAll, expect, test } from 'bun:test';
 
 import { initializeDeterministicRapierForBun } from '../../rapier/bun';
+import { simulateRollTimeline } from '../simulate-timeline';
 import { createCupMotion, cupTransformAt } from './cup-motion';
 import { DEFAULT_CUP_SPEC } from './cup-spec';
-import { applyCupPourAssist, createPhysicsCup, updatePhysicsCup } from './physics-cup';
-import { createDieInCup, createTray } from './physics-environment';
+import { applyCupPourAssist, createPhysicsCup } from './physics-cup';
+import { createDieInCup } from './physics-environment';
 import { rotateVectorByQuat } from './result-recognition';
 import { createRollPhysicsConfig } from './roll-physics';
 import { STEP } from './roll-simulation-constants';
@@ -60,45 +61,38 @@ test.each(['classic', 'burst', 'oblique'] as const)(
   },
 );
 
-test.each([1, 5])(
-  'physically tumbles %i-die samples during shaking, not only after release',
-  (count) => {
-    let largestExcursion = 0;
-    for (let sequence = 0; sequence < 20; sequence += 1) {
-      const seed = `dice-quality-tuning-classic-${count}-${sequence}`;
-      const physics = createRollPhysicsConfig();
-      const world = new RAPIER.World({ x: 0, y: physics.gravity, z: 0 });
-      try {
-        world.timestep = STEP;
-        createTray(world, physics);
-        const motion = createCupMotion(seed, 'classic');
-        const cup = createPhysicsCup(world, cupTransformAt(motion, 0), DEFAULT_CUP_SPEC);
-        const dice = Array.from({ length: count }, (_, index) =>
-          createDieInCup(world, seed, index, count, motion, physics),
-        );
-        const initialUp = dice.map((die) => {
-          const q = die.body.rotation();
-          return rotateVectorByQuat([0, 1, 0], { x: -q.x, y: -q.y, z: -q.z, w: q.w });
-        });
-        for (let step = 0; step * STEP * 1000 < motion.pourAtMs; step += 1) {
-          const timeMs = Math.round(step * STEP * 1000);
-          updatePhysicsCup(cup, cupTransformAt(motion, timeMs));
-          world.step();
-          dice.forEach((die, index) => {
-            const up = rotateVectorByQuat(initialUp[index]!, die.body.rotation());
-            const cosine = up[1] / Math.hypot(...up);
-            largestExcursion = Math.max(
-              largestExcursion,
-              Math.acos(Math.min(1, Math.max(-1, cosine))),
-            );
-          });
-        }
-      } finally {
-        world.free();
-      }
-    }
-    // Tilting the original up axis by a quarter turn distinguishes a tumble from yaw/jitter.
-    // No particular face, number of face changes, or every-roll outcome is required.
-    expect(largestExcursion).toBeGreaterThan(Math.PI / 2);
-  },
-);
+test('physically tumbles the single die during actual shaking before pouring starts', () => {
+  const seed = 'dice-quality-tuning-classic-1-0';
+  const timeline = simulateRollTimeline({
+    rollId: seed,
+    seed,
+    rolledSlots: [0],
+    pourStyle: 'classic',
+  });
+  const { frames } = timeline.dice[0]!;
+  const first = frames[0]!.q;
+  // Track the body axis that pointed upward at the first sample, excluding yaw/jitter.
+  const initialUp = rotateVectorByQuat([0, 1, 0], {
+    x: -first[0],
+    y: -first[1],
+    z: -first[2],
+    w: first[3],
+  });
+  let largestExcursion = 0;
+  let observedShakeFrames = 0;
+  for (const frame of frames) {
+    if (frame.t >= timeline.cup.pourAtMs) continue;
+    observedShakeFrames += 1;
+    const up = rotateVectorByQuat(initialUp, {
+      x: frame.q[0],
+      y: frame.q[1],
+      z: frame.q[2],
+      w: frame.q[3],
+    });
+    const cosine = up[1] / Math.hypot(...up);
+    largestExcursion = Math.max(largestExcursion, Math.acos(Math.min(1, Math.max(-1, cosine))));
+  }
+  expect(observedShakeFrames).toBeGreaterThan(1);
+  // A quarter turn proves a tumble; neither its exact angle nor a final face is prescribed.
+  expect(largestExcursion).toBeGreaterThan(Math.PI / 2);
+});

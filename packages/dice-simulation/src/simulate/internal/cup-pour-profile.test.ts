@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 
 import {
+  CUP_EXIT_HOLD_MS,
   cupLowerSupport,
   DEFAULT_CUP_GEOMETRY,
   DIE_GEOMETRY,
@@ -9,11 +10,23 @@ import {
   TRAY_GEOMETRY,
 } from '../../contract';
 import { createCupFrame, createCupMotion, cupTransformAt, quatFromEuler } from './cup-motion';
+import { CUP_GATHER_MS } from './cup-motion-progress';
 import { createCupPourProfile } from './cup-pour-profile';
 import { rotateVectorByQuat } from './result-recognition';
 import { rollAreaMeta } from './roll-simulation-constants';
 
-const seeds = ['seed-a', 'seed-b', 'seed-c', 'seed-d', 'seed-e', 'seed-f', 'seed-g', 'seed-h'];
+// Six side/yaw combinations plus both preparation-time boundaries; count is not a motion input.
+const motionCases = [
+  { seed: 'motion-coverage-0', side: 1, yawDegrees: 6 },
+  { seed: 'motion-coverage-1', side: -1, yawDegrees: -6 },
+  { seed: 'motion-coverage-2', side: 1, yawDegrees: -6 },
+  { seed: 'motion-coverage-4', side: 1, yawDegrees: 0 },
+  { seed: 'motion-coverage-7', side: -1, yawDegrees: 6 },
+  { seed: 'motion-coverage-13', side: -1, yawDegrees: 0 },
+  { seed: 'motion-coverage-58', side: 1, yawDegrees: -6, preparationMs: 930 },
+  { seed: 'motion-coverage-102', side: 1, yawDegrees: -6, preparationMs: 780 },
+];
+const seeds = motionCases.map(({ seed }) => seed);
 
 describe('cup pour profile', () => {
   it.each(POUR_STYLES)(
@@ -42,49 +55,72 @@ describe('cup pour profile', () => {
     }
   });
 
-  it.each(POUR_STYLES)(
-    'keeps the entire %s cup sweep inside the same tray and below the ceiling',
-    (style) => {
-      for (const seed of seeds) {
-        const motion = createCupMotion(seed, style);
-        for (let time = 0; time <= motion.exitAtMs; time += 16) {
-          const p = cupTransformAt(motion, time);
-          // Leave two die edges below the complete shell, including its shake sweep.
-          expect(p.y - cupLowerSupport(p.tilt) - TRAY_FLOOR_TOP_Y).toBeGreaterThan(
-            DIE_GEOMETRY.size * 2,
-          );
-          expect(p.y + cupLowerSupport(p.tilt + Math.PI)).toBeLessThan(
-            TRAY_GEOMETRY.ceilingY - TRAY_GEOMETRY.ceilingHalfHeight,
-          );
-          const axis = rotateVectorByQuat([0, 1, 0], quatFromEuler(0, p.yaw, p.tilt));
-          const halfWidth =
-            (DEFAULT_CUP_GEOMETRY.innerRadius + DEFAULT_CUP_GEOMETRY.wallThickness) *
-              Math.sqrt(Math.max(0, 1 - axis[0] ** 2)) +
-            (DEFAULT_CUP_GEOMETRY.innerHeight / 2 + DEFAULT_CUP_GEOMETRY.baseThickness) *
-              Math.abs(axis[0]);
-          expect(p.x - halfWidth).toBeGreaterThan(-TRAY_GEOMETRY.halfWidth);
-          expect(p.x + halfWidth).toBeLessThan(TRAY_GEOMETRY.halfWidth);
-        }
+  it.each(POUR_STYLES.flatMap((style) => motionCases.map((fixture) => ({ ...fixture, style }))))(
+    'keeps $seed ($style) in its intended branch with a continuous full-shell fit',
+    ({ seed, side, yawDegrees, style, preparationMs }) => {
+      const motion = createCupMotion(seed, style);
+      expect(Math.sign(motion.stageX)).toBe(side);
+      expect(Math.sign(motion.tilt)).toBe(side);
+      // Burst uses the same side selection but its pour always has zero yaw.
+      expect(motion.pourYaw).toBeCloseTo(
+        ((style === 'burst' ? 0 : yawDegrees) * Math.PI) / 180,
+        10,
+      );
+      expect(cupTransformAt(motion, motion.pourAtMs).yaw).toBeCloseTo(0, 10);
+      expect(cupTransformAt(motion, motion.pourAtMs + motion.pourDurationMs).yaw).toBeCloseTo(
+        ((style === 'burst' ? 0 : yawDegrees) * Math.PI) / 180,
+        10,
+      );
+      if (preparationMs !== undefined) expect(motion.pourAtMs).toBe(preparationMs);
+      const transitions = [
+        motion.pourAtMs - CUP_GATHER_MS,
+        motion.pourAtMs,
+        ...(style === 'burst' ? [motion.pourAtMs + 260] : []),
+        motion.pourAtMs + 280,
+        motion.pourAtMs + motion.pourDurationMs,
+        motion.pourAtMs + motion.pourTravelDelayMs + motion.pourTravelDurationMs,
+        motion.releaseAtMs,
+        motion.releaseAtMs + CUP_EXIT_HOLD_MS,
+        motion.exitAtMs,
+      ];
+      const times = new Set<number>([0]);
+      for (let time = 0; time <= motion.exitAtMs; time += 16) times.add(time);
+      for (const time of transitions) {
+        times.add(time - 0.001);
+        times.add(time);
+        times.add(time + 0.001);
+        const before = cupTransformAt(motion, time - 0.001);
+        const after = cupTransformAt(motion, time + 0.001);
+        expect(Math.hypot(after.x - before.x, after.y - before.y, after.z - before.z)).toBeLessThan(
+          0.0001,
+        );
+        expect(Math.abs(after.tilt - before.tilt)).toBeLessThan(0.0001);
+        expect(Math.abs(after.yaw - before.yaw)).toBeLessThan(0.0001);
+      }
+      const area = rollAreaMeta();
+      const radius = DEFAULT_CUP_GEOMETRY.innerRadius + DEFAULT_CUP_GEOMETRY.wallThickness;
+      const halfHeight = DEFAULT_CUP_GEOMETRY.innerHeight / 2 + DEFAULT_CUP_GEOMETRY.baseThickness;
+      for (const time of [...times].sort((a, b) => a - b)) {
+        const p = cupTransformAt(motion, time);
+        // Leave two die edges below the complete shell, including its shake sweep.
+        expect(p.y - cupLowerSupport(p.tilt) - TRAY_FLOOR_TOP_Y).toBeGreaterThan(
+          DIE_GEOMETRY.size * 2,
+        );
+        expect(p.y + cupLowerSupport(p.tilt + Math.PI)).toBeLessThan(
+          TRAY_GEOMETRY.ceilingY - TRAY_GEOMETRY.ceilingHalfHeight,
+        );
+        const axis = rotateVectorByQuat([0, 1, 0], quatFromEuler(0, p.yaw, p.tilt));
+        const halfWidth =
+          radius * Math.sqrt(Math.max(0, 1 - axis[0] ** 2)) + halfHeight * Math.abs(axis[0]);
+        const halfDepth =
+          radius * Math.sqrt(Math.max(0, 1 - axis[2] ** 2)) + halfHeight * Math.abs(axis[2]);
+        expect(p.x - halfWidth).toBeGreaterThan(-TRAY_GEOMETRY.halfWidth);
+        expect(p.x + halfWidth).toBeLessThan(TRAY_GEOMETRY.halfWidth);
+        expect(p.z - halfDepth).toBeGreaterThanOrEqual((area.topZ ?? 0) - 0.001);
+        expect(p.z + halfDepth).toBeLessThanOrEqual((area.bottomZ ?? area.depth) + 0.001);
       }
     },
   );
-
-  it('shares seeded 0/±6° yaw between classic and oblique while burst stays straight', () => {
-    for (const [seed, degrees] of [
-      ['browser-parity-v1', 0],
-      ['coherent-pour-baseline-5-4', 6],
-      ['pour-direction-1', -6],
-    ] as const) {
-      for (const style of POUR_STYLES) {
-        const motion = createCupMotion(seed, style);
-        expect(cupTransformAt(motion, motion.pourAtMs).yaw).toBeCloseTo(0, 10);
-        expect(cupTransformAt(motion, motion.pourAtMs + 400).yaw).toBeCloseTo(
-          ((style === 'burst' ? 0 : degrees) * Math.PI) / 180,
-          10,
-        );
-      }
-    }
-  });
 
   it.each(POUR_STYLES)('preserves the selected %s lift and minimum floor gap', (style) => {
     const motion = createCupMotion('browser-parity-v1', style);
@@ -112,53 +148,6 @@ describe('cup pour profile', () => {
     expect((angle(260) * 180) / Math.PI).toBeCloseTo(120, 8);
     expect((angle(400) * 180) / Math.PI).toBeCloseTo(145, 8);
     expect(Math.abs((angle(260.01) - angle(259.99)) / 0.02)).toBeLessThan(0.00001);
-  });
-
-  it.each(POUR_STYLES)('keeps %s cup position and tilt continuous as pouring starts', (style) => {
-    let positionJump = 0;
-    let tiltJump = 0;
-    for (const seed of seeds) {
-      const motion = createCupMotion(seed, style);
-      const before = cupTransformAt(motion, motion.pourAtMs - 0.001);
-      const after = cupTransformAt(motion, motion.pourAtMs);
-      positionJump = Math.max(
-        positionJump,
-        Math.hypot(after.x - before.x, after.y - before.y, after.z - before.z),
-      );
-      tiltJump = Math.max(tiltJump, Math.abs(after.tilt - before.tilt));
-    }
-    expect(positionJump).toBeLessThan(0.0001);
-    expect(tiltJump).toBeLessThan(0.0001);
-  });
-
-  it('keeps the enlarged shell and shake sweep below the rack and above the lower edge', () => {
-    const area = rollAreaMeta();
-    const shellHalfDepth = DEFAULT_CUP_GEOMETRY.innerRadius + DEFAULT_CUP_GEOMETRY.wallThickness;
-    let intrusion = 0;
-    for (const style of POUR_STYLES) {
-      for (let count = 1; count <= 5; count += 1) {
-        for (let sequence = 0; sequence < 50; sequence += 1) {
-          const motion = createCupMotion(
-            `dice-quality-tuning-${style}-${count}-${sequence}`,
-            style,
-          );
-          for (let time = 0; time <= motion.exitAtMs; time += 16) {
-            const { z, yaw, tilt } = cupTransformAt(motion, time);
-            const axis = rotateVectorByQuat([0, 1, 0], quatFromEuler(0, yaw, tilt));
-            const halfDepth =
-              shellHalfDepth * Math.sqrt(Math.max(0, 1 - axis[2] ** 2)) +
-              (DEFAULT_CUP_GEOMETRY.innerHeight / 2 + DEFAULT_CUP_GEOMETRY.baseThickness) *
-                Math.abs(axis[2]);
-            intrusion = Math.max(
-              intrusion,
-              (area.topZ ?? 0) - z + halfDepth,
-              z + halfDepth - (area.bottomZ ?? area.depth),
-            );
-          }
-        }
-      }
-    }
-    expect(intrusion).toBeLessThanOrEqual(0.001);
   });
 
   it('uses both seeded cup sides with stable release and tilt toward the center', () => {

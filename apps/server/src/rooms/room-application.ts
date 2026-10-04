@@ -9,41 +9,56 @@ import type { RoomView } from '@repo/game-protocol/socket';
 import type { CompatibilityContract } from '@repo/game-protocol/version';
 import type { SeatIndex } from '@repo/yacht-rules';
 
-import type { RollCommandExecutor } from '@/roll/command-executor';
+import type { RollCommandExecutor } from '@/roll/roll-command-executor';
 import {
   ADMISSION_OPERATION_FAILURE,
   ADMISSION_OPERATION_KIND,
   AdmissionOperationRegistry,
-} from '@/rooms/admission/admission-operation-registry';
-import { type CancelRoomApplicationResult, executeCancelRoom } from '@/rooms/admission/cancel-room';
-import { type CreateRoomApplicationResult, executeCreateRoom } from '@/rooms/admission/create-room';
-import type { CreateRoomRateLimiter } from '@/rooms/admission/create-room-rate-limit';
-import { executeJoinRoom, type JoinRoomApplicationResult } from '@/rooms/admission/join-room';
-import { executeResumeRoom, type ResumeRoomApplicationResult } from '@/rooms/admission/resume-room';
+} from '@/rooms/application/admission/admission-operation-registry';
+import {
+  type CancelRoomApplicationResult,
+  executeCancelRoom,
+} from '@/rooms/application/admission/cancel-room';
+import {
+  type CreateRoomApplicationResult,
+  executeCreateRoom,
+} from '@/rooms/application/admission/create-room';
+import type { CreateRoomRateLimiter } from '@/rooms/application/admission/create-room-rate-limiter';
+import {
+  executeJoinRoom,
+  type JoinRoomApplicationResult,
+} from '@/rooms/application/admission/join-room';
+import {
+  executeResumeRoom,
+  type ResumeRoomApplicationResult,
+} from '@/rooms/application/admission/resume-room';
+import { closeRoomApplicationResources } from '@/rooms/application/close-room-resources';
 import {
   executeGameCommand,
   type ExecuteGameCommandInput,
   type ExecuteGameCommandResult,
-} from '@/rooms/commands/execute-game-command';
-import { PendingActionRegistry } from '@/rooms/commands/pending-action-registry';
-import { RoomStateCommitter, type RoomStatePublisher } from '@/rooms/commit';
+} from '@/rooms/application/commands/execute-game-command';
+import { PendingActionRegistry } from '@/rooms/application/commands/pending-action-registry';
 import {
   type ConnectSeatInput,
   type ConnectSeatResult,
   executeConnectSeat,
-} from '@/rooms/connections/connect-seat';
-import { ConnectionRegistry } from '@/rooms/connections/connection-registry';
+} from '@/rooms/application/connections/connect-seat';
+import { ConnectionRegistry } from '@/rooms/application/connections/connection-registry';
 import {
   type DisconnectSeatInput,
   executeDisconnectSeat,
-} from '@/rooms/connections/disconnect-seat';
+} from '@/rooms/application/connections/disconnect-seat';
+import { RoomMaintenance } from '@/rooms/application/room-maintenance';
+import type { RoomRepository } from '@/rooms/application/room-repository';
+import {
+  RoomStateCommitter,
+  type RoomStatePublisher,
+} from '@/rooms/application/room-state-committer';
+import { RoomDeadlineScheduler } from '@/rooms/application/scheduling/deadline-scheduler';
+import type { RoomTaskQueue } from '@/rooms/application/scheduling/room-task-queue';
+import { executeSyncRoom, type SyncRoomData } from '@/rooms/application/sync-room';
 import type { RoomId } from '@/rooms/domain/room-model';
-import type { RoomRepository } from '@/rooms/repository';
-import { closeRoomApplicationResources } from '@/rooms/room-application-lifecycle';
-import { CleanupRoomsUseCase } from '@/rooms/scheduling/cleanup-rooms';
-import { RoomDeadlineScheduler } from '@/rooms/scheduling/deadline-scheduler';
-import type { RoomTaskQueue } from '@/rooms/scheduling/room-task-queue';
-import { executeSyncRoom, type SyncRoomData } from '@/rooms/sync-room';
 import type { Clock } from '@/runtime/clock';
 import type { ServerIdentity } from '@/runtime/server-identity';
 import type { TaskScheduler } from '@/runtime/task-scheduler';
@@ -63,7 +78,7 @@ export interface RoomApplicationStats {
   };
 }
 
-export interface RoomApplicationServiceDependencies {
+export interface RoomApplicationDependencies {
   readonly clock: Clock;
   readonly connections: ConnectionRegistry;
   readonly expectedContract: CompatibilityContract;
@@ -83,15 +98,15 @@ const ADMISSION_OPERATION_MAX_ENTRIES = 128;
 const ADMISSION_OPERATION_TTL_MS = 60 * 1_000;
 const ADMISSION_CAPACITY_RETRY_AFTER_MS = 1_000;
 
-export class RoomApplicationService {
+export class RoomApplication {
   readonly #admissionOperations: AdmissionOperationRegistry;
-  readonly #dependencies: RoomApplicationServiceDependencies;
-  readonly #cleanup: CleanupRoomsUseCase;
+  readonly #dependencies: RoomApplicationDependencies;
+  readonly #maintenance: RoomMaintenance;
   readonly #deadlines: RoomDeadlineScheduler;
   readonly #commits: RoomStateCommitter;
   #closed: boolean = false;
 
-  public constructor(dependencies: RoomApplicationServiceDependencies) {
+  public constructor(dependencies: RoomApplicationDependencies) {
     this.#dependencies = dependencies;
     this.#admissionOperations = new AdmissionOperationRegistry({
       clock: dependencies.clock,
@@ -115,7 +130,7 @@ export class RoomApplicationService {
       tasks: dependencies.tasks,
       commits: this.#commits,
     });
-    this.#cleanup = new CleanupRoomsUseCase({
+    this.#maintenance = new RoomMaintenance({
       clock: dependencies.clock,
       queue: dependencies.queue,
       repository: dependencies.repository,
@@ -247,7 +262,7 @@ export class RoomApplicationService {
   public cleanupRooms() {
     this.#admissionOperations.prune();
     this.#dependencies.rateLimiter.prune(this.#dependencies.clock.now());
-    return this.#cleanup.execute();
+    return this.#maintenance.execute();
   }
 
   #releaseRoomResources(roomId: RoomId, view: RoomView): void {

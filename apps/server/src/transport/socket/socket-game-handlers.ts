@@ -10,7 +10,7 @@ import { GAME_PROTOCOL_VERSION } from '@repo/game-protocol/version';
 import type { SeatIndex } from '@repo/yacht-rules';
 
 import type { RoomId } from '@/rooms/domain/room-model';
-import type { RoomApplicationService } from '@/rooms/room-application';
+import type { RoomApplication } from '@/rooms/room-application';
 import type { Clock } from '@/runtime/clock';
 import { type ErrorReporter, reportUnexpected } from '@/runtime/error-reporter';
 import type { Logger } from '@/runtime/logger';
@@ -26,7 +26,7 @@ interface SocketGameHandlerDependencies {
   readonly isAcceptingRequests: () => boolean;
   readonly logger: Logger;
   readonly reportUnexpected?: ErrorReporter;
-  readonly rooms: Pick<RoomApplicationService, 'executeGameCommand' | 'syncRoom'>;
+  readonly rooms: Pick<RoomApplication, 'executeGameCommand' | 'syncRoom'>;
 }
 
 export async function handleSync(

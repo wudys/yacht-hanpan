@@ -5,7 +5,7 @@ import { createRoom } from '@/rooms/domain/create-room';
 import { joinRoom } from '@/rooms/domain/join-room';
 import { resumeSeat } from '@/rooms/domain/presence';
 import { ROOM_CLEANUP_REASON, ROOM_REJECTION_CODE } from '@/rooms/domain/room-constants';
-import { markGameFinished } from '@/rooms/domain/room-lifecycle';
+import { markGameFinished } from '@/rooms/domain/room-match-lifecycle';
 import {
   type FinishedRoom,
   type PlayingRoom,

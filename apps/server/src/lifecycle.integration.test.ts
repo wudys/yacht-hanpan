@@ -22,13 +22,13 @@ import { afterEach, describe, expect, spyOn, test } from 'bun:test';
 import { io as createClient, type Socket as ClientSocket } from 'socket.io-client';
 
 import { type GameServer, startGameServer } from '@/app/start-game-server';
-import type { RollCommandExecutor } from '@/roll/command-executor';
+import type { RollCommandExecutor } from '@/roll/roll-command-executor';
+import { InMemoryRoomRepository } from '@/rooms/application/room-repository';
 import { roomId } from '@/rooms/domain/room-model';
 import { isPlayingRoomState } from '@/rooms/domain/room-state';
 import { isRoomCode } from '@/rooms/domain/room-validation';
 import { epochMilliseconds } from '@/rooms/domain/time';
-import { InMemoryRoomRepository } from '@/rooms/repository';
-import { RoomApplicationService } from '@/rooms/room-application';
+import { RoomApplication } from '@/rooms/room-application';
 import type { TaskScheduler } from '@/runtime/task-scheduler';
 
 const RELEASE_ID = 'test-release';
@@ -66,7 +66,7 @@ afterEach(async () => {
   await Promise.all(servers.splice(0).map((server) => server.close()));
 });
 
-describe('deployed lifecycle adapters', () => {
+describe('game server lifecycle integration', () => {
   test.each(['forfeit-first', 'score-first'] as const)(
     'publishes one score result for same-time Socket commands: %s',
     async (order) => {
@@ -126,20 +126,19 @@ describe('deployed lifecycle adapters', () => {
       const firstEntered = Promise.withResolvers<void>();
       const bothEntered = Promise.withResolvers<void>();
       const captured: number[] = [];
-      const { executeGameCommand } = RoomApplicationService.prototype;
-      const observed = spyOn(
-        RoomApplicationService.prototype,
-        'executeGameCommand',
-      ).mockImplementation(function (
-        this: RoomApplicationService,
-        input: Parameters<RoomApplicationService['executeGameCommand']>[0],
-      ) {
-        const result = executeGameCommand.call(this, input);
-        captured.push(input.receivedAt);
-        if (captured.length === 1) firstEntered.resolve();
-        if (captured.length === 2) bothEntered.resolve();
-        return result;
-      });
+      const { executeGameCommand } = RoomApplication.prototype;
+      const observed = spyOn(RoomApplication.prototype, 'executeGameCommand').mockImplementation(
+        function (
+          this: RoomApplication,
+          input: Parameters<RoomApplication['executeGameCommand']>[0],
+        ) {
+          const result = executeGameCommand.call(this, input);
+          captured.push(input.receivedAt);
+          if (captured.length === 1) firstEntered.resolve();
+          if (captured.length === 2) bothEntered.resolve();
+          return result;
+        },
+      );
       try {
         const forfeit = () =>
           emitAck(creator, SOCKET_EVENT.GAME_COMMAND, {
@@ -466,7 +465,7 @@ describe('deployed lifecycle adapters', () => {
     if (!isRoomCode(removedCode)) throw new Error('fixture produced an invalid room code');
     expect(repository.findRoomIdByCode(removedCode)).toBeUndefined();
     const pending = Promise.withResolvers<void>();
-    const cleanup = spyOn(RoomApplicationService.prototype, 'cleanupRooms').mockReturnValueOnce(
+    const cleanup = spyOn(RoomApplication.prototype, 'cleanupRooms').mockReturnValueOnce(
       pending.promise,
     );
     try {
@@ -551,18 +550,17 @@ describe('deployed lifecycle adapters', () => {
     const creator = await connect(server.url, created.data.authority);
     const guest = await connect(server.url, joined.data.authority);
     const entered = Promise.withResolvers<void>();
-    const { executeGameCommand } = RoomApplicationService.prototype;
-    const observed = spyOn(
-      RoomApplicationService.prototype,
-      'executeGameCommand',
-    ).mockImplementationOnce(function (
-      this: RoomApplicationService,
-      input: Parameters<RoomApplicationService['executeGameCommand']>[0],
-    ) {
-      const result = executeGameCommand.call(this, input);
-      entered.resolve();
-      return result;
-    });
+    const { executeGameCommand } = RoomApplication.prototype;
+    const observed = spyOn(RoomApplication.prototype, 'executeGameCommand').mockImplementationOnce(
+      function (
+        this: RoomApplication,
+        input: Parameters<RoomApplication['executeGameCommand']>[0],
+      ) {
+        const result = executeGameCommand.call(this, input);
+        entered.resolve();
+        return result;
+      },
+    );
     try {
       const ack = emitAck(creator, SOCKET_EVENT.GAME_COMMAND, {
         type: GAME_COMMAND_TYPE.FORFEIT_MATCH,
@@ -626,18 +624,17 @@ describe('deployed lifecycle adapters', () => {
       if (session.getSnapshot().connection === 'disconnected') disconnected.resolve();
     });
     const entered = Promise.withResolvers<void>();
-    const { executeGameCommand } = RoomApplicationService.prototype;
-    const observed = spyOn(
-      RoomApplicationService.prototype,
-      'executeGameCommand',
-    ).mockImplementationOnce(function (
-      this: RoomApplicationService,
-      input: Parameters<RoomApplicationService['executeGameCommand']>[0],
-    ) {
-      const result = executeGameCommand.call(this, input);
-      entered.resolve();
-      return result;
-    });
+    const { executeGameCommand } = RoomApplication.prototype;
+    const observed = spyOn(RoomApplication.prototype, 'executeGameCommand').mockImplementationOnce(
+      function (
+        this: RoomApplication,
+        input: Parameters<RoomApplication['executeGameCommand']>[0],
+      ) {
+        const result = executeGameCommand.call(this, input);
+        entered.resolve();
+        return result;
+      },
+    );
     try {
       expect(await session.connect()).toEqual({ ok: true });
       const initial = session.getSnapshot().game;
@@ -806,12 +803,9 @@ describe('deployed lifecycle adapters', () => {
     if (!created.ok) throw new Error('create failed');
     const entered = Promise.withResolvers<void>();
     const release = Promise.withResolvers<void>();
-    const { connectSeat } = RoomApplicationService.prototype;
-    const pending = spyOn(RoomApplicationService.prototype, 'connectSeat').mockImplementationOnce(
-      async function (
-        this: RoomApplicationService,
-        input: Parameters<RoomApplicationService['connectSeat']>[0],
-      ) {
+    const { connectSeat } = RoomApplication.prototype;
+    const pending = spyOn(RoomApplication.prototype, 'connectSeat').mockImplementationOnce(
+      async function (this: RoomApplication, input: Parameters<RoomApplication['connectSeat']>[0]) {
         entered.resolve();
         await release.promise;
         return connectSeat.call(this, input);

@@ -30,7 +30,7 @@ import {
   GAME_PROTOCOL_VERSION,
 } from '@repo/game-protocol/version';
 
-import type { RoomApplicationService } from '@/rooms/room-application';
+import type { RoomApplication } from '@/rooms/room-application';
 import { type ErrorReporter, reportUnexpected } from '@/runtime/error-reporter';
 import type { Logger } from '@/runtime/logger';
 import type { ServerIdentity } from '@/runtime/server-identity';
@@ -58,10 +58,7 @@ export interface HttpRequestHandlerDependencies {
   readonly logger: Logger;
   readonly reportUnexpected?: ErrorReporter;
   readonly resolveClientAddress: (request: IncomingMessage) => string;
-  readonly rooms: Pick<
-    RoomApplicationService,
-    'cancelRoom' | 'createRoom' | 'joinRoom' | 'resumeRoom'
-  >;
+  readonly rooms: Pick<RoomApplication, 'cancelRoom' | 'createRoom' | 'joinRoom' | 'resumeRoom'>;
 }
 
 export function createHttpRequestHandler(

@@ -20,12 +20,12 @@ import {
   ROLL_SIMULATION_EXECUTOR_ERROR_CODE,
   RollSimulationExecutorError,
 } from '@/roll/roll-simulation-executor';
-import { WorkerRollSimulationExecutor } from '@/roll/worker-roll-simulation-executor';
-import type { SuccessfulLogicalActionResult } from '@/rooms/commands/action-ledger';
-import type { ConnectSeatResult } from '@/rooms/connections/connect-seat';
+import { RollSimulationWorkerPool } from '@/roll/worker/roll-simulation-worker-pool';
+import type { SuccessfulLogicalActionResult } from '@/rooms/application/commands/action-ledger';
+import type { ConnectSeatResult } from '@/rooms/application/connections/connect-seat';
+import { InMemoryRoomRepository } from '@/rooms/application/room-repository';
 import { roomId } from '@/rooms/domain/room-model';
-import { InMemoryRoomRepository } from '@/rooms/repository';
-import { RoomApplicationService } from '@/rooms/room-application';
+import { RoomApplication } from '@/rooms/room-application';
 import type { ErrorReporter } from '@/runtime/error-reporter';
 import { createProductionIdentity } from '@/runtime/server-identity';
 import { SocketConnectionLimit } from '@/transport/socket/socket-connection-limit';
@@ -202,17 +202,16 @@ describe('authoritative Socket server', () => {
       contract: createCompatibilityContract(RELEASE_ID),
     });
     const gate = Promise.withResolvers<void>();
-    const { executeGameCommand } = RoomApplicationService.prototype;
-    const delayed = spyOn(
-      RoomApplicationService.prototype,
-      'executeGameCommand',
-    ).mockImplementation(async function (
-      this: RoomApplicationService,
-      input: Parameters<RoomApplicationService['executeGameCommand']>[0],
-    ) {
-      await gate.promise;
-      return executeGameCommand.call(this, input);
-    });
+    const { executeGameCommand } = RoomApplication.prototype;
+    const delayed = spyOn(RoomApplication.prototype, 'executeGameCommand').mockImplementation(
+      async function (
+        this: RoomApplication,
+        input: Parameters<RoomApplication['executeGameCommand']>[0],
+      ) {
+        await gate.promise;
+        return executeGameCommand.call(this, input);
+      },
+    );
     const command = { type: GAME_COMMAND_TYPE.FORFEIT_MATCH, actionId: crypto.randomUUID() };
     const waiting = Array.from({ length: 8 }, () =>
       emitAck(client, SOCKET_EVENT.GAME_COMMAND, command),
@@ -271,13 +270,10 @@ describe('authoritative Socket server', () => {
     const authority = await createTestRoom(server.url, crypto.randomUUID());
     const entered = Promise.withResolvers<void>();
     const release = Promise.withResolvers<void>();
-    const { connectSeat } = RoomApplicationService.prototype;
+    const { connectSeat } = RoomApplication.prototype;
     let firstAdmission = true;
-    const admission = spyOn(RoomApplicationService.prototype, 'connectSeat').mockImplementation(
-      async function (
-        this: RoomApplicationService,
-        input: Parameters<RoomApplicationService['connectSeat']>[0],
-      ) {
+    const admission = spyOn(RoomApplication.prototype, 'connectSeat').mockImplementation(
+      async function (this: RoomApplication, input: Parameters<RoomApplication['connectSeat']>[0]) {
         const delay = firstAdmission;
         firstAdmission = false;
         const result = await connectSeat.call(this, input);
@@ -728,15 +724,12 @@ describe('authoritative Socket server', () => {
       });
       const initial = parseSyncAck(await emitAckWithin(creator, SOCKET_EVENT.GAME_SYNC));
       if (!initial.ok) throw new Error('initial sync failed');
-      const pending =
-        Promise.withResolvers<Awaited<ReturnType<RoomApplicationService['syncRoom']>>>();
+      const pending = Promise.withResolvers<Awaited<ReturnType<RoomApplication['syncRoom']>>>();
       const entered = Promise.withResolvers<void>();
-      const sync = spyOn(RoomApplicationService.prototype, 'syncRoom').mockImplementationOnce(
-        () => {
-          entered.resolve();
-          return pending.promise;
-        },
-      );
+      const sync = spyOn(RoomApplication.prototype, 'syncRoom').mockImplementationOnce(() => {
+        entered.resolve();
+        return pending.promise;
+      });
       try {
         const first = emitAckWithin(creator, SOCKET_EVENT.GAME_SYNC);
         await within(entered.promise, 'sync started');
@@ -1024,27 +1017,26 @@ describe('authoritative Socket server', () => {
       seatToken: authority.seatToken,
       contract: createCompatibilityContract(RELEASE_ID),
     });
-    const sync = spyOn(RoomApplicationService.prototype, 'syncRoom').mockResolvedValueOnce({
+    const sync = spyOn(RoomApplication.prototype, 'syncRoom').mockResolvedValueOnce({
       ok: true,
       data: null,
-    } as unknown as Awaited<ReturnType<RoomApplicationService['syncRoom']>>);
+    } as unknown as Awaited<ReturnType<RoomApplication['syncRoom']>>);
     let originalReceipt: Omit<SuccessfulLogicalActionResult, 'ok'> | undefined;
-    const originalExecute = RoomApplicationService.prototype.executeGameCommand;
-    const execute = spyOn(
-      RoomApplicationService.prototype,
-      'executeGameCommand',
-    ).mockImplementationOnce(async function (
-      this: RoomApplicationService,
-      input: Parameters<RoomApplicationService['executeGameCommand']>[0],
-    ) {
-      const execution = await originalExecute.call(this, input);
-      if (!execution.result.ok) throw new Error('expected committed command');
-      originalReceipt = execution.result.data.receipt;
-      return {
-        ...execution,
-        result: { ...execution.result, data: null },
-      } as unknown as typeof execution;
-    });
+    const originalExecute = RoomApplication.prototype.executeGameCommand;
+    const execute = spyOn(RoomApplication.prototype, 'executeGameCommand').mockImplementationOnce(
+      async function (
+        this: RoomApplication,
+        input: Parameters<RoomApplication['executeGameCommand']>[0],
+      ) {
+        const execution = await originalExecute.call(this, input);
+        if (!execution.result.ok) throw new Error('expected committed command');
+        originalReceipt = execution.result.data.receipt;
+        return {
+          ...execution,
+          result: { ...execution.result, data: null },
+        } as unknown as typeof execution;
+      },
+    );
     try {
       expect(parseSyncAck(await emitAckWithin(creator, SOCKET_EVENT.GAME_SYNC))).toMatchObject({
         ok: false,
@@ -1140,13 +1132,13 @@ describe('authoritative Socket server', () => {
 
   test('worker recovery allows admission, sync and nonphysical commands while roll failure preserves retry', async () => {
     const { server, repository, reports } = await startFaultServer();
-    const stats = spyOn(WorkerRollSimulationExecutor.prototype, 'stats').mockReturnValue({
+    const stats = spyOn(RollSimulationWorkerPool.prototype, 'stats').mockReturnValue({
       readyWorkers: 0,
       running: 0,
       queued: 0,
       restarts: 1,
     });
-    const execute = spyOn(WorkerRollSimulationExecutor.prototype, 'execute');
+    const execute = spyOn(RollSimulationWorkerPool.prototype, 'execute');
     try {
       expect((await fetch(`${server.url}/health/ready`)).status).toBe(503);
       expect((await fetch(`${server.url}/health/live`)).status).toBe(200);
@@ -1255,7 +1247,7 @@ describe('authoritative Socket server', () => {
     expect(
       parseCommandAck(await emitAckWithin(creator, SOCKET_EVENT.GAME_COMMAND, {})),
     ).toMatchObject({ ok: false, error: { code: PUBLIC_ERROR_CODE.INVALID_REQUEST } });
-    const stats = spyOn(WorkerRollSimulationExecutor.prototype, 'stats').mockReturnValue({
+    const stats = spyOn(RollSimulationWorkerPool.prototype, 'stats').mockReturnValue({
       readyWorkers: 0,
       running: 0,
       queued: 0,

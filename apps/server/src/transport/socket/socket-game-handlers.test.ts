@@ -3,7 +3,7 @@ import { type CommandAck, GAME_COMMAND_TYPE, type SyncAck } from '@repo/game-pro
 import { expect, test } from 'bun:test';
 
 import { roomId } from '@/rooms/domain/room-model';
-import type { RoomApplicationService } from '@/rooms/room-application';
+import type { RoomApplication } from '@/rooms/room-application';
 import type { ErrorReporter } from '@/runtime/error-reporter';
 import { handleCommand, handleSync } from '@/transport/socket/socket-game-handlers';
 
@@ -34,7 +34,7 @@ function fixture(fault: 'application' | 'output' | 'none', original: Error) {
       syncRoom: async () => {
         if (fault === 'application') throw original;
         return (fault === 'output' ? { ok: true, data: null } : refusal) as Awaited<
-          ReturnType<RoomApplicationService['syncRoom']>
+          ReturnType<RoomApplication['syncRoom']>
         >;
       },
       executeGameCommand: async () => {
@@ -42,7 +42,7 @@ function fixture(fault: 'application' | 'output' | 'none', original: Error) {
         return {
           result: fault === 'output' ? { ok: true, data: null } : refusal,
           committedStateVersion: null,
-        } as Awaited<ReturnType<RoomApplicationService['executeGameCommand']>>;
+        } as Awaited<ReturnType<RoomApplication['executeGameCommand']>>;
       },
     },
   };

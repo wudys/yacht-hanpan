@@ -12,7 +12,7 @@ import type {
   RollCommandExecution,
   RollCommandExecutionInput,
   RollCommandExecutor,
-} from '@/roll/command-executor';
+} from '@/roll/roll-command-executor';
 import {
   ROLL_SIMULATION_EXECUTOR_ERROR_CODE,
   type RollSimulationExecutor,

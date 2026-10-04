@@ -6,7 +6,7 @@ import { joinRoom } from '@/rooms/domain/join-room';
 import { turnId } from '@/rooms/domain/match';
 import { disconnectSeat, resumeSeat } from '@/rooms/domain/presence';
 import { applyRoomDeadlineDecision, evaluateRoomDeadlines } from '@/rooms/domain/room-deadlines';
-import { startRoomMatch } from '@/rooms/domain/room-lifecycle';
+import { startRoomMatch } from '@/rooms/domain/room-match-lifecycle';
 import { roomId } from '@/rooms/domain/room-model';
 import type { PlayingRoomState } from '@/rooms/domain/room-state';
 import { epochMilliseconds } from '@/rooms/domain/time';

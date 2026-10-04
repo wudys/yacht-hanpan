@@ -22,10 +22,10 @@ import { Server as SocketIoServer, Socket as ServerSocket } from 'socket.io';
 import { io as createClient } from 'socket.io-client';
 
 import { type GameServer, startGameServer } from '@/app/start-game-server';
-import { WorkerRollSimulationExecutor } from '@/roll/worker-roll-simulation-executor';
+import { RollSimulationWorkerPool } from '@/roll/worker/roll-simulation-worker-pool';
+import { InMemoryRoomRepository } from '@/rooms/application/room-repository';
 import { roomId } from '@/rooms/domain/room-model';
-import { InMemoryRoomRepository } from '@/rooms/repository';
-import { RoomApplicationService } from '@/rooms/room-application';
+import { RoomApplication } from '@/rooms/room-application';
 import type { ErrorReporter } from '@/runtime/error-reporter';
 import { createJsonLogger, type LogFields, type Logger } from '@/runtime/logger';
 import { parseServerConfig } from '@/runtime/server-config';
@@ -55,15 +55,15 @@ function config() {
 describe('production game HTTP server', () => {
   test('shutdown failure still closes the listener, transport and owned worker once', async () => {
     const failure = new Error('scheduler close failure');
-    const originalStart = WorkerRollSimulationExecutor.prototype.start;
-    let worker: WorkerRollSimulationExecutor | undefined;
-    const startWorker = spyOn(WorkerRollSimulationExecutor.prototype, 'start').mockImplementation(
-      function (this: WorkerRollSimulationExecutor) {
+    const originalStart = RollSimulationWorkerPool.prototype.start;
+    let worker: RollSimulationWorkerPool | undefined;
+    const startWorker = spyOn(RollSimulationWorkerPool.prototype, 'start').mockImplementation(
+      function (this: RollSimulationWorkerPool) {
         worker = this;
         return originalStart.call(this);
       },
     );
-    const closeWorker = spyOn(WorkerRollSimulationExecutor.prototype, 'close');
+    const closeWorker = spyOn(RollSimulationWorkerPool.prototype, 'close');
     const originalAddress = HttpServer.prototype.address;
     let listener: HttpServer | undefined;
     const address = spyOn(HttpServer.prototype, 'address').mockImplementation(function (
@@ -156,13 +156,13 @@ describe('production game HTTP server', () => {
       await gate.promise;
       return originalClose.call(this, callback);
     });
-    const create = spyOn(RoomApplicationService.prototype, 'createRoom');
-    const join = spyOn(RoomApplicationService.prototype, 'joinRoom');
-    const resume = spyOn(RoomApplicationService.prototype, 'resumeRoom');
-    const cancel = spyOn(RoomApplicationService.prototype, 'cancelRoom');
-    const connect = spyOn(RoomApplicationService.prototype, 'connectSeat');
-    const sync = spyOn(RoomApplicationService.prototype, 'syncRoom');
-    const command = spyOn(RoomApplicationService.prototype, 'executeGameCommand');
+    const create = spyOn(RoomApplication.prototype, 'createRoom');
+    const join = spyOn(RoomApplication.prototype, 'joinRoom');
+    const resume = spyOn(RoomApplication.prototype, 'resumeRoom');
+    const cancel = spyOn(RoomApplication.prototype, 'cancelRoom');
+    const connect = spyOn(RoomApplication.prototype, 'connectSeat');
+    const sync = spyOn(RoomApplication.prototype, 'syncRoom');
+    const command = spyOn(RoomApplication.prototype, 'executeGameCommand');
     const replacement = createClient(server.url, {
       autoConnect: false,
       path: GAME_SOCKET_PATH,
@@ -390,12 +390,9 @@ describe('production game HTTP server', () => {
     servers.push(server);
     const gate = Promise.withResolvers<void>();
     const entered = Promise.withResolvers<void>();
-    const { createRoom } = RoomApplicationService.prototype;
-    const delayed = spyOn(RoomApplicationService.prototype, 'createRoom').mockImplementationOnce(
-      async function (
-        this: RoomApplicationService,
-        ...input: Parameters<RoomApplicationService['createRoom']>
-      ) {
+    const { createRoom } = RoomApplication.prototype;
+    const delayed = spyOn(RoomApplication.prototype, 'createRoom').mockImplementationOnce(
+      async function (this: RoomApplication, ...input: Parameters<RoomApplication['createRoom']>) {
         entered.resolve();
         await gate.promise;
         return createRoom.apply(this, input);
@@ -497,7 +494,7 @@ describe('production game HTTP server', () => {
         },
       ] as const;
       for (const route of routes) {
-        const facade = spyOn(RoomApplicationService.prototype, route.method);
+        const facade = spyOn(RoomApplication.prototype, route.method);
         try {
           const response = await post(
             `${server.url}${route.path}`,
@@ -903,7 +900,7 @@ describe('production game HTTP server', () => {
   test('readiness follows worker availability while liveness and busy workers remain healthy', async () => {
     const server = await startGameServer({ config: config() });
     servers.push(server);
-    const stats = spyOn(WorkerRollSimulationExecutor.prototype, 'stats');
+    const stats = spyOn(RollSimulationWorkerPool.prototype, 'stats');
     try {
       stats.mockReturnValue({ readyWorkers: 0, running: 0, queued: 1, restarts: 1 });
       expect(server.isReady()).toBeFalse();
@@ -1067,7 +1064,7 @@ describe('production game HTTP server', () => {
     async (framing) => {
       const server = await startGameServer({ config: config() });
       servers.push(server);
-      const createRoom = spyOn(RoomApplicationService.prototype, 'createRoom');
+      const createRoom = spyOn(RoomApplication.prototype, 'createRoom');
       const socket = connect(Number(new URL(server.url).port), '127.0.0.1');
       let timer: ReturnType<typeof setTimeout> | undefined;
       try {
@@ -1284,15 +1281,15 @@ async function json(url: string): Promise<{ status: number; body: unknown }> {
 }
 
 function captureOwnedWorker() {
-  const originalStart = WorkerRollSimulationExecutor.prototype.start;
-  let worker: WorkerRollSimulationExecutor | undefined;
-  const start = spyOn(WorkerRollSimulationExecutor.prototype, 'start').mockImplementation(function (
-    this: WorkerRollSimulationExecutor,
+  const originalStart = RollSimulationWorkerPool.prototype.start;
+  let worker: RollSimulationWorkerPool | undefined;
+  const start = spyOn(RollSimulationWorkerPool.prototype, 'start').mockImplementation(function (
+    this: RollSimulationWorkerPool,
   ) {
     worker = this;
     return originalStart.call(this);
   });
-  const close = spyOn(WorkerRollSimulationExecutor.prototype, 'close');
+  const close = spyOn(RollSimulationWorkerPool.prototype, 'close');
   let closeCalls: number | undefined;
   return {
     closeCalls: () => closeCalls ?? close.mock.calls.length,

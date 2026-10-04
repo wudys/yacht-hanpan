@@ -1,17 +1,17 @@
 import type { RoomView } from '@repo/game-protocol/socket';
 import type { CompatibilityContract } from '@repo/game-protocol/version';
 
-import type { RollCommandExecutor } from '@/roll/command-executor';
-import { CreateRoomRateLimiter } from '@/rooms/admission/create-room-rate-limit';
-import type { ExecuteGameCommandResult } from '@/rooms/commands/execute-game-command';
-import { PendingActionRegistry } from '@/rooms/commands/pending-action-registry';
-import type { RoomStatePublisher } from '@/rooms/commit';
-import { ConnectionRegistry } from '@/rooms/connections/connection-registry';
+import type { RollCommandExecutor } from '@/roll/roll-command-executor';
+import { CreateRoomRateLimiter } from '@/rooms/application/admission/create-room-rate-limiter';
+import { closeRoomApplicationResources } from '@/rooms/application/close-room-resources';
+import type { ExecuteGameCommandResult } from '@/rooms/application/commands/execute-game-command';
+import { PendingActionRegistry } from '@/rooms/application/commands/pending-action-registry';
+import { ConnectionRegistry } from '@/rooms/application/connections/connection-registry';
+import { InMemoryRoomRepository } from '@/rooms/application/room-repository';
+import type { RoomStatePublisher } from '@/rooms/application/room-state-committer';
+import { InMemoryRoomTaskQueue } from '@/rooms/application/scheduling/room-task-queue';
 import type { RoomId } from '@/rooms/domain/room-model';
-import { InMemoryRoomRepository } from '@/rooms/repository';
-import { RoomApplicationService } from '@/rooms/room-application';
-import { closeRoomApplicationResources } from '@/rooms/room-application-lifecycle';
-import { InMemoryRoomTaskQueue } from '@/rooms/scheduling/room-task-queue';
+import { RoomApplication } from '@/rooms/room-application';
 import type { Clock } from '@/runtime/clock';
 import { type ErrorReporter, reportUnexpected } from '@/runtime/error-reporter';
 import type { ServerIdentity } from '@/runtime/server-identity';
@@ -36,7 +36,7 @@ interface RoomApplicationOverrides {
 export function createRoomApplication(
   options: CreateRoomApplicationOptions,
   overrides: RoomApplicationOverrides = {},
-): RoomApplicationService {
+): RoomApplication {
   let tasks: TaskScheduler | null = null;
   let queue: InMemoryRoomTaskQueue | null = null;
   try {
@@ -48,7 +48,7 @@ export function createRoomApplication(
     const pending = new PendingActionRegistry<ExecuteGameCommandResult>();
     const rateLimiter = new CreateRoomRateLimiter();
     const roomQueue = queue;
-    return new RoomApplicationService({
+    return new RoomApplication({
       clock: options.clock,
       connections,
       expectedContract: options.expectedContract,

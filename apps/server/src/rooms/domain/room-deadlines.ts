@@ -9,7 +9,7 @@ import {
 } from '@/rooms/domain/match/match-lifecycle';
 import type { NextTurnInput } from '@/rooms/domain/match/model';
 import { earliestReconnectDeadline } from '@/rooms/domain/reconnect-policy';
-import { finishRoomMatch } from '@/rooms/domain/room-lifecycle';
+import { finishRoomMatch } from '@/rooms/domain/room-match-lifecycle';
 import type { FinishedRoomState, PlayingRoomState } from '@/rooms/domain/room-state';
 import { epochMilliseconds } from '@/rooms/domain/time';
 

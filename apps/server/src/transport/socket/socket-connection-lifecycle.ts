@@ -16,7 +16,7 @@ import type { SeatIndex } from '@repo/yacht-rules';
 import type { Server as SocketIoServer, Socket } from 'socket.io';
 
 import type { RoomId } from '@/rooms/domain/room-model';
-import type { RoomApplicationService } from '@/rooms/room-application';
+import type { RoomApplication } from '@/rooms/room-application';
 import type { Clock } from '@/runtime/clock';
 import { type ErrorReporter, reportUnexpected } from '@/runtime/error-reporter';
 import type { Logger } from '@/runtime/logger';
@@ -58,7 +58,7 @@ export interface SocketConnectionLifecycleDependencies {
   readonly isAcceptingRequests: () => boolean;
   readonly logger: Logger;
   readonly reportUnexpected?: ErrorReporter;
-  readonly rooms: Pick<RoomApplicationService, 'connectSeat' | 'disconnectSeat'>;
+  readonly rooms: Pick<RoomApplication, 'connectSeat' | 'disconnectSeat'>;
   readonly resolveClientAddress: (socket: GameSocket) => string;
 }
 

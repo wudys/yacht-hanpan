@@ -8,16 +8,16 @@ import {
 } from '@repo/game-protocol/socket';
 import { createCompatibilityContract } from '@repo/game-protocol/version';
 
-import { closeGameServerResources } from '@/app/server-lifecycle';
+import { closeGameServerResources } from '@/app/close-game-server-resources';
 import { createAuthoritativeRollCommandExecutor } from '@/roll/authoritative-roll-command-executor';
-import type { RollCommandExecutor } from '@/roll/command-executor';
 import { createProductionRollRecipeSource } from '@/roll/production-roll-recipe-source';
-import { WorkerRollSimulationExecutor } from '@/roll/worker-roll-simulation-executor';
-import type { RoomStatePublication } from '@/rooms/commit';
+import type { RollCommandExecutor } from '@/roll/roll-command-executor';
+import { RollSimulationWorkerPool } from '@/roll/worker/roll-simulation-worker-pool';
+import type { InMemoryRoomRepository } from '@/rooms/application/room-repository';
+import type { RoomStatePublication } from '@/rooms/application/room-state-committer';
 import { createRoomApplication } from '@/rooms/create-room-application';
 import type { RoomId } from '@/rooms/domain/room-model';
-import type { InMemoryRoomRepository } from '@/rooms/repository';
-import type { RoomApplicationService } from '@/rooms/room-application';
+import type { RoomApplication } from '@/rooms/room-application';
 import type { Clock } from '@/runtime/clock';
 import { systemClock } from '@/runtime/clock';
 import { type ErrorReporter, reportUnexpected } from '@/runtime/error-reporter';
@@ -59,8 +59,8 @@ export async function startGameServer(options: StartGameServerOptions = {}): Pro
   const logger = options.logger ?? createJsonLogger();
   const httpAdmission = new HttpRequestAdmission();
   const expectedContract = createCompatibilityContract(config.releaseId);
-  let rollSimulation: WorkerRollSimulationExecutor | null = null;
-  let rooms: RoomApplicationService | null = null;
+  let rollSimulation: RollSimulationWorkerPool | null = null;
+  let rooms: RoomApplication | null = null;
   let telemetry: ServerTelemetryMonitor | null = null;
   let httpServer: HttpServer | null = null;
   let socketServer: GameSocketServer | null = null;
@@ -81,7 +81,7 @@ export async function startGameServer(options: StartGameServerOptions = {}): Pro
     if (options.rolls !== undefined) {
       rolls = options.rolls;
     } else {
-      rollSimulation = new WorkerRollSimulationExecutor({
+      rollSimulation = new RollSimulationWorkerPool({
         size: 1,
         maxQueued: 128,
         logger,

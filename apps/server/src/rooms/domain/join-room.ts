@@ -2,7 +2,7 @@ import { isCharacterId } from '@repo/game-assets/characters';
 
 import { PRESENCE_STATUS, ROOM_REJECTION_CODE, ROOM_STATUS } from '@/rooms/domain/room-constants';
 import type { PlayingRoom, Room, RoomTransition } from '@/rooms/domain/room-model';
-import { roomRejected } from '@/rooms/domain/room-transitions';
+import { roomRejected } from '@/rooms/domain/room-transition-result';
 import { isValidTimestamp } from '@/rooms/domain/room-validation';
 import { epochMilliseconds } from '@/rooms/domain/time';
 

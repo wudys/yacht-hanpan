@@ -15,18 +15,21 @@ import {
 import { createCompatibilityContract } from '@repo/game-protocol/version';
 import { expect, spyOn, test } from 'bun:test';
 
-import type { RollCommandExecution, RollCommandExecutor } from '@/roll/command-executor';
-import { CreateRoomRateLimiter } from '@/rooms/admission/create-room-rate-limit';
-import type { ExecuteGameCommandResult } from '@/rooms/commands/execute-game-command';
-import { PendingActionRegistry } from '@/rooms/commands/pending-action-registry';
-import { RoomStateCommitter, type RoomStatePublication } from '@/rooms/commit';
-import { ConnectionRegistry } from '@/rooms/connections/connection-registry';
+import type { RollCommandExecution, RollCommandExecutor } from '@/roll/roll-command-executor';
+import { CreateRoomRateLimiter } from '@/rooms/application/admission/create-room-rate-limiter';
+import type { ExecuteGameCommandResult } from '@/rooms/application/commands/execute-game-command';
+import { PendingActionRegistry } from '@/rooms/application/commands/pending-action-registry';
+import { ConnectionRegistry } from '@/rooms/application/connections/connection-registry';
+import { InMemoryRoomRepository } from '@/rooms/application/room-repository';
+import {
+  RoomStateCommitter,
+  type RoomStatePublication,
+} from '@/rooms/application/room-state-committer';
+import { InMemoryRoomTaskQueue } from '@/rooms/application/scheduling/room-task-queue';
 import { roomId } from '@/rooms/domain/room-model';
 import { isPlayingRoomState } from '@/rooms/domain/room-state';
 import { epochMilliseconds } from '@/rooms/domain/time';
-import { InMemoryRoomRepository } from '@/rooms/repository';
-import { RoomApplicationService } from '@/rooms/room-application';
-import { InMemoryRoomTaskQueue } from '@/rooms/scheduling/room-task-queue';
+import { RoomApplication } from '@/rooms/room-application';
 
 const ROOM_ID = roomId('018f47f2-c2d8-7f4a-8bf4-3f559c39843e');
 const TOKEN = 'd9428888-122b-4d34-8f6f-1f0f4f7f6b91';
@@ -50,7 +53,7 @@ async function fixture(
   const published: { publication: RoomStatePublication; runAt: number | null }[] = [];
   const rateLimiter = new CreateRoomRateLimiter();
   let issuedTokens = 0;
-  const service = new RoomApplicationService({
+  const service = new RoomApplication({
     clock: { now: () => now },
     connections,
     expectedContract: contract,

@@ -10,7 +10,7 @@ import {
 import { Server as SocketIoServer } from 'socket.io';
 
 import type { RoomId } from '@/rooms/domain/room-model';
-import type { RoomApplicationService } from '@/rooms/room-application';
+import type { RoomApplication } from '@/rooms/room-application';
 import { isBrowserOriginAllowed } from '@/transport/origin-policy';
 import {
   createSocketConnectionLifecycle,
@@ -38,7 +38,7 @@ export interface AttachGameSocketServerDependencies extends Omit<
   readonly allowedOrigins: readonly string[];
   readonly isAcceptingRequests: () => boolean;
   readonly rooms: Pick<
-    RoomApplicationService,
+    RoomApplication,
     'connectSeat' | 'disconnectSeat' | 'executeGameCommand' | 'syncRoom'
   >;
 }

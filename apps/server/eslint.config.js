@@ -100,7 +100,7 @@ export default [
             {
               regex: '^@/rooms/(?!room-application$)',
               allowTypeImports: true,
-              message: 'Transport executes room operations through RoomApplicationService.',
+              message: 'Transport executes room operations through RoomApplication.',
             },
           ],
         },

@@ -3,11 +3,16 @@ import { parseSocketAuth } from '@repo/game-protocol/socket';
 import { createCompatibilityContract } from '@repo/game-protocol/version';
 import { describe, expect, test } from 'bun:test';
 
-import { executeResumeRoom } from '@/rooms/admission/resume-room';
-import { RoomStateCommitter } from '@/rooms/commit';
-import { executeConnectSeat } from '@/rooms/connections/connect-seat';
-import { ConnectionRegistry } from '@/rooms/connections/connection-registry';
-import { hashSeatToken } from '@/rooms/connections/seat-token';
+import { executeResumeRoom } from '@/rooms/application/admission/resume-room';
+import { executeConnectSeat } from '@/rooms/application/connections/connect-seat';
+import { ConnectionRegistry } from '@/rooms/application/connections/connection-registry';
+import { hashSeatToken } from '@/rooms/application/connections/seat-token';
+import { reconcileRoomDeadlines } from '@/rooms/application/reconcile-room-deadlines';
+import { RoomMaintenance } from '@/rooms/application/room-maintenance';
+import type { PlayingRoomRecord, RoomRecord } from '@/rooms/application/room-record';
+import { InMemoryRoomRepository } from '@/rooms/application/room-repository';
+import { RoomStateCommitter } from '@/rooms/application/room-state-committer';
+import { InMemoryRoomTaskQueue } from '@/rooms/application/scheduling/room-task-queue';
 import { createRoom } from '@/rooms/domain/create-room';
 import { deadlineTime } from '@/rooms/domain/event-time';
 import { joinRoom } from '@/rooms/domain/join-room';
@@ -16,11 +21,6 @@ import { disconnectSeat, resumeSeat } from '@/rooms/domain/presence';
 import { roomId } from '@/rooms/domain/room-model';
 import { isPlayingRoomState } from '@/rooms/domain/room-state';
 import { epochMilliseconds } from '@/rooms/domain/time';
-import type { PlayingRoomRecord, RoomRecord } from '@/rooms/record';
-import { InMemoryRoomRepository } from '@/rooms/repository';
-import { CleanupRoomsUseCase } from '@/rooms/scheduling/cleanup-rooms';
-import { reconcileRoomDeadlines } from '@/rooms/scheduling/reconcile-room-deadlines';
-import { InMemoryRoomTaskQueue } from '@/rooms/scheduling/room-task-queue';
 
 const ROOM_ID = roomId('018f47f2-c2d8-7f4a-8bf4-3f559c39843e');
 const TOKENS = [
@@ -144,7 +144,7 @@ describe('shared reconnect lifecycle', () => {
     if (record?.room.status !== 'playing' || record.match?.status !== 'playing')
       throw new Error('playing record missing');
     expect(record.room.seats[1].presence).toMatchObject({ reconnectDeadlineAt: 153_000 });
-    const cleanup = new CleanupRoomsUseCase(state);
+    const cleanup = new RoomMaintenance(state);
     await cleanup.execute();
     expect(state.repository.getById(ROOM_ID)).toBe(record);
     const before = await executeResumeRoom(
@@ -189,7 +189,7 @@ describe('shared reconnect lifecycle', () => {
     ).toBeFalse();
     expect(state.connections.get(ROOM_ID, 0)).toBeUndefined();
     expect(state.connections.get(ROOM_ID, 1)).toBeUndefined();
-    const cleanup = new CleanupRoomsUseCase(state);
+    const cleanup = new RoomMaintenance(state);
     await cleanup.execute();
     expect(state.repository.getById(ROOM_ID)).toBeUndefined();
   });

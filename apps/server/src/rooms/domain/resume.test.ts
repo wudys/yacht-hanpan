@@ -6,7 +6,7 @@ import { forfeitMatch, turnId } from '@/rooms/domain/match';
 import { disconnectSeat, resumeSeat } from '@/rooms/domain/presence';
 import { evaluateSeatResume } from '@/rooms/domain/resume';
 import { ROOM_REJECTION_CODE } from '@/rooms/domain/room-constants';
-import { finishRoomMatch, startRoomMatch } from '@/rooms/domain/room-lifecycle';
+import { finishRoomMatch, startRoomMatch } from '@/rooms/domain/room-match-lifecycle';
 import { roomId } from '@/rooms/domain/room-model';
 import {
   isPlayingRoomState,

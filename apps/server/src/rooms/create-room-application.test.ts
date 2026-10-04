@@ -6,9 +6,9 @@ import {
 } from '@repo/game-protocol/version';
 import { expect, spyOn, test } from 'bun:test';
 
+import { InMemoryRoomTaskQueue } from '@/rooms/application/scheduling/room-task-queue';
 import { createRoomApplication } from '@/rooms/create-room-application';
 import type { RoomApplicationStats } from '@/rooms/room-application';
-import { InMemoryRoomTaskQueue } from '@/rooms/scheduling/room-task-queue';
 import { createProductionIdentity } from '@/runtime/server-identity';
 
 const contract = createCompatibilityContract('test-release');

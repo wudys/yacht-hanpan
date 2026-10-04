@@ -16,7 +16,7 @@ import type {
   SeatPresence,
   WaitingRoom,
 } from '@/rooms/domain/room-model';
-import { roomChanged, roomRejected, roomUnchanged } from '@/rooms/domain/room-transitions';
+import { roomChanged, roomRejected, roomUnchanged } from '@/rooms/domain/room-transition-result';
 import { isValidTimestamp } from '@/rooms/domain/room-validation';
 import { epochMilliseconds } from '@/rooms/domain/time';
 

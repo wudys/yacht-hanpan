@@ -1,9 +1,13 @@
 import { parentPort } from 'node:worker_threads';
 
 import { initializeDeterministicRapierForBun } from '@repo/dice-simulation/rapier/bun';
-import { simulateRoll } from '@repo/dice-simulation/simulate';
+import { simulateRoll, simulateRollOutcome } from '@repo/dice-simulation/simulate';
 
-import { ROLL_WORKER_GOLDEN_DIGEST, ROLL_WORKER_GOLDEN_INPUT } from '@/roll/roll-worker-golden';
+import {
+  ROLL_WORKER_GOLDEN_DIGEST,
+  ROLL_WORKER_GOLDEN_INPUT,
+  ROLL_WORKER_GOLDEN_OUTCOME,
+} from '@/roll/roll-worker-golden';
 import {
   type RollWorkerRequest,
   type RollWorkerResponse,
@@ -18,6 +22,17 @@ try {
   const golden = await simulateRoll(ROLL_WORKER_GOLDEN_INPUT);
   if (golden.replayDigest !== ROLL_WORKER_GOLDEN_DIGEST) {
     throw new Error('roll simulation worker golden mismatch');
+  }
+  const outcome = await simulateRollOutcome(ROLL_WORKER_GOLDEN_INPUT);
+  if (
+    outcome.authoritativeValuesBySlot.length !== ROLL_WORKER_GOLDEN_OUTCOME.length ||
+    outcome.authoritativeValuesBySlot.some(
+      (face, index) =>
+        face.slot !== ROLL_WORKER_GOLDEN_OUTCOME[index]?.slot ||
+        face.value !== ROLL_WORKER_GOLDEN_OUTCOME[index]?.value,
+    )
+  ) {
+    throw new Error('roll simulation worker outcome golden mismatch');
   }
   port.postMessage({
     kind: 'ready',
@@ -37,7 +52,7 @@ port.on('message', (request: RollWorkerRequest) => {
 
 async function execute(request: RollWorkerRequest): Promise<void> {
   try {
-    const result = await simulateRoll(request.input);
+    const result = await simulateRollOutcome(request.input);
     port.postMessage({ kind: 'result', id: request.id, result } satisfies RollWorkerResponse);
   } catch (error) {
     port.postMessage({

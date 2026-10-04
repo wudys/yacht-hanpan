@@ -1,4 +1,4 @@
-import type { SimulationInput, SimulationResult } from '@repo/dice-simulation/contract';
+import type { SimulationInput, SimulationOutcome } from '@repo/dice-simulation/contract';
 
 export const ROLL_SIMULATION_EXECUTOR_ERROR_CODE = {
   CAPACITY: 'CAPACITY',
@@ -19,5 +19,5 @@ export class RollSimulationExecutorError extends Error {
 }
 
 export interface RollSimulationExecutor {
-  execute(input: SimulationInput): Promise<SimulationResult>;
+  execute(input: SimulationInput): Promise<SimulationOutcome>;
 }

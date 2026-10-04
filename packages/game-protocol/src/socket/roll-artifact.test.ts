@@ -91,7 +91,13 @@ function plain(value: unknown): unknown {
 describe('resolved roll artifact', () => {
   describe.each(artifactParsers)('$name validates artifact invariants', ({ parse }) => {
     test('accepts a canonical artifact', () => {
-      expect(() => parse({ type: 'roll:resolved', replay, outcome, replayDigest })).not.toThrow();
+      expect(() => parse({ type: 'roll:resolved', replay, outcome })).not.toThrow();
+    });
+
+    test('rejects a retired full-timeline digest field', () => {
+      expect(() => parse({ type: 'roll:resolved', replay, outcome, replayDigest })).toThrow(
+        GameApiParseError,
+      );
     });
 
     test.each([
@@ -125,14 +131,31 @@ describe('resolved roll artifact', () => {
           ],
         },
       },
-      { replayDigest: `${DICE_SIMULATION_CONTRACT.replayDigestVersion}:not-sha256` },
-      { replayDigest: `sha256-q4-v1:${'a'.repeat(64)}` },
-      { replayDigest: `unsupported:${'a'.repeat(64)}` },
-      { replayDigest: `${replayDigest}:extra` },
+      {
+        outcome: {
+          authoritativeValuesBySlot: [...outcome.authoritativeValuesBySlot, { slot: 3, value: 2 }],
+        },
+      },
+      {
+        outcome: {
+          authoritativeValuesBySlot: [
+            { slot: 0, value: 7 },
+            ...outcome.authoritativeValuesBySlot.slice(1),
+          ],
+        },
+      },
+      {
+        outcome: {
+          authoritativeValuesBySlot: [
+            { slot: 0, value: 1.5 },
+            ...outcome.authoritativeValuesBySlot.slice(1),
+          ],
+        },
+      },
     ])('rejects invalid artifact %j', (override) => {
-      expect(() =>
-        parse({ type: 'roll:resolved', replay, outcome, replayDigest, ...override }),
-      ).toThrow(GameApiParseError);
+      expect(() => parse({ type: 'roll:resolved', replay, outcome, ...override })).toThrow(
+        GameApiParseError,
+      );
     });
   });
 
@@ -142,7 +165,6 @@ describe('resolved roll artifact', () => {
         type: 'roll:resolved',
         replay: { ...replay, pourStyle },
         outcome,
-        replayDigest,
       }).replay.pourStyle,
     ).toBe(pourStyle);
   });
@@ -155,43 +177,39 @@ describe('resolved roll artifact', () => {
           type: 'roll:resolved',
           replay: { ...replay, pourStyle },
           outcome,
-          replayDigest,
         }),
       ).toThrow(GameApiParseError);
     },
   );
-  test('accepts only compact recipe, outcome, and digest', () => {
-    const artifact = { type: 'roll:resolved', replay, outcome, replayDigest };
+  test('accepts only compact recipe and outcome', () => {
+    const artifact = { type: 'roll:resolved', replay, outcome };
     expect(plain(parseResolvedRollArtifact(artifact))).toEqual(artifact);
   });
 
   test.each([
-    { type: 'roll:resolved', replay, outcome, replayDigest, timeline: [] },
-    { type: 'roll:resolved', replay, outcome, replayDigest, frames: [] },
-    { type: 'roll:resolved', replay: { ...replay, seed: ' padded ' }, outcome, replayDigest },
+    { type: 'roll:resolved', replay, outcome, timeline: [] },
+    { type: 'roll:resolved', replay, outcome, frames: [] },
+    { type: 'roll:resolved', replay: { ...replay, seed: ' padded ' }, outcome },
     {
       type: 'roll:resolved',
       replay: { ...replay, targetValues: [1, 4, 6] },
       outcome,
-      replayDigest,
     },
     {
       type: 'roll:resolved',
       replay: { ...replay, authoritativeValuesBySlot: outcome.authoritativeValuesBySlot },
       outcome,
-      replayDigest,
     },
     {
       type: 'roll:resolved',
       replay,
       outcome: { ...outcome, targetFaces: [1, 4, 6] },
-      replayDigest,
     },
   ])('rejects timeline and target/output inputs', (value) => {
     expect(() => parseResolvedRollArtifact(value)).toThrow(GameApiParseError);
   });
 
-  test('authoritative outcome mutation leaves replay unchanged and fails slot parity', () => {
+  test('rejects outcome slots that differ from the ordered recipe slots', () => {
     const changedOutcome = {
       authoritativeValuesBySlot: [
         { slot: 0, value: 6 },
@@ -204,7 +222,6 @@ describe('resolved roll artifact', () => {
         type: 'roll:resolved',
         replay,
         outcome: changedOutcome,
-        replayDigest,
       }),
     ).toThrow(GameApiParseError);
     expect(replay.rolledSlots).toEqual([0, 2, 4]);

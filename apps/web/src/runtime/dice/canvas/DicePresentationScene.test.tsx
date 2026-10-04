@@ -96,7 +96,7 @@ test('runs frames only for verified playback and renders all static states on de
       playback: {
         status: 'static-fallback',
         rollId: 'fallback-roll',
-        reason: 'DIGEST_MISMATCH',
+        reason: 'OUTCOME_MISMATCH',
         dice: [],
       },
     });

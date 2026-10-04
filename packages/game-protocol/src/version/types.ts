@@ -1,6 +1,6 @@
 import type { DICE_SIMULATION_CONTRACT } from '@repo/dice-simulation/contract';
 
-export const GAME_PROTOCOL_VERSION = 'game-protocol-v15' as const;
+export const GAME_PROTOCOL_VERSION = 'game-protocol-v16' as const;
 
 export interface CompatibilityContract {
   readonly releaseId: string;

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { DICE_SIMULATION_CONTRACT, POUR_STYLE } from '@repo/dice-simulation/contract';
+import { POUR_STYLE } from '@repo/dice-simulation/contract';
 import { PUBLIC_ERROR_CODE } from '@repo/game-protocol/errors';
 import { parseCreateRoomRequest, parseJoinRoomRequest } from '@repo/game-protocol/http';
 import {
@@ -1923,7 +1923,6 @@ function resolvedRollArtifact() {
         { slot: 4, value: 5 },
       ],
     },
-    replayDigest: `${DICE_SIMULATION_CONTRACT.replayDigestVersion}:${'a'.repeat(64)}`,
   });
 }
 

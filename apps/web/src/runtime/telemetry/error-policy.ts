@@ -4,7 +4,6 @@ import type { PlaybackFallbackReason } from '@/runtime/dice/replay';
 
 export const ERROR_CONTEXT_VALUES = {
   replay_reason: [
-    'DIGEST_MISMATCH',
     'OUTCOME_MISMATCH',
     'SIMULATION_FAILED',
   ] satisfies readonly PlaybackFallbackReason[],

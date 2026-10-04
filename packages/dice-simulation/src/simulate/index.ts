@@ -1,1 +1,1 @@
-export { simulateRoll } from './simulate-roll';
+export { simulateRoll, simulateRollOutcome, simulateRollReplay } from './simulate-roll';

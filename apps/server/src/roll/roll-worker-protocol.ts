@@ -1,7 +1,7 @@
 import {
-  isSimulationResult,
+  isSimulationOutcome,
   type SimulationInput,
-  type SimulationResult,
+  type SimulationOutcome,
 } from '@repo/dice-simulation/contract';
 
 export interface RollWorkerRequest {
@@ -22,7 +22,7 @@ const MAX_ERROR_CAUSE_DEPTH = 5;
 
 export type RollWorkerResponse =
   | { readonly kind: 'ready'; readonly goldenDigest: string }
-  | { readonly kind: 'result'; readonly id: number; readonly result: SimulationResult }
+  | { readonly kind: 'result'; readonly id: number; readonly result: SimulationOutcome }
   | { readonly kind: 'error'; readonly id: number; readonly error: RollWorkerError }
   | { readonly kind: 'startup-error'; readonly error: RollWorkerError };
 
@@ -73,7 +73,7 @@ export function parseRollWorkerResponse(value: unknown): RollWorkerResponse {
     if (
       !hasExactKeys(value, ['id', 'kind', 'result']) ||
       !isJobId(value.id) ||
-      !isSimulationResult(value.result)
+      !isSimulationOutcome(value.result)
     ) {
       throw invalidResponse();
     }

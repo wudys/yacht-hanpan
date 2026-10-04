@@ -96,7 +96,6 @@ const rollUpdate = {
         { slot: 4, value: 3 },
       ],
     },
-    replayDigest: `${DICE_SIMULATION_CONTRACT.replayDigestVersion}:${'b'.repeat(64)}`,
   },
 } as const;
 

@@ -1,5 +1,16 @@
-import type { SimulationInput, SimulationResult } from './types';
-import { parseSimulationInput } from './validation';
+import type { SimulationInput, SimulationOutcome, SimulationResult } from './types';
+import { isSimulationInput, parseSimulationInput } from './validation';
+
+/** Checks compact shape and ordered outcome slots; request identity remains with the caller. */
+export function isSimulationOutcome(value: unknown): value is SimulationOutcome {
+  return (
+    isRecord(value) &&
+    hasExactKeys(value, ['authoritativeValuesBySlot', 'input']) &&
+    isSimulationInput(value.input) &&
+    Array.isArray(value.authoritativeValuesBySlot) &&
+    isRolledFaces(value.authoritativeValuesBySlot, value.input.rolledSlots)
+  );
+}
 
 /** Checks result shape only; request identity and digest verification remain with the caller. */
 export function isSimulationResult(value: unknown): value is SimulationResult {

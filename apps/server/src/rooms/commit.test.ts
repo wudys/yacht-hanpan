@@ -1,4 +1,4 @@
-import { DICE_SIMULATION_CONTRACT, POUR_STYLE } from '@repo/dice-simulation/contract';
+import { POUR_STYLE } from '@repo/dice-simulation/contract';
 import { parseResolvedRollArtifact } from '@repo/game-protocol/socket';
 import { createCompatibilityContract } from '@repo/game-protocol/version';
 import { describe, expect, spyOn, test } from 'bun:test';
@@ -466,7 +466,6 @@ describe('RoomStateCommitter', () => {
         contract: createCompatibilityContract('test-release'),
       },
       outcome: { authoritativeValuesBySlot: [0, 1, 2, 3, 4].map((slot) => ({ slot, value: 1 })) },
-      replayDigest: `${DICE_SIMULATION_CONTRACT.replayDigestVersion}:${'a'.repeat(64)}`,
     });
 
     expect(() =>

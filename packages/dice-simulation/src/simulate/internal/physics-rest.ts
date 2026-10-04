@@ -19,7 +19,7 @@ const REST_STABLE_SAMPLES = 10;
 
 interface PhysicsRestContinuation {
   readonly dice: RestSimulationDie[];
-  readonly frames: DieFrame[][];
+  readonly frames?: DieFrame[][];
   readonly simulationMs: number;
   readonly wallReleaseTimes: Map<string, number>;
   readonly groundEdgeReleaseStates: Map<string, GroundEdgeReleaseState>;
@@ -73,7 +73,7 @@ export function appendPhysicsRestFrames(
     )
       break;
 
-    if (step % sampleEvery !== 0) continue;
+    if (!frames || step % sampleEvery !== 0) continue;
 
     const t = simulationMs + elapsedMs;
     dice.forEach((die, index) => {
@@ -88,16 +88,17 @@ export function appendPhysicsRestFrames(
   }
 
   const finalT = simulationMs + elapsedMs;
-  dice.forEach((die, index) => {
-    if (frames[index].at(-1)?.t === finalT) return;
-    const p = die.body.translation();
-    const q = die.body.rotation();
-    frames[index].push({
-      t: finalT,
-      p: [round(p.x), round(p.y), round(p.z)],
-      q: [round(q.x), round(q.y), round(q.z), round(q.w)],
+  if (frames)
+    dice.forEach((die, index) => {
+      if (frames[index].at(-1)?.t === finalT) return;
+      const p = die.body.translation();
+      const q = die.body.rotation();
+      frames[index].push({
+        t: finalT,
+        p: [round(p.x), round(p.y), round(p.z)],
+        q: [round(q.x), round(q.y), round(q.z), round(q.w)],
+      });
     });
-  });
 
   return simulationMs + elapsedMs;
 }

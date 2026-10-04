@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { isSimulationResult, type SimulationResult } from './index';
+import { isSimulationOutcome, isSimulationResult, type SimulationResult } from './index';
 
 const result: SimulationResult = {
   input: { rollId: 'roll', seed: 'seed', rolledSlots: [2], pourStyle: 'classic' },
@@ -101,5 +101,50 @@ describe('simulation result shape', () => {
   test('does not confuse shape validation with digest or outcome agreement', () => {
     expect(isSimulationResult(changed('replayDigest', 'incorrect-digest'))).toBe(true);
     expect(isSimulationResult(changed('authoritativeValuesBySlot.0.value', 1))).toBe(true);
+  });
+});
+
+describe('compact simulation outcome shape', () => {
+  const outcome = {
+    input: result.input,
+    authoritativeValuesBySlot: result.authoritativeValuesBySlot,
+  };
+  test('accepts the exact compact result without allocating or mutating its data', () => {
+    const copy = structuredClone(outcome);
+    expect(isSimulationOutcome(outcome)).toBe(true);
+    expect(outcome).toEqual(copy);
+    expect(isSimulationOutcome(result)).toBe(false);
+  });
+  test.each([
+    { ...outcome, extra: true },
+    { ...outcome, input: { ...outcome.input, extra: true } },
+    { ...outcome, input: { ...outcome.input, rolledSlots: [] } },
+    { ...outcome, input: { ...outcome.input, rolledSlots: [2, 1] } },
+    { ...outcome, input: { ...outcome.input, rolledSlots: [2, 2] } },
+    { ...outcome, input: { ...outcome.input, rolledSlots: [5] } },
+    { ...outcome, input: { ...outcome.input, rolledSlots: Array(1) } },
+    ...[0, 7, 1.5, NaN, Infinity, '2'].map((value) => ({
+      ...outcome,
+      authoritativeValuesBySlot: [{ slot: 2, value }],
+    })),
+    { ...outcome, authoritativeValuesBySlot: Array(1) },
+    { ...outcome, authoritativeValuesBySlot: [undefined] },
+    { ...outcome, authoritativeValuesBySlot: [] },
+    { ...outcome, authoritativeValuesBySlot: [{ slot: 1, value: 2 }] },
+    { ...outcome, authoritativeValuesBySlot: [{ slot: 2, value: 2, extra: true }] },
+  ])('rejects malformed compact outcomes: %p', (value) => {
+    expect(isSimulationOutcome(value)).toBe(false);
+  });
+  test('checks ascending slots and dense faces for every supported die count', () => {
+    for (let count = 1; count <= 5; count += 1) {
+      const slots = Array.from({ length: count }, (_, index) => index);
+      const input = { ...outcome.input, rolledSlots: slots };
+      const faces = slots.map((slot) => ({ slot, value: 6 }));
+      expect(isSimulationOutcome({ input, authoritativeValuesBySlot: faces })).toBe(true);
+      if (count > 1)
+        expect(
+          isSimulationOutcome({ input, authoritativeValuesBySlot: [...faces].reverse() }),
+        ).toBe(false);
+    }
   });
 });

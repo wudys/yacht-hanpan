@@ -9,7 +9,7 @@ import {
   ROLL_SIMULATION_EXECUTOR_ERROR_CODE,
   RollSimulationExecutorError,
 } from '@/roll/roll-simulation-executor';
-import { ROLL_WORKER_GOLDEN_DIGEST, ROLL_WORKER_GOLDEN_INPUT } from '@/roll/roll-worker-golden';
+import { ROLL_WORKER_GOLDEN_INPUT, ROLL_WORKER_GOLDEN_OUTCOME } from '@/roll/roll-worker-golden';
 import { WorkerRollSimulationExecutor } from '@/roll/worker-roll-simulation-executor';
 import type { ServerErrorOperation } from '@/runtime/error-reporter';
 
@@ -135,7 +135,9 @@ describe('worker roll simulation executor', () => {
         expect(report.error).toMatchObject({ name: 'TypeError', cause: { name: 'RangeError' } });
         expect((report.error as Error).stack).toContain('roll-simulation.test-worker.ts');
       }
-      expect((await executor.execute(goldenInput)).replayDigest).toBe(ROLL_WORKER_GOLDEN_DIGEST);
+      expect((await executor.execute(goldenInput)).authoritativeValuesBySlot).toEqual(
+        ROLL_WORKER_GOLDEN_OUTCOME,
+      );
       expect(executor.stats()).toMatchObject({
         readyWorkers: 1,
         running: 0,
@@ -231,8 +233,7 @@ describe('worker roll simulation executor', () => {
     try {
       await executor.start();
       const result = await executor.execute(goldenInput);
-      expect(result.replayDigest).toBe(ROLL_WORKER_GOLDEN_DIGEST);
-      expect(result.authoritativeValuesBySlot).toEqual([{ slot: 0, value: 3 }]);
+      expect(result.authoritativeValuesBySlot).toEqual(ROLL_WORKER_GOLDEN_OUTCOME);
       expect(executor.stats()).toMatchObject({ readyWorkers: 1, running: 0, queued: 0 });
     } finally {
       await executor.close();
@@ -267,7 +268,7 @@ describe('worker roll simulation executor', () => {
       });
       expect(await surviving).toMatchObject({
         ok: true,
-        value: { replayDigest: ROLL_WORKER_GOLDEN_DIGEST },
+        value: { authoritativeValuesBySlot: ROLL_WORKER_GOLDEN_OUTCOME },
       });
       expect(executor.stats().restarts).toBe(1);
       expect(diagnostics.reports).toMatchObject([{ operation: 'worker.exit', error: {} }]);
@@ -277,7 +278,12 @@ describe('worker roll simulation executor', () => {
     }
   });
 
-  test('rejects a malformed worker result and warms a replacement', async () => {
+  test.each([
+    'test-malformed',
+    'test-malformed-sparse',
+    'test-malformed-face',
+    'test-malformed-slot',
+  ])('rejects malformed compact response %s and warms a replacement', async (seed) => {
     const diagnostics = observeDiagnostics();
     const executor = new WorkerRollSimulationExecutor({
       size: 1,
@@ -287,14 +293,14 @@ describe('worker roll simulation executor', () => {
     });
     try {
       await executor.start();
-      expect(
-        await observe(executor.execute({ ...goldenInput, seed: 'test-malformed' })),
-      ).toMatchObject({
+      expect(await observe(executor.execute({ ...goldenInput, seed }))).toMatchObject({
         ok: false,
         error: { code: ROLL_SIMULATION_EXECUTOR_ERROR_CODE.UNAVAILABLE },
       });
       await waitFor(() => executor.stats().readyWorkers === 1);
-      expect((await executor.execute(goldenInput)).replayDigest).toContain('sha256-q4-v2:');
+      expect((await executor.execute(goldenInput)).authoritativeValuesBySlot).toEqual(
+        ROLL_WORKER_GOLDEN_OUTCOME,
+      );
       expect(executor.stats().restarts).toBe(1);
       expect(diagnostics.reports).toMatchObject([{ operation: 'worker.response', error: {} }]);
     } finally {
@@ -323,7 +329,7 @@ describe('worker roll simulation executor', () => {
         ok: false,
         error: { code: ROLL_SIMULATION_EXECUTOR_ERROR_CODE.UNAVAILABLE },
       });
-      expect((await queued).replayDigest).toContain('sha256-q4-v2:');
+      expect((await queued).authoritativeValuesBySlot).toEqual(ROLL_WORKER_GOLDEN_OUTCOME);
       expect(executor.stats()).toMatchObject({ readyWorkers: 1, restarts: 1 });
       expect(diagnostics.reports).toMatchObject([{ operation: 'worker.timeout', error: {} }]);
     } finally {
@@ -401,7 +407,7 @@ describe('worker roll simulation executor', () => {
       jest.advanceTimersByTime(399);
       expect(await queued).toMatchObject({
         ok: true,
-        value: { replayDigest: ROLL_WORKER_GOLDEN_DIGEST },
+        value: { authoritativeValuesBySlot: ROLL_WORKER_GOLDEN_OUTCOME },
       });
       expect(executor.stats()).toMatchObject({ running: 0, queued: 0, restarts: 0 });
     } finally {
@@ -432,7 +438,7 @@ describe('worker roll simulation executor', () => {
           ok: false,
           error: { code: ROLL_SIMULATION_EXECUTOR_ERROR_CODE.UNAVAILABLE },
         });
-        expect((await laterQueued).replayDigest).toContain('sha256-q4-v2:');
+        expect((await laterQueued).authoritativeValuesBySlot).toEqual(ROLL_WORKER_GOLDEN_OUTCOME);
         expect(executor.stats()).toMatchObject({
           readyWorkers: 1,
           running: 0,
@@ -491,7 +497,9 @@ describe('worker roll simulation executor', () => {
 
       rmSync(attemptLog);
       await waitFor(() => executor.stats().readyWorkers === 1);
-      expect((await executor.execute(goldenInput)).replayDigest).toContain('sha256-q4-v2:');
+      expect((await executor.execute(goldenInput)).authoritativeValuesBySlot).toEqual(
+        ROLL_WORKER_GOLDEN_OUTCOME,
+      );
       expect(executor.stats()).toMatchObject({ running: 0, queued: 0, restarts: 1 });
       expect(
         diagnostics.reports.every(

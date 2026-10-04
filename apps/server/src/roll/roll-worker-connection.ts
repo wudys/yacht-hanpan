@@ -1,6 +1,6 @@
 import { Worker } from 'node:worker_threads';
 
-import type { SimulationInput, SimulationResult } from '@repo/dice-simulation/contract';
+import type { SimulationInput, SimulationOutcome } from '@repo/dice-simulation/contract';
 
 import {
   ROLL_SIMULATION_EXECUTOR_ERROR_CODE,
@@ -38,7 +38,7 @@ interface RollWorkerConnectionOptions {
 
 interface PendingRun {
   readonly id: number;
-  readonly resolve: (result: SimulationResult) => void;
+  readonly resolve: (result: SimulationOutcome) => void;
   readonly reject: (error: RollSimulationExecutorError) => void;
 }
 
@@ -89,12 +89,12 @@ export class RollWorkerConnection {
     return this.#startPromise;
   }
 
-  public run(id: number, input: SimulationInput): Promise<SimulationResult> {
+  public run(id: number, input: SimulationInput): Promise<SimulationOutcome> {
     const worker = this.#worker;
     if (!this.#ready || this.#current !== null || worker === null) {
       return Promise.reject(unavailable());
     }
-    return new Promise<SimulationResult>((resolve, reject) => {
+    return new Promise<SimulationOutcome>((resolve, reject) => {
       this.#current = { id, resolve, reject };
       try {
         worker.postMessage({ kind: 'run', id, input } satisfies RollWorkerRequest);

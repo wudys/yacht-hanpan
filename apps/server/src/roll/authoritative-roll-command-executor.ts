@@ -1,9 +1,9 @@
 import {
-  createReplayDigest,
+  isSimulationOutcome,
   parseSimulationInput,
   type PourStyle,
   type SimulationInput,
-  type SimulationResult,
+  type SimulationOutcome,
 } from '@repo/dice-simulation/contract';
 import { parseResolvedRollArtifact, RESOLVED_ROLL_TYPE } from '@repo/game-protocol/socket';
 import type { CompatibilityContract } from '@repo/game-protocol/version';
@@ -40,16 +40,15 @@ export function createAuthoritativeRollCommandExecutor(
 ): RollCommandExecutor {
   return {
     async execute({ rolledSlots }: RollCommandExecutionInput): Promise<RollCommandExecution> {
-      const input: SimulationInput = {
-        rollId: dependencies.recipeSource.createRollId(),
-        seed: dependencies.recipeSource.createRollSeed(),
-        rolledSlots,
-        pourStyle: dependencies.recipeSource.createPourStyle(),
-      };
-
       try {
+        const input = parseSimulationInput({
+          rollId: dependencies.recipeSource.createRollId(),
+          seed: dependencies.recipeSource.createRollSeed(),
+          rolledSlots,
+          pourStyle: dependencies.recipeSource.createPourStyle(),
+        });
         const result = await dependencies.simulation.execute(input);
-        const mismatch = await authoritativeResultMismatch(input, result);
+        const mismatch = authoritativeResultMismatch(input, result);
         if (mismatch !== null) {
           reportUnexpected(
             dependencies.reportUnexpected,
@@ -70,7 +69,6 @@ export function createAuthoritativeRollCommandExecutor(
             contract: dependencies.contract,
           },
           outcome: { authoritativeValuesBySlot: result.authoritativeValuesBySlot },
-          replayDigest: result.replayDigest,
         });
         return {
           ok: true,
@@ -96,26 +94,18 @@ export function createAuthoritativeRollCommandExecutor(
   };
 }
 
-async function authoritativeResultMismatch(
+function authoritativeResultMismatch(
   expectedInput: SimulationInput,
-  result: SimulationResult,
-): Promise<
-  'request_mismatch' | 'timeline_mismatch' | 'outcome_mismatch' | 'digest_mismatch' | null
-> {
-  const actualInput = parseSimulationInput(result.input);
-  if (JSON.stringify(actualInput) !== JSON.stringify(parseSimulationInput(expectedInput)))
-    return 'request_mismatch';
-  if (
-    result.timeline.rollId !== actualInput.rollId ||
-    result.timeline.seed !== actualInput.seed ||
-    result.timeline.dice.length !== actualInput.rolledSlots.length
-  ) {
-    return 'timeline_mismatch';
-  }
-  const timelineFaces = result.timeline.dice.map(({ slot, value }) => ({ slot, value }));
-  if (JSON.stringify(timelineFaces) !== JSON.stringify(result.authoritativeValuesBySlot))
-    return 'outcome_mismatch';
-  return (await createReplayDigest(actualInput, result.timeline)) === result.replayDigest
-    ? null
-    : 'digest_mismatch';
+  result: SimulationOutcome,
+): 'request_mismatch' | 'outcome_mismatch' | null {
+  // Custom executors share this authority boundary with the validated native IPC path.
+  if (!isSimulationOutcome(result)) return 'outcome_mismatch';
+  const actualInput = result.input;
+  return actualInput.rollId !== expectedInput.rollId ||
+    actualInput.seed !== expectedInput.seed ||
+    actualInput.pourStyle !== expectedInput.pourStyle ||
+    actualInput.rolledSlots.length !== expectedInput.rolledSlots.length ||
+    actualInput.rolledSlots.some((slot, index) => slot !== expectedInput.rolledSlots[index])
+    ? 'request_mismatch'
+    : null;
 }

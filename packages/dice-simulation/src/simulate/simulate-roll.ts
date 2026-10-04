@@ -2,20 +2,26 @@ import {
   createReplayDigest,
   parseSimulationInput,
   type SimulationInput,
+  type SimulationOutcome,
+  type SimulationReplay,
   type SimulationResult,
 } from '../contract';
-import { simulateRollTimeline } from './simulate-timeline';
+import { simulateRollPhysics } from './simulate-timeline';
+
+export async function simulateRollOutcome(input: SimulationInput): Promise<SimulationOutcome> {
+  return simulateRollPhysics(parseSimulationInput(input), false);
+}
+
+export async function simulateRollReplay(input: SimulationInput): Promise<SimulationReplay> {
+  return simulateRollPhysics(parseSimulationInput(input), true);
+}
 
 export async function simulateRoll(input: SimulationInput): Promise<SimulationResult> {
-  const parsedInput = parseSimulationInput(input);
-  const timeline = simulateRollTimeline(parsedInput);
-  const authoritativeValuesBySlot = timeline.dice.map(({ slot, value }) => ({ slot, value }));
-  const replayDigest = await createReplayDigest(parsedInput, timeline);
+  const replay = await simulateRollReplay(input);
+  const replayDigest = await createReplayDigest(replay.input, replay.timeline);
 
   return deepFreeze({
-    input: parsedInput,
-    timeline,
-    authoritativeValuesBySlot,
+    ...replay,
     replayDigest,
   });
 }

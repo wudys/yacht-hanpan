@@ -1761,7 +1761,6 @@ test.each([
           rolledSlots: [0, 1, 2, 3, 4],
         },
         outcome: { authoritativeValuesBySlot: [0, 1, 2, 3, 4].map((slot) => ({ slot, value: 6 })) },
-        replayDigest: `sha256-q4-v2:${'a'.repeat(64)}`,
       } as ResolvedRollArtifact;
       await act(async () => harness.sessions.publish(yachtGame, artifact));
       act(() => presentation.completePlayback(rollId));

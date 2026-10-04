@@ -1,4 +1,4 @@
-import { DICE_SIMULATION_CONTRACT, type DieSlot, POUR_STYLE } from '@repo/dice-simulation/contract';
+import { type DieSlot, POUR_STYLE } from '@repo/dice-simulation/contract';
 import * as v from 'valibot';
 
 import { parseWith } from '../internal/parse';
@@ -17,7 +17,6 @@ const dieSlotSchema = v.picklist([0, 1, 2, 3, 4]);
 const dieFaceSchema = v.picklist([1, 2, 3, 4, 5, 6]);
 const rolledSlotsSchema = v.pipe(v.array(dieSlotSchema), v.minLength(1), v.maxLength(5));
 const rolledFaceSchema = v.strictObject({ slot: dieSlotSchema, value: dieFaceSchema });
-const SHA256_HEX_PATTERN = /^[0-9a-f]{64}$/u;
 
 const resolvedRollArtifactSchema = v.pipe(
   v.strictObject({
@@ -38,16 +37,11 @@ const resolvedRollArtifactSchema = v.pipe(
     outcome: v.strictObject({
       authoritativeValuesBySlot: v.pipe(v.array(rolledFaceSchema), v.minLength(1), v.maxLength(5)),
     }),
-    replayDigest: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
   }),
   v.check((artifact) => {
     const replaySlots = artifact.replay.rolledSlots;
     const outcomeSlots = artifact.outcome.authoritativeValuesBySlot.map(({ slot }) => slot);
-    const digestParts = artifact.replayDigest.split(':');
     return (
-      digestParts.length === 2 &&
-      digestParts[0] === DICE_SIMULATION_CONTRACT.replayDigestVersion &&
-      SHA256_HEX_PATTERN.test(digestParts[1] ?? '') &&
       outcomeSlots.length === replaySlots.length &&
       isStrictlyAscending(replaySlots) &&
       isStrictlyAscending(outcomeSlots) &&

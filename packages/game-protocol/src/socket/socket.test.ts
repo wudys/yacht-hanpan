@@ -39,7 +39,6 @@ const roll = {
     contract,
   },
   outcome: { authoritativeValuesBySlot: [{ slot: 0, value: 6 }] },
-  replayDigest: `${DICE_SIMULATION_CONTRACT.replayDigestVersion}:${'a'.repeat(64)}`,
 } as const;
 
 const view = {

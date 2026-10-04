@@ -1,4 +1,4 @@
-import type { SimulationInput, SimulationResult } from '@repo/dice-simulation/contract';
+import type { SimulationInput, SimulationOutcome } from '@repo/dice-simulation/contract';
 
 import {
   ROLL_SIMULATION_EXECUTOR_ERROR_CODE,
@@ -30,7 +30,7 @@ interface PendingJob {
   readonly queuedAt: number;
   startedAt: number | null;
   timeout: ReturnType<typeof setTimeout> | null;
-  readonly resolve: (result: SimulationResult) => void;
+  readonly resolve: (result: SimulationOutcome) => void;
   readonly reject: (error: RollSimulationExecutorError) => void;
 }
 
@@ -91,7 +91,7 @@ export class WorkerRollSimulationExecutor implements RollSimulationExecutor {
     return this.#startPromise;
   }
 
-  public execute(input: SimulationInput): Promise<SimulationResult> {
+  public execute(input: SimulationInput): Promise<SimulationOutcome> {
     if (!this.#accepting || this.#closing) return Promise.reject(unavailable());
     const idle = this.#slots.find((slot) => slot.connection.ready && slot.current === null);
     if (!idle && this.#queue.length >= this.#maxQueued) {
@@ -101,7 +101,7 @@ export class WorkerRollSimulationExecutor implements RollSimulationExecutor {
       );
     }
 
-    const job = new Promise<SimulationResult>((resolve, reject) => {
+    const job = new Promise<SimulationOutcome>((resolve, reject) => {
       const pending: PendingJob = {
         id: (this.#nextJobId += 1),
         input,

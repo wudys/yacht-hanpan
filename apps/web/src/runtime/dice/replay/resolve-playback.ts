@@ -2,21 +2,19 @@ import {
   type DieFace,
   type DieSlot,
   type RollTimeline,
-  simulateRoll,
+  simulateRollReplay,
   type SimulationInput,
-  type SimulationResult,
+  type SimulationReplay,
 } from '@repo/dice-simulation';
 
 export type ResolvedRollPlaybackArtifact = Readonly<{
   replay: Readonly<Pick<SimulationInput, 'rollId' | 'seed' | 'rolledSlots' | 'pourStyle'>>;
   outcome: Readonly<{
-    authoritativeValuesBySlot: SimulationResult['authoritativeValuesBySlot'];
+    authoritativeValuesBySlot: SimulationReplay['authoritativeValuesBySlot'];
   }>;
-  replayDigest: string;
 }>;
 
 const PLAYBACK_FALLBACK_REASON = {
-  DIGEST_MISMATCH: 'DIGEST_MISMATCH',
   OUTCOME_MISMATCH: 'OUTCOME_MISMATCH',
   SIMULATION_FAILED: 'SIMULATION_FAILED',
 } as const;
@@ -30,6 +28,7 @@ type StaticDie = Readonly<{
 }>;
 
 type VerifiedRollPlayback = Readonly<{
+  // Compatibility is checked by the transport; playback verifies the ordered outcome.
   status: 'verified';
   rollId: string;
   timeline: RollTimeline;
@@ -44,11 +43,11 @@ type StaticRollFallback = Readonly<{
 }>;
 
 export type RollPlayback = VerifiedRollPlayback | StaticRollFallback;
-type RollSimulator = (input: SimulationInput) => Promise<SimulationResult>;
+type RollSimulator = (input: SimulationInput) => Promise<SimulationReplay>;
 
 function sameOutcome(
   expected: ResolvedRollPlaybackArtifact['outcome']['authoritativeValuesBySlot'],
-  actual: SimulationResult['authoritativeValuesBySlot'],
+  actual: SimulationReplay['authoritativeValuesBySlot'],
 ): boolean {
   return (
     expected.length === actual.length &&
@@ -60,7 +59,7 @@ function sameOutcome(
 
 export async function resolveRollPlayback(
   artifact: ResolvedRollPlaybackArtifact,
-  simulator: RollSimulator = simulateRoll,
+  simulator: RollSimulator = simulateRollReplay,
 ): Promise<RollPlayback> {
   const simulationInput: SimulationInput = {
     rollId: artifact.replay.rollId,
@@ -69,7 +68,7 @@ export async function resolveRollPlayback(
     pourStyle: artifact.replay.pourStyle,
   };
 
-  let result: SimulationResult;
+  let result: SimulationReplay;
   try {
     result = await simulator(simulationInput);
   } catch (cause) {
@@ -82,14 +81,6 @@ export async function resolveRollPlayback(
     };
   }
 
-  if (result.replayDigest !== artifact.replayDigest) {
-    return {
-      status: 'static-fallback',
-      rollId: artifact.replay.rollId,
-      reason: PLAYBACK_FALLBACK_REASON.DIGEST_MISMATCH,
-      dice: artifact.outcome.authoritativeValuesBySlot,
-    };
-  }
   if (!sameOutcome(artifact.outcome.authoritativeValuesBySlot, result.authoritativeValuesBySlot)) {
     return {
       status: 'static-fallback',

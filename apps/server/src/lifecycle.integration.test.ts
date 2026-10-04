@@ -1,4 +1,4 @@
-import { DICE_SIMULATION_CONTRACT, POUR_STYLE } from '@repo/dice-simulation/contract';
+import { POUR_STYLE } from '@repo/dice-simulation/contract';
 import { createGameClient } from '@repo/game-client-sdk';
 import { PUBLIC_ERROR_CODE } from '@repo/game-protocol/errors';
 import {
@@ -915,7 +915,6 @@ function resolvedRollArtifact(rollId: string) {
     outcome: {
       authoritativeValuesBySlot: [0, 1, 2, 3, 4].map((slot) => ({ slot, value: slot + 1 })),
     },
-    replayDigest: `${DICE_SIMULATION_CONTRACT.replayDigestVersion}:${'a'.repeat(64)}`,
   });
 }
 

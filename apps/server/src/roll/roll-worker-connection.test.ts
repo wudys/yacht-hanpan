@@ -4,7 +4,7 @@ import { describe, expect, spyOn, test } from 'bun:test';
 
 import { ROLL_SIMULATION_EXECUTOR_ERROR_CODE } from '@/roll/roll-simulation-executor';
 import { RollWorkerConnection, type RollWorkerTerminal } from '@/roll/roll-worker-connection';
-import { ROLL_WORKER_GOLDEN_DIGEST, ROLL_WORKER_GOLDEN_INPUT } from '@/roll/roll-worker-golden';
+import { ROLL_WORKER_GOLDEN_INPUT, ROLL_WORKER_GOLDEN_OUTCOME } from '@/roll/roll-worker-golden';
 import type { ServerErrorOperation } from '@/runtime/error-reporter';
 
 const workerUrl = new URL('../../test/fixtures/roll-simulation.test-worker.ts', import.meta.url);
@@ -25,8 +25,8 @@ describe('roll worker connection', () => {
       await first;
       const input = { ...ROLL_WORKER_GOLDEN_INPUT, seed: 'test-wrong-id' };
       expect((await connection.run(1, input)).input).toEqual(input);
-      expect((await connection.run(2, ROLL_WORKER_GOLDEN_INPUT)).replayDigest).toBe(
-        ROLL_WORKER_GOLDEN_DIGEST,
+      expect((await connection.run(2, ROLL_WORKER_GOLDEN_INPUT)).authoritativeValuesBySlot).toEqual(
+        ROLL_WORKER_GOLDEN_OUTCOME,
       );
       expect(reports).toEqual([]);
       expect(terminal).toEqual([]);

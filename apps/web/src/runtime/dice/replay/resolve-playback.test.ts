@@ -1,8 +1,8 @@
+import { simulateRollReplay } from '@repo/dice-simulation';
 import {
-  DICE_SIMULATION_CONTRACT,
   POUR_STYLE,
   type SimulationInput,
-  type SimulationResult,
+  type SimulationReplay,
 } from '@repo/dice-simulation/contract';
 import { describe, expect, test, vi } from 'vitest';
 
@@ -13,9 +13,7 @@ import {
 
 // These tests inject simulation results; real WASM replay is covered by product integration.
 vi.mock('@repo/dice-simulation', () => ({
-  simulateRoll: () => {
-    throw new Error('Use the injected simulation fixture');
-  },
+  simulateRollReplay: vi.fn(),
 }));
 
 const artifact: ResolvedRollPlaybackArtifact = {
@@ -31,14 +29,12 @@ const artifact: ResolvedRollPlaybackArtifact = {
       { slot: 2, value: 5 },
     ],
   },
-  replayDigest: `${DICE_SIMULATION_CONTRACT.replayDigestVersion}:${'a'.repeat(64)}`,
 };
 
-function result(input: SimulationInput, digest: string = artifact.replayDigest): SimulationResult {
+function result(input: SimulationInput): SimulationReplay {
   return {
     input,
     authoritativeValuesBySlot: artifact.outcome.authoritativeValuesBySlot,
-    replayDigest: digest,
     timeline: {
       rollId: input.rollId,
       seed: input.seed,
@@ -109,13 +105,57 @@ describe('resolveRollPlayback', () => {
     }
   });
 
-  test('digest mismatch never face-forces the reconstructed timeline', async () => {
-    const playback = await resolveRollPlayback(artifact, async (input) =>
-      result(input, 'sha256:bad'),
-    );
-    expect(playback).toMatchObject({ status: 'static-fallback', reason: 'DIGEST_MISMATCH' });
-    expect(playback).not.toHaveProperty('timeline');
+  test('uses the replay API without requiring a diagnostic digest', async () => {
+    vi.mocked(simulateRollReplay).mockImplementationOnce(async (input) => result(input));
+    const playback = await resolveRollPlayback(artifact);
+
+    expect(playback.status).toBe('verified');
+    expect(simulateRollReplay).toHaveBeenCalledWith(artifact.replay);
   });
+
+  test.each([
+    { faces: [{ slot: 0, value: 2 }] },
+    {
+      faces: [
+        { slot: 0, value: 2 },
+        { slot: 2, value: 5 },
+        { slot: 4, value: 1 },
+      ],
+    },
+    {
+      faces: [
+        { slot: 0, value: 2 },
+        { slot: 1, value: 5 },
+      ],
+    },
+    {
+      faces: [
+        { slot: 2, value: 5 },
+        { slot: 0, value: 2 },
+      ],
+    },
+    {
+      faces: [
+        { slot: 0, value: 2 },
+        { slot: 0, value: 5 },
+      ],
+    },
+  ] satisfies { faces: SimulationReplay['authoritativeValuesBySlot'] }[])(
+    'rejects mismatched ordered slots %j',
+    async ({ faces }) => {
+      const playback = await resolveRollPlayback(artifact, async (input) => ({
+        ...result(input),
+        authoritativeValuesBySlot: faces,
+      }));
+
+      expect(playback).toMatchObject({
+        status: 'static-fallback',
+        reason: 'OUTCOME_MISMATCH',
+        dice: artifact.outcome.authoritativeValuesBySlot,
+      });
+      expect(playback).not.toHaveProperty('timeline');
+    },
+  );
 
   test('simulation failures preserve the authoritative static outcome', async () => {
     const cause = new WebAssembly.RuntimeError('WASM failed');

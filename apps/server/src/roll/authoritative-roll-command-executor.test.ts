@@ -1,12 +1,11 @@
 import {
-  canonicalizeReplay,
   DICE_SIMULATION_CONTRACT,
-  isSimulationResult,
+  isSimulationOutcome,
   POUR_STYLE,
   type SimulationInput,
 } from '@repo/dice-simulation/contract';
 import { initializeDeterministicRapierForBun } from '@repo/dice-simulation/rapier/bun';
-import { simulateRoll } from '@repo/dice-simulation/simulate';
+import { simulateRollOutcome } from '@repo/dice-simulation/simulate';
 import { createCompatibilityContract } from '@repo/game-protocol/version';
 import { describe, expect, test } from 'bun:test';
 
@@ -36,7 +35,7 @@ describe('authoritative roll command executor', () => {
       simulation: {
         execute: async (input) => {
           received = input;
-          return await simulateRoll(input);
+          return await simulateRollOutcome(input);
         },
       },
     });
@@ -63,13 +62,14 @@ describe('authoritative roll command executor', () => {
       },
     });
     expect(lines).toEqual([]);
-    expect(JSON.stringify(result)).not.toMatch(/"(?:timeline|frames|target\w*)"\s*:/iu);
+    expect(JSON.stringify(result)).not.toMatch(
+      /"(?:timeline|frames|replayDigest|target\w*)"\s*:/iu,
+    );
   });
 
-  test.each(['digest', 'request', 'outcome'] as const)(
-    'fails closed when a shape-valid worker result has a %s mismatch',
+  test.each(['rollId', 'seed', 'pourStyle', 'rolledSlots', 'outcome'] as const)(
+    'fails closed when a compact worker result has a %s mismatch',
     async (mismatch) => {
-      await initializeDeterministicRapierForBun();
       const lines: string[] = [];
       const reports: Array<Parameters<ErrorReporter>> = [];
       const executor = createAuthoritativeRollCommandExecutor({
@@ -80,42 +80,33 @@ describe('authoritative roll command executor', () => {
         },
         contract: createCompatibilityContract('test-release'),
         recipeSource: {
-          createRollId: () => '8184fc0a-4e59-455d-a7c1-579a9ee96403',
-          createRollSeed: () => 'cd'.repeat(32),
+          createRollId: () => 'server-roll',
+          createRollSeed: () => 'server-seed',
           createPourStyle: () => POUR_STYLE.CLASSIC,
         },
         simulation: {
           execute: async (input) => {
-            const simulated = await simulateRoll(
-              mismatch === 'request' ? { ...input, seed: 'another-server-recipe' } : input,
-            );
-            const result =
-              mismatch === 'digest'
-                ? {
-                    ...simulated,
-                    replayDigest: `${DICE_SIMULATION_CONTRACT.replayDigestVersion}:${'0'.repeat(64)}`,
-                  }
-                : mismatch === 'outcome'
-                  ? {
-                      ...simulated,
-                      authoritativeValuesBySlot: simulated.authoritativeValuesBySlot.map(
-                        ({ slot, value }) => ({
-                          slot,
-                          value: value === 1 ? (2 as const) : (1 as const),
-                        }),
-                      ),
-                    }
-                  : simulated;
-            expect(isSimulationResult(result)).toBe(true);
+            const changedInput = {
+              ...input,
+              ...(mismatch === 'rollId' ? { rollId: 'other-roll' } : {}),
+              ...(mismatch === 'seed' ? { seed: 'other-seed' } : {}),
+              ...(mismatch === 'pourStyle' ? { pourStyle: POUR_STYLE.BURST } : {}),
+              ...(mismatch === 'rolledSlots' ? { rolledSlots: [1, 3] as const } : {}),
+            };
+            const result = {
+              input: changedInput,
+              authoritativeValuesBySlot: changedInput.rolledSlots.map((slot) => ({
+                slot,
+                value: 2 as const,
+              })),
+            };
+            if (mismatch === 'outcome') Reflect.deleteProperty(result.authoritativeValuesBySlot, 0);
+            expect(isSimulationOutcome(result)).toBe(mismatch !== 'outcome');
             return result;
           },
         },
       });
-
-      expect(await executor.execute({ rolledSlots })).toEqual({
-        ok: false,
-        reason: 'unavailable',
-      });
+      expect(await executor.execute({ rolledSlots })).toEqual({ ok: false, reason: 'unavailable' });
       expect(reports).toHaveLength(1);
       expect(reports[0]?.[0]).toBeInstanceOf(Error);
       expect(reports[0]?.[1]).toBe('roll.result');
@@ -123,7 +114,7 @@ describe('authoritative roll command executor', () => {
         {
           level: 'error',
           event: 'roll.result.rejected',
-          reason: `${mismatch}_mismatch`,
+          reason: mismatch === 'outcome' ? 'outcome_mismatch' : 'request_mismatch',
         },
       ]);
     },
@@ -156,36 +147,6 @@ describe('authoritative roll command executor', () => {
       expect(reports).toEqual([]);
     },
   );
-
-  test('fails closed for a sparse tuple even when its null serialization has a matching digest', async () => {
-    await initializeDeterministicRapierForBun();
-    const executor = createAuthoritativeRollCommandExecutor({
-      logger: createJsonLogger(() => undefined),
-      contract: createCompatibilityContract('test-release'),
-      recipeSource: {
-        createRollId: () => '8184fc0a-4e59-455d-a7c1-579a9ee96403',
-        createRollSeed: () => 'sparse-authoritative-result',
-        createPourStyle: () => POUR_STYLE.CLASSIC,
-      },
-      simulation: {
-        execute: async (input) => {
-          const result = structuredClone(await simulateRoll(input));
-          const canonical = JSON.parse(canonicalizeReplay(input, result.timeline));
-          // A hole formerly became null in the first die position tuple's digest data.
-          canonical[2][4][1][2][0][1][1] = null;
-          const replayDigest = `${DICE_SIMULATION_CONTRACT.replayDigestVersion}:${new Bun.CryptoHasher(
-            'sha256',
-          )
-            .update(JSON.stringify(canonical))
-            .digest('hex')}`;
-          Reflect.deleteProperty(result.timeline.dice[0]!.frames[0]!.p, 1);
-          return { ...result, replayDigest };
-        },
-      },
-    });
-
-    expect(await executor.execute({ rolledSlots })).toEqual({ ok: false, reason: 'unavailable' });
-  });
 
   test.each([new Error('private exception detail'), 'private exception detail'])(
     'reports unexpected simulation failure without exception details: %p',

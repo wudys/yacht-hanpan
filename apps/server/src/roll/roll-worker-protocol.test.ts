@@ -1,5 +1,5 @@
 import { initializeDeterministicRapierForBun } from '@repo/dice-simulation/rapier/bun';
-import { simulateRoll } from '@repo/dice-simulation/simulate';
+import { simulateRollOutcome } from '@repo/dice-simulation/simulate';
 import { expect, test } from 'bun:test';
 
 import { ROLL_WORKER_GOLDEN_DIGEST } from '@/roll/roll-worker-golden';
@@ -25,9 +25,9 @@ test('accepts only exact internal worker response envelopes', () => {
   expect(() => parseRollWorkerResponse({ kind: 'private-error', message: 'raw' })).toThrow();
 });
 
-test('rejects a sparse coordinate tuple preserved by worker structuredClone', async () => {
+test('rejects sparse outcomes preserved by worker structuredClone', async () => {
   await initializeDeterministicRapierForBun();
-  const result = await simulateRoll({
+  const result = await simulateRollOutcome({
     rollId: 'worker-sparse-result',
     seed: 'worker-sparse-result',
     rolledSlots: [0],
@@ -39,9 +39,9 @@ test('rejects a sparse coordinate tuple preserved by worker structuredClone', as
     result,
   });
   const malformed = structuredClone(result);
-  Reflect.deleteProperty(malformed.timeline.dice[0]!.frames[0]!.p, 1);
+  Reflect.deleteProperty(malformed.authoritativeValuesBySlot, 0);
   const message = structuredClone({ kind: 'result', id: 1, result: malformed });
-  expect(1 in message.result.timeline.dice[0]!.frames[0]!.p).toBe(false);
+  expect(0 in message.result.authoritativeValuesBySlot).toBe(false);
   expect(() => parseRollWorkerResponse(message)).toThrow('Invalid roll worker response');
 });
 

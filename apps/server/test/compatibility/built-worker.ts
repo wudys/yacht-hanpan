@@ -4,27 +4,22 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import {
-  createReplayDigest,
-  isSimulationResult,
-  type SimulationResult,
-} from '@repo/dice-simulation/contract';
+import { isSimulationOutcome, type SimulationOutcome } from '@repo/dice-simulation/contract';
 
 import { ROLL_SIMULATION_EXECUTOR_ERROR_CODE } from '@/roll/roll-simulation-executor';
-import { ROLL_WORKER_GOLDEN_DIGEST, ROLL_WORKER_GOLDEN_INPUT } from '@/roll/roll-worker-golden';
+import {
+  ROLL_WORKER_GOLDEN_DIGEST,
+  ROLL_WORKER_GOLDEN_INPUT,
+  ROLL_WORKER_GOLDEN_OUTCOME,
+} from '@/roll/roll-worker-golden';
 import { WorkerRollSimulationExecutor } from '@/roll/worker-roll-simulation-executor';
 
 export const builtWorkerUrl = new URL('../../dist/roll-simulation.worker.js', import.meta.url);
 
-export async function assertGoldenResult(result: SimulationResult): Promise<void> {
-  assert.ok(isSimulationResult(result));
+export async function assertGoldenResult(result: SimulationOutcome): Promise<void> {
+  assert.ok(isSimulationOutcome(result));
   assert.deepEqual(result.input, ROLL_WORKER_GOLDEN_INPUT);
-  assert.equal(result.replayDigest, ROLL_WORKER_GOLDEN_DIGEST);
-  assert.equal(
-    await createReplayDigest(ROLL_WORKER_GOLDEN_INPUT, result.timeline),
-    ROLL_WORKER_GOLDEN_DIGEST,
-  );
-  assert.deepEqual(result.authoritativeValuesBySlot, [{ slot: 0, value: 3 }]);
+  assert.deepEqual(result.authoritativeValuesBySlot, ROLL_WORKER_GOLDEN_OUTCOME);
 }
 
 export async function verifyBuiltWorker(): Promise<void> {

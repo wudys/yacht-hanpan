@@ -1,4 +1,4 @@
-import { DICE_SIMULATION_CONTRACT, POUR_STYLE } from '@repo/dice-simulation/contract';
+import { POUR_STYLE } from '@repo/dice-simulation/contract';
 import { PUBLIC_ERROR_CODE } from '@repo/game-protocol/errors';
 import {
   parseCancelRoomRequest,
@@ -166,7 +166,6 @@ function rollArtifact() {
         { slot: 4, value: 5 },
       ],
     },
-    replayDigest: `${DICE_SIMULATION_CONTRACT.replayDigestVersion}:${'a'.repeat(64)}`,
   });
 }
 

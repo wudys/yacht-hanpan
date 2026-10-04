@@ -298,7 +298,7 @@ it('strips arbitrary exception names, mechanisms and context while preserving fi
         operation: 'roll',
         stage: 'response',
         error_code: 'INVALID_RESPONSE',
-        replay_reason: 'DIGEST_MISMATCH',
+        replay_reason: 'OUTCOME_MISMATCH',
         token: 'SECRET',
       },
       exception: {
@@ -323,7 +323,7 @@ it('strips arbitrary exception names, mechanisms and context while preserving fi
     operation: 'roll',
     stage: 'response',
     error_code: 'INVALID_RESPONSE',
-    replay_reason: 'DIGEST_MISMATCH',
+    replay_reason: 'OUTCOME_MISMATCH',
   });
   expect(safe?.exception?.values?.[0]?.mechanism?.handled).toBe(true);
   expect(JSON.stringify(safe)).not.toContain('SECRET');

@@ -24,13 +24,7 @@ export class SimulationInputError extends Error {
 const INPUT_KEYS = ['pourStyle', 'rollId', 'rolledSlots', 'seed'] as const;
 
 export function parseSimulationInput(value: unknown): SimulationInput {
-  if (!isExactInputObject(value)) throw new SimulationInputError();
-  if (!isBoundedIdentifier(value.rollId) || !isBoundedIdentifier(value.seed)) {
-    throw new SimulationInputError();
-  }
-  if (!isPourStyle(value.pourStyle) || !isRolledSlots(value.rolledSlots)) {
-    throw new SimulationInputError();
-  }
+  if (!isSimulationInput(value)) throw new SimulationInputError();
 
   return Object.freeze({
     rollId: value.rollId,
@@ -38,6 +32,17 @@ export function parseSimulationInput(value: unknown): SimulationInput {
     rolledSlots: Object.freeze([...value.rolledSlots]),
     pourStyle: value.pourStyle,
   });
+}
+
+/** Validates an existing input without allocating a parsed copy. */
+export function isSimulationInput(value: unknown): value is SimulationInput {
+  return (
+    isExactInputObject(value) &&
+    isBoundedIdentifier(value.rollId) &&
+    isBoundedIdentifier(value.seed) &&
+    isPourStyle(value.pourStyle) &&
+    isRolledSlots(value.rolledSlots)
+  );
 }
 
 function isExactInputObject(value: unknown): value is Record<string, unknown> {

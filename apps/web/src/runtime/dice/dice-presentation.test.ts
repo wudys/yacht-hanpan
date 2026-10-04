@@ -38,7 +38,6 @@ function artifact(
     outcome: {
       authoritativeValuesBySlot: values.map((value, slot) => ({ slot, value })),
     },
-    replayDigest: `sha256-q4-v2:${'a'.repeat(64)}`,
   } as ResolvedRollArtifact;
 }
 
@@ -386,7 +385,7 @@ describe('DicePresentation', () => {
     const fallback: RollPlayback = {
       status: 'static-fallback',
       rollId: 'roll-fallback',
-      reason: 'DIGEST_MISMATCH',
+      reason: 'OUTCOME_MISMATCH',
       dice: [],
     };
     const resolver = vi.fn(async (input: ResolvedRollArtifact) => ({
@@ -411,8 +410,8 @@ describe('DicePresentation', () => {
     expect(presentation.getSnapshot()).toMatchObject({ phase: 'rolling', playback: fallback });
     expect(requireRefreshAfterSynchronization).toHaveBeenCalledTimes(1);
     expect(requestSynchronization).not.toHaveBeenCalled();
-    expect(warn).toHaveBeenCalledWith('dice_replay_static_fallback', 'DIGEST_MISMATCH');
-    expect(requireRefreshAfterSynchronization).toHaveBeenCalledWith('DIGEST_MISMATCH');
+    expect(warn).toHaveBeenCalledWith('dice_replay_static_fallback', 'OUTCOME_MISMATCH');
+    expect(requireRefreshAfterSynchronization).toHaveBeenCalledWith('OUTCOME_MISMATCH');
     presentation.completePlayback('roll-fallback');
     publish({ connection: 'connected' });
     expect(presentation.getSnapshot()).toMatchObject({ phase: 'rolling', playback: fallback });

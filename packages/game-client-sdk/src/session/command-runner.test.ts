@@ -31,7 +31,6 @@ const ROLL = parseResolvedRollArtifact({
     contract: createCompatibilityContract('release-1'),
   },
   outcome: { authoritativeValuesBySlot: [{ slot: 0, value: 4 }] },
-  replayDigest: `sha256-q4-v2:${'a'.repeat(64)}`,
 });
 
 function playingGame(stateVersion = 2, turnId = TURN_ID) {

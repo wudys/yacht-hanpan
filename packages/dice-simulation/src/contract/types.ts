@@ -70,9 +70,17 @@ export type RolledFace = Readonly<{
   value: DieFace;
 }>;
 
-export type SimulationResult = Readonly<{
+export type SimulationOutcome = Readonly<{
   input: SimulationInput;
-  timeline: RollTimeline;
   authoritativeValuesBySlot: readonly RolledFace[];
-  replayDigest: string;
 }>;
+
+export type SimulationReplay = SimulationOutcome &
+  Readonly<{
+    timeline: RollTimeline;
+  }>;
+
+export type SimulationResult = SimulationReplay &
+  Readonly<{
+    replayDigest: string;
+  }>;

@@ -2,7 +2,7 @@ import { appendFileSync, existsSync } from 'node:fs';
 import { parentPort } from 'node:worker_threads';
 
 import { initializeDeterministicRapierForBun } from '@repo/dice-simulation/rapier/bun';
-import { simulateRoll } from '@repo/dice-simulation/simulate';
+import { simulateRollOutcome } from '@repo/dice-simulation/simulate';
 
 import { ROLL_WORKER_GOLDEN_DIGEST } from '@/roll/roll-worker-golden';
 import {
@@ -72,7 +72,21 @@ async function run(request: Extract<RollWorkerRequest, { readonly kind: 'run' }>
         error: serializeRollWorkerError(new Error('unmatched job response')),
       } satisfies RollWorkerResponse);
     }
-    const result = await simulateRoll(request.input);
+    if (request.input.seed.startsWith('test-malformed-')) {
+      const result = {
+        input: request.input,
+        authoritativeValuesBySlot: request.input.rolledSlots.map((slot) => ({ slot, value: 2 })),
+      };
+      if (request.input.seed === 'test-malformed-sparse')
+        Reflect.deleteProperty(result.authoritativeValuesBySlot, 0);
+      if (request.input.seed === 'test-malformed-face')
+        result.authoritativeValuesBySlot[0]!.value = Infinity;
+      if (request.input.seed === 'test-malformed-slot')
+        result.authoritativeValuesBySlot[0]!.slot = 4;
+      port.postMessage({ kind: 'result', id: request.id, result });
+      return;
+    }
+    const result = await simulateRollOutcome(request.input);
     port.postMessage({ kind: 'result', id: request.id, result } satisfies RollWorkerResponse);
   } catch (error) {
     port.postMessage({

@@ -36,7 +36,7 @@ extend({
 const FIRST_PLAYBACK: RollPlayback = {
   status: 'static-fallback',
   rollId: 'roll-fallback-a',
-  reason: 'DIGEST_MISMATCH',
+  reason: 'OUTCOME_MISMATCH',
   dice: [
     { slot: 1, value: 2 },
     { slot: 4, value: 6 },

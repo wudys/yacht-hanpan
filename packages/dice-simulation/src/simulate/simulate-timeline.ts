@@ -5,6 +5,8 @@ import {
   parseSimulationInput,
   type RollTimeline,
   type SimulationInput,
+  type SimulationOutcome,
+  type SimulationReplay,
 } from '../contract';
 import { assertRapierReady } from '../rapier/state';
 import { createCupFrame, createCupMotion, cupTransformAt } from './internal/cup-motion';
@@ -71,7 +73,25 @@ export function simulateRollTimeline(
   input: SimulationInput,
   inspectPhysics?: (snapshot: PhysicsCompletionSnapshot) => void,
 ): RollTimeline {
-  const { rollId, seed, rolledSlots, pourStyle } = parseSimulationInput(input);
+  return simulateRollPhysics(parseSimulationInput(input), true, inspectPhysics).timeline;
+}
+
+/** Internal core. Callers own input validation; recording never changes physics cadence. */
+export function simulateRollPhysics(
+  input: SimulationInput,
+  recordTimeline: true,
+  inspectPhysics?: (snapshot: PhysicsCompletionSnapshot) => void,
+): SimulationReplay;
+export function simulateRollPhysics(
+  input: SimulationInput,
+  recordTimeline: false,
+): SimulationOutcome;
+export function simulateRollPhysics(
+  input: SimulationInput,
+  recordTimeline: boolean,
+  inspectPhysics?: (snapshot: PhysicsCompletionSnapshot) => void,
+): SimulationReplay | SimulationOutcome {
+  const { rollId, seed, rolledSlots, pourStyle } = input;
   assertRapierReady();
   const diceCount = rolledSlots.length;
   const physics = createRollPhysicsConfig();
@@ -85,8 +105,8 @@ export function simulateRollTimeline(
     const dice = Array.from({ length: diceCount }, (_, index) =>
       createDieInCup(world, seed, index, diceCount, cup, physics),
     );
-    const frames: DieFrame[][] = dice.map(() => []);
-    const cupFrames: CupFrame[] = [];
+    const frames: DieFrame[][] | undefined = recordTimeline ? dice.map(() => []) : undefined;
+    const cupFrames: CupFrame[] | undefined = recordTimeline ? [] : undefined;
     const rollSimulationMs = Math.round(
       3100 +
         Math.max(0, diceCount - 3) * 180 +
@@ -170,16 +190,18 @@ export function simulateRollTimeline(
 
       const samplesEveryPourStep = t >= cup.pourAtMs && t < cup.releaseAtMs;
       if (!samplesEveryPourStep && step % sampleEvery !== 0 && step !== steps) continue;
-      dice.forEach((die, index) => {
-        const p = die.body.translation();
-        const q = die.body.rotation();
-        frames[index].push({
-          t,
-          p: [round(p.x), round(p.y), round(p.z)],
-          q: [round(q.x), round(q.y), round(q.z), round(q.w)],
+      if (frames && cupFrames) {
+        dice.forEach((die, index) => {
+          const p = die.body.translation();
+          const q = die.body.rotation();
+          frames[index].push({
+            t,
+            p: [round(p.x), round(p.y), round(p.z)],
+            q: [round(q.x), round(q.y), round(q.z), round(q.w)],
+          });
         });
-      });
-      cupFrames.push(createCupFrame(cup, t));
+        cupFrames.push(createCupFrame(cup, t));
+      }
 
       const minRolloutMs = diceCount >= 5 ? 1800 : 1400;
       const maxVisualRolloutMs = 2400;
@@ -209,6 +231,15 @@ export function simulateRollTimeline(
       { world, floor: tray.floor, walls: tray.walls },
     );
     const recognizedOutcomeValues = dice.map((die) => recognizeTopFace(die.body.rotation()));
+    const outcome: SimulationOutcome = Object.freeze({
+      input,
+      authoritativeValuesBySlot: Object.freeze(
+        rolledSlots.map((slot, index) =>
+          Object.freeze({ slot, value: recognizedOutcomeValues[index] }),
+        ),
+      ),
+    });
+    if (!frames || !cupFrames) return outcome;
     if (inspectPhysics) {
       inspectPhysics({
         simulationMs,
@@ -256,7 +287,7 @@ export function simulateRollTimeline(
         frames: frames[index],
       })),
     };
-    return timeline;
+    return { ...outcome, timeline };
   } finally {
     world.free();
   }

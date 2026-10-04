@@ -38,7 +38,7 @@ describe('compatibility contract', () => {
     const expected = createCompatibilityContract(RELEASE_ID);
     expect(() => assertExactCompatibility(expected, expected)).not.toThrow();
     expect(() =>
-      parseCompatibilityContract({ ...expected, gameProtocolVersion: 'game-protocol-v14' }),
+      parseCompatibilityContract({ ...expected, gameProtocolVersion: 'game-protocol-v15' }),
     ).toThrow(GameApiParseError);
     expect(() =>
       parseCompatibilityContract({ ...expected, timelineSchemaVersion: 'dice-timeline-v3' }),
@@ -48,7 +48,7 @@ describe('compatibility contract', () => {
     ).toThrow(GameApiParseError);
   });
 
-  test('response metadata contains only request and protocol IDs', () => {
+  test('response metadata accepts request and protocol IDs and rejects actionId', () => {
     const meta = parseWith(responseMetaSchema, {
       requestId: REQUEST_ID,
       gameProtocolVersion: GAME_PROTOCOL_VERSION,

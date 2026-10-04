@@ -4,7 +4,7 @@ import {
   SOCKET_EVENT,
 } from '@repo/game-protocol/socket';
 import { createCompatibilityContract } from '@repo/game-protocol/version';
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, jest, test } from 'bun:test';
 
 import { createSocketIoGameSocket } from './socket-io-adapter';
 
@@ -17,6 +17,7 @@ const authentication = parseSocketAuth({
 });
 
 function unresponsiveAuthenticationServer() {
+  const closed = Promise.withResolvers<void>();
   let opened!: () => void;
   const authenticating = new Promise<void>((resolve) => {
     opened = resolve;
@@ -43,9 +44,12 @@ function unresponsiveAuthenticationServer() {
       message(_socket, message) {
         if (String(message).startsWith('40')) opened();
       },
+      close() {
+        closed.resolve();
+      },
     },
   });
-  return { server, authenticating };
+  return { server, authenticating, closed: closed.promise };
 }
 
 describe('Socket.IO authentication boundary', () => {
@@ -120,22 +124,17 @@ describe('Socket.IO authentication boundary', () => {
         second.resolve();
       }
     });
-    let deadline: ReturnType<typeof setTimeout> | undefined;
     try {
       await socket.connect();
-      const deliveryDeadline = new Promise<void>((_resolve, reject) => {
-        deadline = setTimeout(() => reject(new Error('room state was not delivered')), 1000);
-      });
       sendUpdate(update);
-      await Promise.race([first.promise, deliveryDeadline]);
+      await first.promise;
       expect(received).toEqual([update]);
       unsubscribe();
       sendUpdate(secondUpdate);
-      await Promise.race([second.promise, deliveryDeadline]);
+      await second.promise;
       expect(observed).toEqual([update, secondUpdate]);
       expect(received).toEqual([update]);
     } finally {
-      clearTimeout(deadline);
       unsubscribe();
       stopObserving();
       socket.dispose();
@@ -233,41 +232,46 @@ describe('Socket.IO authentication boundary', () => {
   });
 
   test('ends an unacknowledged namespace authentication within 20 seconds', async () => {
-    const { server, authenticating } = unresponsiveAuthenticationServer();
+    const { server, authenticating, closed } = unresponsiveAuthenticationServer();
     const socket = createSocketIoGameSocket(
       `http://127.0.0.1:${server.port}`,
       () => authentication,
     );
-    let deadline: ReturnType<typeof setTimeout> | undefined;
     try {
+      jest.useFakeTimers();
+      let settled = false;
       const outcome = socket.connect().then(
-        () => 'connected',
-        () => 'failed',
+        () => {
+          settled = true;
+          return null;
+        },
+        (error: unknown) => {
+          settled = true;
+          return error;
+        },
       );
       await authenticating;
-      const result = await Promise.race([
-        outcome,
-        new Promise<string>((resolve) => {
-          deadline = setTimeout(() => resolve('still pending'), 21_000);
-        }),
-      ]);
-      expect(result).toBe('failed');
+      jest.advanceTimersByTime(19_999);
+      await Promise.resolve();
+      expect(settled).toBe(false);
+      jest.advanceTimersByTime(1);
+      expect(await outcome).toMatchObject({ message: 'Socket authentication timed out' });
+      await closed;
     } finally {
-      clearTimeout(deadline);
       socket.dispose();
+      jest.useRealTimers();
       await server.stop(true);
     }
-  }, 25_000);
+  });
 
   test.each(['disconnect', 'dispose'] as const)(
     '%s settles a pending authentication',
     async (end) => {
-      const { server, authenticating } = unresponsiveAuthenticationServer();
+      const { server, authenticating, closed } = unresponsiveAuthenticationServer();
       const socket = createSocketIoGameSocket(
         `http://127.0.0.1:${server.port}`,
         () => authentication,
       );
-      let deadline: ReturnType<typeof setTimeout> | undefined;
       try {
         const outcome = socket.connect().then(
           () => 'connected',
@@ -275,15 +279,9 @@ describe('Socket.IO authentication boundary', () => {
         );
         await authenticating;
         socket[end]();
-        const result = await Promise.race([
-          outcome,
-          new Promise<string>((resolve) => {
-            deadline = setTimeout(() => resolve('still pending'), 50);
-          }),
-        ]);
-        expect(result).toBe('failed');
+        expect(await outcome).toBe('failed');
+        await closed;
       } finally {
-        clearTimeout(deadline);
         socket.dispose();
         await server.stop(true);
       }

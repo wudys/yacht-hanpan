@@ -42,7 +42,8 @@ describe('Bun Socket.IO compatibility', () => {
     first.emit('compatibility:message', { roomId: 'room-a', value: 'room-only' });
 
     expect(await message).toEqual({ roomId: 'room-a', value: 'room-only' });
-    await Bun.sleep(25);
+    // The outsider's acknowledgement follows any preceding event on its transport.
+    await outsider.timeout(1_000).emitWithAck('compatibility:ping', { nonce: 'after-message' });
     expect(outsiderReceived).toBeFalse();
   });
 

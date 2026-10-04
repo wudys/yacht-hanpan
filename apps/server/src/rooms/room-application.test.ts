@@ -278,7 +278,7 @@ test.each(['join', 'cancel', 'resume', 'connect', 'sync', 'command'] as const)(
     };
     const result = requests[operation]();
     try {
-      expect(await Promise.race([result, Bun.sleep(50).then(() => null)])).toMatchObject({
+      expect(await result).toMatchObject({
         ok: false,
         error: { code: PUBLIC_ERROR_CODE.RATE_LIMITED },
       });

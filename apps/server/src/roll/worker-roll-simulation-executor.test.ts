@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Worker } from 'node:worker_threads';
 
-import { describe, expect, spyOn, test } from 'bun:test';
+import { describe, expect, jest, spyOn, test } from 'bun:test';
 
 import {
   ROLL_SIMULATION_EXECUTOR_ERROR_CODE,
@@ -188,12 +188,7 @@ describe('worker roll simulation executor', () => {
     });
     try {
       const started = observe(executor.start());
-      expect(
-        await Promise.race([
-          started,
-          Bun.sleep(150).then(() => ({ ok: true as const, value: 'timed-out' })),
-        ]),
-      ).toMatchObject({
+      expect(await started).toMatchObject({
         ok: false,
         error: { code: ROLL_SIMULATION_EXECUTOR_ERROR_CODE.UNAVAILABLE },
       });
@@ -217,12 +212,7 @@ describe('worker roll simulation executor', () => {
     try {
       await executor.close();
       expect(diagnostics.reports).toEqual([]);
-      expect(
-        await Promise.race([
-          started,
-          Bun.sleep(100).then(() => ({ ok: true as const, value: 'startup-pending' })),
-        ]),
-      ).toMatchObject({
+      expect(await started).toMatchObject({
         ok: false,
         error: { code: ROLL_SIMULATION_EXECUTOR_ERROR_CODE.UNAVAILABLE },
       });
@@ -268,11 +258,17 @@ describe('worker roll simulation executor', () => {
       await Promise.all([running, queued]);
       expect(diagnostics.reports).toEqual([]);
 
-      await expect(executor.execute({ ...goldenInput, seed: 'test-crash' })).rejects.toBeInstanceOf(
-        RollSimulationExecutorError,
-      );
-      await waitFor(() => executor.stats().readyWorkers === 1);
-      expect((await executor.execute(goldenInput)).replayDigest).toContain('sha256-q4-v2:');
+      const crashed = observe(executor.execute({ ...goldenInput, seed: 'test-crash' }));
+      const surviving = observe(executor.execute(goldenInput));
+      expect(executor.stats()).toMatchObject({ running: 1, queued: 1 });
+      expect(await crashed).toMatchObject({
+        ok: false,
+        error: { code: ROLL_SIMULATION_EXECUTOR_ERROR_CODE.UNAVAILABLE },
+      });
+      expect(await surviving).toMatchObject({
+        ok: true,
+        value: { replayDigest: ROLL_WORKER_GOLDEN_DIGEST },
+      });
       expect(executor.stats().restarts).toBe(1);
       expect(diagnostics.reports).toMatchObject([{ operation: 'worker.exit', error: {} }]);
     } finally {
@@ -292,10 +288,7 @@ describe('worker roll simulation executor', () => {
     try {
       await executor.start();
       expect(
-        await Promise.race([
-          observe(executor.execute({ ...goldenInput, seed: 'test-malformed' })),
-          Bun.sleep(1_000).then(() => ({ ok: true as const, value: 'timed-out' })),
-        ]),
+        await observe(executor.execute({ ...goldenInput, seed: 'test-malformed' })),
       ).toMatchObject({
         ok: false,
         error: { code: ROLL_SIMULATION_EXECUTOR_ERROR_CODE.UNAVAILABLE },
@@ -321,15 +314,12 @@ describe('worker roll simulation executor', () => {
     });
     try {
       await executor.start();
-      const hung = executor.execute({ ...goldenInput, seed: 'test-hang' });
+      jest.useFakeTimers();
+      const hung = observe(executor.execute({ ...goldenInput, seed: 'test-hang' }));
       const queued = executor.execute(goldenInput);
 
-      expect(
-        await Promise.race([
-          observe(hung),
-          Bun.sleep(150).then(() => ({ ok: true as const, value: 'timed-out' })),
-        ]),
-      ).toMatchObject({
+      jest.advanceTimersByTime(100);
+      expect(await hung).toMatchObject({
         ok: false,
         error: { code: ROLL_SIMULATION_EXECUTOR_ERROR_CODE.UNAVAILABLE },
       });
@@ -338,6 +328,7 @@ describe('worker roll simulation executor', () => {
       expect(diagnostics.reports).toMatchObject([{ operation: 'worker.timeout', error: {} }]);
     } finally {
       await executor.close();
+      jest.useRealTimers();
       expect(diagnostics.reports).toHaveLength(1);
     }
   });
@@ -400,14 +391,22 @@ describe('worker roll simulation executor', () => {
     });
     try {
       await executor.start();
-      const input = { ...goldenInput, seed: 'test-long-delay' };
-      const running = executor.execute(input);
-      const queued = executor.execute(input);
-      const results = await Promise.all([running, queued]);
-      expect(results.map((result) => result.input.seed)).toEqual([input.seed, input.seed]);
+      // Advance the executor clock independently of native worker/WASM speed.
+      jest.useFakeTimers();
+      const running = executor.execute(goldenInput);
+      const queued = observe(executor.execute(goldenInput));
+      expect(executor.stats()).toMatchObject({ running: 1, queued: 1 });
+      jest.advanceTimersByTime(399);
+      await running;
+      jest.advanceTimersByTime(399);
+      expect(await queued).toMatchObject({
+        ok: true,
+        value: { replayDigest: ROLL_WORKER_GOLDEN_DIGEST },
+      });
       expect(executor.stats()).toMatchObject({ running: 0, queued: 0, restarts: 0 });
     } finally {
       await executor.close();
+      jest.useRealTimers();
     }
   });
 
@@ -422,6 +421,7 @@ describe('worker roll simulation executor', () => {
     });
     try {
       await executor.start();
+      jest.useFakeTimers();
       const running = executor.execute({ ...goldenInput, seed: 'test-delay' });
       const queued = observe(executor.execute({ ...goldenInput, seed: 'test-crash' }));
       const now = spyOn(performance, 'now').mockReturnValue(performance.now() + 1_001);
@@ -445,6 +445,7 @@ describe('worker roll simulation executor', () => {
       }
     } finally {
       await executor.close();
+      jest.useRealTimers();
     }
   });
 
@@ -476,12 +477,7 @@ describe('worker roll simulation executor', () => {
       expect(
         diagnostics.reports.filter((report) => report.operation === 'worker.exit'),
       ).toHaveLength(1);
-      expect(
-        await Promise.race([
-          queued,
-          Bun.sleep(1_000).then(() => ({ ok: true as const, value: 'timed-out' })),
-        ]),
-      ).toMatchObject({
+      expect(await queued).toMatchObject({
         ok: false,
         error: { code: ROLL_SIMULATION_EXECUTOR_ERROR_CODE.UNAVAILABLE },
       });

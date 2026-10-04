@@ -1750,9 +1750,7 @@ describe('game session', () => {
     const pending = session.connect();
     session.disconnect();
 
-    expect(
-      await Promise.race([pending, Bun.sleep(20).then(() => ({ timedOut: true }) as const)]),
-    ).toMatchObject({
+    expect(await pending).toMatchObject({
       ok: false,
       error: { kind: 'transport', code: 'SOCKET_DISCONNECTED' },
     });

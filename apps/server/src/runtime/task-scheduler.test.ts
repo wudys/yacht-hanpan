@@ -1,17 +1,20 @@
-import { describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, jest, test } from 'bun:test';
 
 import { SystemTaskScheduler } from '@/runtime/task-scheduler';
 
+beforeEach(() => jest.useFakeTimers());
+afterEach(() => jest.useRealTimers());
+
 describe('SystemTaskScheduler', () => {
   test('reports rejected work instead of leaking an unhandled rejection', async () => {
-    const errors: unknown[] = [];
-    const scheduler = new SystemTaskScheduler({ now: () => 1_000 }, (error) => errors.push(error));
+    const reported = Promise.withResolvers<unknown>();
+    const scheduler = new SystemTaskScheduler({ now: () => 1_000 }, reported.resolve);
     const failure = new Error('scheduled failure');
 
     scheduler.schedule('room', 1_000, () => Promise.reject(failure));
-    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    jest.advanceTimersByTime(0);
 
-    expect(errors).toEqual([failure]);
+    expect(await reported.promise).toBe(failure);
     scheduler.close();
   });
 
@@ -26,7 +29,11 @@ describe('SystemTaskScheduler', () => {
       scheduler.schedule('room', 1_020, () => {
         calls.push('current');
       });
-      await new Promise<void>((resolve) => setTimeout(resolve, 30));
+      jest.advanceTimersByTime(19);
+      await Promise.resolve();
+      expect(calls).toEqual([]);
+      jest.advanceTimersByTime(1);
+      await Promise.resolve();
 
       expect(calls).toEqual(['current']);
     } finally {
@@ -43,7 +50,8 @@ describe('SystemTaskScheduler', () => {
         calls.push('cancelled');
       });
       scheduler.cancel('room');
-      await new Promise<void>((resolve) => setTimeout(resolve, 20));
+      jest.advanceTimersByTime(20);
+      await Promise.resolve();
 
       expect(calls).toEqual([]);
     } finally {
@@ -60,7 +68,8 @@ describe('SystemTaskScheduler', () => {
         calls.push('closed');
       });
       scheduler.close();
-      await new Promise<void>((resolve) => setTimeout(resolve, 20));
+      jest.advanceTimersByTime(20);
+      await Promise.resolve();
 
       expect(calls).toEqual([]);
     } finally {
@@ -76,7 +85,8 @@ describe('SystemTaskScheduler', () => {
     scheduler.schedule('room', 1_000, () => {
       calls.push('late');
     });
-    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    jest.advanceTimersByTime(0);
+    await Promise.resolve();
 
     expect(calls).toEqual([]);
   });

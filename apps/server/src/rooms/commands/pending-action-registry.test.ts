@@ -45,12 +45,9 @@ describe('pending action registry', () => {
       pending.run('room', 'seat:action', 'same', () => gate.promise),
     );
     try {
-      expect(
-        await Promise.race([
-          pending.run('room', 'seat:action', 'same', () => gate.promise),
-          Bun.sleep(20).then(() => null),
-        ]),
-      ).toEqual({ kind: 'saturated' });
+      expect(await pending.run('room', 'seat:action', 'same', () => gate.promise)).toEqual({
+        kind: 'saturated',
+      });
     } finally {
       gate.resolve(42);
       await Promise.all(waiting);

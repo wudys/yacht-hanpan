@@ -58,7 +58,6 @@ async function run(request: Extract<RollWorkerRequest, { readonly kind: 'run' }>
   try {
     if (request.input.seed === 'test-hang') return;
     if (request.input.seed === 'test-delay') await Bun.sleep(75);
-    if (request.input.seed === 'test-long-delay') await Bun.sleep(250);
     if (request.input.seed.startsWith('test-job-error-')) {
       throw new TypeError('test job failure', { cause: new RangeError('test job cause') });
     }

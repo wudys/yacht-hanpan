@@ -7,7 +7,7 @@ import {
   parseRoomView,
 } from '@repo/game-protocol/socket';
 import { createCompatibilityContract, GAME_PROTOCOL_VERSION } from '@repo/game-protocol/version';
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, jest, test } from 'bun:test';
 
 import { CLIENT_ERROR_CODE } from '../errors';
 import { createCommandRunner } from './command-runner';
@@ -509,14 +509,26 @@ describe('command runner', () => {
       signal: lifecycle.signal,
     });
 
-    const pending = runner.rollDice();
-    await Bun.sleep(2);
-    lifecycle.abort();
+    jest.useFakeTimers();
+    try {
+      const pending = runner.rollDice();
+      jest.advanceTimersByTime(1);
+      await Promise.resolve();
+      jest.advanceTimersByTime(4_999);
+      await Promise.resolve();
+      expect(emits).toBe(1);
+      lifecycle.abort();
 
-    expect(await pending).toMatchObject({
-      ok: false,
-      error: { kind: 'protocol', code: CLIENT_ERROR_CODE.SESSION_DISPOSED },
-    });
-    expect(emits).toBe(1);
+      expect(await pending).toMatchObject({
+        ok: false,
+        error: { kind: 'protocol', code: CLIENT_ERROR_CODE.SESSION_DISPOSED },
+      });
+      jest.advanceTimersByTime(10_000);
+      await Promise.resolve();
+      expect(emits).toBe(1);
+    } finally {
+      lifecycle.abort();
+      jest.useRealTimers();
+    }
   });
 });

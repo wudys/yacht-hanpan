@@ -1,6 +1,7 @@
 import {
   CUP_EXIT_HOLD_MS,
   type CupFrame,
+  DEFAULT_CUP_GEOMETRY,
   type DieFrame,
   parseSimulationInput,
   type RollTimeline,
@@ -11,7 +12,7 @@ import {
 import { assertRapierReady } from '../rapier/state';
 import { createCupFrame, createCupMotion, cupTransformAt } from './internal/cup-motion';
 import { CUP_EXIT_TAIL_MS } from './internal/cup-motion-progress';
-import { cupInteriorDimensions, DEFAULT_CUP_SPEC } from './internal/cup-spec';
+import { cupInteriorDimensions } from './internal/cup-timeline-dimensions';
 import {
   applyCupPourAssist,
   areDiceOutsideCup,
@@ -24,7 +25,7 @@ import {
   updatePhysicsCup,
 } from './internal/physics-cup';
 import { createDieInCup, createRollWorld, createTray } from './internal/physics-environment';
-import { appendPhysicsRestFrames } from './internal/physics-rest';
+import { runPhysicsRest } from './internal/physics-rest';
 import {
   areDicePhysicallyStable,
   areDiceReadablySettled,
@@ -100,8 +101,8 @@ export function simulateRollPhysics(
     const tray = createTray(world, physics);
 
     const cup = createCupMotion(seed, pourStyle);
-    const physicsCup = createPhysicsCup(world, cupTransformAt(cup, 0), DEFAULT_CUP_SPEC);
-    const shakeLid = createCupShakeLid(world, physicsCup, DEFAULT_CUP_SPEC);
+    const physicsCup = createPhysicsCup(world, cupTransformAt(cup, 0), DEFAULT_CUP_GEOMETRY);
+    const shakeLid = createCupShakeLid(world, physicsCup, DEFAULT_CUP_GEOMETRY);
     const dice = Array.from({ length: diceCount }, (_, index) =>
       createDieInCup(world, seed, index, diceCount, cup, physics),
     );
@@ -155,7 +156,9 @@ export function simulateRollPhysics(
       if (!released) applyCupPourAssist(physicsCup, dice, cup, t, exitedDice);
       if (!released) {
         for (const die of dice) {
-          if (haveDiceClearedCup(world, physicsCup, [die])) exitedDice.add(die.id);
+          if (!exitedDice.has(die.id) && haveDiceClearedCup(world, physicsCup, [die])) {
+            exitedDice.add(die.id);
+          }
         }
       }
       if (
@@ -220,7 +223,7 @@ export function simulateRollPhysics(
     if (!released) {
       throw new CupReleaseError(Math.round(steps * STEP * 1000), exitedDice.size, diceCount);
     }
-    simulationMs = appendPhysicsRestFrames(
+    simulationMs = runPhysicsRest(
       {
         dice,
         frames,

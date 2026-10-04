@@ -1,4 +1,4 @@
 /// <reference path="../rapier-glue.d.ts" />
 
-export * from '../browser-rapier-asset';
-export * from './initialize-rapier';
+export { DETERMINISTIC_RAPIER_WASM_FILE } from '../browser-rapier-asset';
+export { initializeDeterministicRapierForBrowser } from './initialize-rapier';

@@ -7,9 +7,9 @@ import type {
 } from '@dimforge/rapier3d-deterministic';
 import RAPIER from '@dimforge/rapier3d-deterministic';
 
+import { DEFAULT_CUP_GEOMETRY } from '../../contract/cup-geometry';
 import type { SimulatedCupMotion } from './cup-motion';
 import { cupTransformAt, quatFromEuler } from './cup-motion';
-import { DEFAULT_CUP_SPEC } from './cup-spec';
 import { rotateVectorByQuat } from './result-recognition';
 import type { RollPhysicsConfig } from './roll-physics';
 import {
@@ -41,11 +41,11 @@ export interface SimDie {
 export function createRollWorld(physics: RollPhysicsConfig): World {
   const world = new RAPIER.World({ x: 0, y: physics.gravity, z: 0 });
   world.timestep = STEP;
+  world.numSolverIterations = 2;
   // A broad speculative margin consumes wall impact before the real contact.
   // Keep a small look-ahead; visible cup contacts still use CCD.
   world.integrationParameters.normalizedPredictionDistance = 0.02;
-  // Keep contact stiffness explicit at the 1/240s step to limit penetration
-  // through the thin cup base during shaking.
+  // Keep contact stiffness explicit for the moving cup's substeps.
   world.integrationParameters.contact_natural_frequency = 240;
   return world;
 }
@@ -195,7 +195,7 @@ export function createDieInCup(
   const x = cupPosition.x + localPosition.x;
   const y =
     cupPosition.y -
-    DEFAULT_CUP_SPEC.innerHeight / 2 +
+    DEFAULT_CUP_GEOMETRY.innerHeight / 2 +
     halfHeight +
     0.04 +
     localPosition.level * (DIE_SIZE + 0.13);

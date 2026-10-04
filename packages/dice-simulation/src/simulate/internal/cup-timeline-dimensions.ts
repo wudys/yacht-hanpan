@@ -1,9 +1,6 @@
 import { type CupGeometry, DEFAULT_CUP_GEOMETRY } from '../../contract/cup-geometry';
 
-export type CupSpec = CupGeometry;
-export const DEFAULT_CUP_SPEC = DEFAULT_CUP_GEOMETRY;
-
-export function cupInteriorDimensions(spec: CupSpec = DEFAULT_CUP_SPEC) {
+export function cupInteriorDimensions(spec: CupGeometry = DEFAULT_CUP_GEOMETRY) {
   return {
     innerWidth: round(spec.innerRadius * 2),
     innerDepth: round(spec.innerRadius * 2),

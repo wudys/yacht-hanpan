@@ -1,10 +1,10 @@
 import RAPIER from '@dimforge/rapier3d-deterministic';
 import { beforeAll, expect, test } from 'bun:test';
 
+import { DEFAULT_CUP_GEOMETRY } from '../../contract/cup-geometry';
 import { initializeDeterministicRapierForBun } from '../../rapier/bun';
 import { simulateRollTimeline } from '../simulate-timeline';
 import { createCupMotion, cupTransformAt } from './cup-motion';
-import { DEFAULT_CUP_SPEC } from './cup-spec';
 import { applyCupPourAssist, createPhysicsCup } from './physics-cup';
 import { createDieInCup } from './physics-environment';
 import { rotateVectorByQuat } from './result-recognition';
@@ -23,7 +23,7 @@ test.each(['classic', 'burst', 'oblique'] as const)(
       const start = motion.pourAtMs + (style === 'burst' ? 210 : 300);
       const t = start + 100;
       const pose = cupTransformAt(motion, t);
-      const cup = createPhysicsCup(world, pose, DEFAULT_CUP_SPEC);
+      const cup = createPhysicsCup(world, pose, DEFAULT_CUP_GEOMETRY);
       const die = createDieInCup(world, seed, 0, 1, motion, createRollPhysicsConfig());
       const axis = rotateVectorByQuat([0, 1, 0], cup.body.rotation());
       const apply = (time: number, along: number, exited = false) => {
@@ -39,7 +39,7 @@ test.each(['classic', 'burst', 'oblique'] as const)(
       };
       expect(apply(start - 1, 0)).toBe(0);
       expect(apply(start + 450, 0)).toBe(0);
-      expect(apply(t, DEFAULT_CUP_SPEC.innerHeight / 2 + 0.1)).toBe(0);
+      expect(apply(t, DEFAULT_CUP_GEOMETRY.innerHeight / 2 + 0.1)).toBe(0);
       expect(apply(t, 0, true)).toBe(0);
       expect(apply(t, 0)).toBeCloseTo(20 * STEP, 5);
       const v = die.body.linvel();
@@ -47,7 +47,7 @@ test.each(['classic', 'burst', 'oblique'] as const)(
       expect(v.y).toBeCloseTo(axis[1] * 20 * STEP, 5);
       expect(die.body.angvel()).toEqual({ x: 0, y: 0, z: 0 });
       die.body.setTranslation(
-        { x: pose.x, y: pose.y, z: pose.z + DEFAULT_CUP_SPEC.innerRadius + 0.1 },
+        { x: pose.x, y: pose.y, z: pose.z + DEFAULT_CUP_GEOMETRY.innerRadius + 0.1 },
         false,
       );
       die.body.setLinvel({ x: 0, y: 0, z: 0 }, false);

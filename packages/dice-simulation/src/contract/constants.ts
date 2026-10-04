@@ -14,7 +14,7 @@ export const AUTOMATIC_POUR_STYLES = [
 ] as const;
 
 export const DICE_SIMULATION_CONTRACT = Object.freeze({
-  simulationVersion: 'dice-simulation-v34',
+  simulationVersion: 'dice-simulation-v35',
   timelineSchemaVersion: 'dice-timeline-v4',
   replayDigestVersion: 'sha256-q4-v2',
   prngVersion: 'sha256-counter53-v1',

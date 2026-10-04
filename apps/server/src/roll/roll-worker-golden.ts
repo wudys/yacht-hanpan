@@ -13,8 +13,8 @@ export const ROLL_WORKER_GOLDEN_INPUT: SimulationInput = {
 
 // Reviewed compatibility expectation; never derive this value from the current simulation.
 export const ROLL_WORKER_GOLDEN_DIGEST =
-  'sha256-q4-v2:4102ce173bcedd8bbe65156a861ffabede591c275617d26136a0a79e2c754658';
+  'sha256-q4-v2:4111ba2aff379dc6a3e8175c91cf873bba6078cf3b48fff0302d6bfe97a0404c';
 
 export const ROLL_WORKER_GOLDEN_OUTCOME: SimulationOutcome['authoritativeValuesBySlot'] = [
-  { slot: 0, value: 3 },
+  { slot: 0, value: 2 },
 ];

@@ -1,10 +1,10 @@
 import RAPIER from '@dimforge/rapier3d-deterministic';
 import { beforeAll, expect, test } from 'bun:test';
 
+import { DEFAULT_CUP_GEOMETRY } from '../../contract/cup-geometry';
 import { initializeDeterministicRapierForBun } from '../../rapier/bun';
 import { type PhysicsCompletionSnapshot, simulateRollTimeline } from '../simulate-timeline';
 import { createCupFrame, createCupMotion, cupTransformAt } from './cup-motion';
-import { DEFAULT_CUP_SPEC } from './cup-spec';
 import {
   areDiceOutsideCup,
   createPhysicsCup,
@@ -54,7 +54,7 @@ test('aims the oblique physical mouth with the same rotation as its replay', () 
   const world = new RAPIER.World({ x: 0, y: 0, z: 0 });
   try {
     const motion = createCupMotion('coherent-pour-baseline-5-4', 'oblique');
-    const cup = createPhysicsCup(world, cupTransformAt(motion, 0), DEFAULT_CUP_SPEC);
+    const cup = createPhysicsCup(world, cupTransformAt(motion, 0), DEFAULT_CUP_GEOMETRY);
     const time = motion.pourAtMs + 750;
     updatePhysicsCup(cup, cupTransformAt(motion, time));
     world.step();
@@ -117,7 +117,7 @@ test('distinguishes finite cup clearance from crossing the mouth or only its cen
   try {
     const motion = createCupMotion('cup-clearance', 'classic');
     const pose = cupTransformAt(motion, 0);
-    const cup = createPhysicsCup(world, pose, DEFAULT_CUP_SPEC);
+    const cup = createPhysicsCup(world, pose, DEFAULT_CUP_GEOMETRY);
     const die = createDieInCup(world, 'cup-clearance', 0, 1, motion, createRollPhysicsConfig());
     die.body.setRotation({ x: 0, y: 0, z: 0, w: 1 }, true);
     const check = (x: number, y: number) => {
@@ -143,13 +143,17 @@ test.each([0.003, 0.012])(
     const world = createRollWorld(physics);
     try {
       const motion = createCupMotion('predictive-rim-contact', 'classic');
-      const cup = createPhysicsCup(world, { x: 0, y: 0, z: 0, tilt: 0, yaw: 0 }, DEFAULT_CUP_SPEC);
+      const cup = createPhysicsCup(
+        world,
+        { x: 0, y: 0, z: 0, tilt: 0, yaw: 0 },
+        DEFAULT_CUP_GEOMETRY,
+      );
       const die = createDieInCup(world, 'predictive-rim-contact', 0, 1, motion, physics);
       die.body.setRotation({ x: 0, y: 0, z: 0, w: 1 }, true);
       die.body.setTranslation(
         {
-          x: DEFAULT_CUP_SPEC.innerRadius,
-          y: DEFAULT_CUP_SPEC.innerHeight / 2 + DIE_SIZE / 2 + gap,
+          x: DEFAULT_CUP_GEOMETRY.innerRadius,
+          y: DEFAULT_CUP_GEOMETRY.innerHeight / 2 + DIE_SIZE / 2 + gap,
           z: 0,
         },
         true,
@@ -206,7 +210,7 @@ test.each([1, 2, 3, 4, 5])('starts %i dice without intersecting each other or th
     const world = new RAPIER.World({ x: 0, y: -9.8, z: 0 });
     try {
       const motion = createCupMotion(seed, 'classic');
-      const cup = createPhysicsCup(world, cupTransformAt(motion, 0), DEFAULT_CUP_SPEC);
+      const cup = createPhysicsCup(world, cupTransformAt(motion, 0), DEFAULT_CUP_GEOMETRY);
       const physics = createRollPhysicsConfig();
       const dice = Array.from({ length: count }, (_, i) =>
         createDieInCup(world, seed, i, count, motion, physics),

@@ -63,7 +63,7 @@ export function createCupMotion(seed: string, style: PourStyle): SimulatedCupMot
         ? 0
         : ([-6, 0, 6][Math.floor(seededNumber(`${seed}:prototype-pour-yaw`, 0) * 3)]! * Math.PI) /
           180,
-    // Full-shell sweep clearance: classic ≈2.27, burst ≈2.84, oblique ≈2.86 die edges.
+    // Full-shell sweep clearance: classic ≈2.28, burst ≈2.85, oblique ≈2.87 die edges.
     heightOffset: style === 'classic' ? 0 : style === 'burst' ? 0.443053 : 0.369182,
     releaseAtMs,
     exitAtMs: releaseAtMs + CUP_EXIT_HOLD_MS + CUP_EXIT_TAIL_MS,

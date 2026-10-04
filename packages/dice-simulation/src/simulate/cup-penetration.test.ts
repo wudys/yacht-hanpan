@@ -4,6 +4,7 @@ import { beforeAll, expect, spyOn, test } from 'bun:test';
 import { type DieSlot, POUR_STYLES } from '../contract';
 import { DEFAULT_CUP_GEOMETRY as CUP } from '../contract/cup-geometry';
 import { DIE_GEOMETRY } from '../contract/roll-geometry';
+import { measureCupBottomBoundary } from '../quality/cup-boundary-audit';
 import { initializeDeterministicRapierForBun } from '../rapier/bun';
 import { createCupMotion, quatFromEuler } from './internal/cup-motion';
 import { createPhysicsCup, haveDiceClearedCup } from './internal/physics-cup';
@@ -106,6 +107,38 @@ const cases = POUR_STYLES.flatMap((pourStyle) =>
   ),
 );
 
+test('bottom boundary queries leave recorded physics unchanged', () => {
+  const input = {
+    rollId: 'cup-bottom-observer-parity',
+    seed: 'cup-bottom-probe-0',
+    pourStyle: 'classic' as const,
+    rolledSlots: [0, 1, 2, 3, 4] as DieSlot[],
+  };
+  const baseline = simulateRollTimeline(input);
+  const stepWorld = RAPIER.World.prototype.step;
+  let queries = 0;
+  const observer = spyOn(RAPIER.World.prototype, 'step').mockImplementation(function (
+    this: RAPIER.World,
+    ...args: Parameters<typeof stepWorld>
+  ) {
+    stepWorld.apply(this, args);
+    const bodies: RAPIER.RigidBody[] = [];
+    this.forEachRigidBody((body) => bodies.push(body));
+    const cup = bodies.find((body) => body.isKinematic());
+    if (!cup) return;
+    for (const die of bodies.filter((body) => body.isDynamic())) {
+      measureCupBottomBoundary(die.collider(0), cup.collider(0));
+      queries += 1;
+    }
+  });
+  try {
+    expect(simulateRollTimeline(input)).toEqual(baseline);
+    expect(queries).toBeGreaterThan(0);
+  } finally {
+    observer.mockRestore();
+  }
+});
+
 test.each([
   { gap: -0.001, sensor: false, touching: true },
   { gap: 0.04, sensor: false, touching: false },
@@ -143,7 +176,14 @@ test.each(cases)(
   ({ seed, pourStyle, count }) => {
     const stepWorld = RAPIER.World.prototype.step;
     const exited = new Set<number>();
-    const penetrations: { timeMs: number; die: number; depth: number; exited: boolean }[] = [];
+    const penetrations: {
+      timeMs: number;
+      die: number;
+      depth: number;
+      axisMinimumOuterGap: number;
+      externalOverlapDepth: number;
+      exited: boolean;
+    }[] = [];
     const pinches: { timeMs: number; die: number; exited: boolean }[] = [];
     let elapsedSeconds = 0;
     let observedFloor = false;
@@ -182,9 +222,16 @@ test.each(cases)(
         }
         // Released dice can legitimately bounce below the finite cup.
         if (exited.has(body.handle)) continue;
-        const depth = basePenetration(body, cupBody);
-        if (depth > CUP.baseThickness / 2)
-          penetrations.push({ timeMs, die: body.handle, depth, exited: false });
+        const boundary = measureCupBottomBoundary(die.collider, cup.colliders[0]);
+        if (boundary.externalBottomCrossing)
+          penetrations.push({
+            timeMs,
+            die: body.handle,
+            depth: boundary.baseContactDepth,
+            axisMinimumOuterGap: boundary.axisMinimumOuterGap,
+            externalOverlapDepth: boundary.externalOverlapDepth,
+            exited: false,
+          });
       }
     });
     try {
@@ -197,7 +244,8 @@ test.each(cases)(
       expect(observedSteps).toBeGreaterThan(0);
       expect(observedFloor).toBe(true);
       expect(exited.size).toBe(count);
-      // Leave half the visible base thickness as margin; zero solver overlap is not required.
+      // Internal contact overlap can be hidden inside the thickness; the external
+      // finite cylinder query must remain clear until this die crosses the mouth.
       expect({ seed, pourStyle, count, penetrations }).toEqual({
         seed,
         pourStyle,

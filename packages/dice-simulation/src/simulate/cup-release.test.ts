@@ -64,11 +64,12 @@ test.each(
     ...args: Parameters<typeof stepWorld>
   ) {
     stepWorld.apply(this, args);
-    const t = Math.round(Math.floor(substep++ / 4) * STEP * 1000);
     const bodies: RAPIER.RigidBody[] = [];
     this.forEachRigidBody((body) => bodies.push(body));
     const cup = bodies.find((body) => body.isKinematic());
     if (!cup) return;
+    const substeps = Math.round(STEP / this.timestep);
+    const t = Math.round(Math.floor(substep++ / substeps) * STEP * 1000);
     const center = cup.translation();
     const normal = rotateVectorByQuat([0, 1, 0], cup.rotation());
     const ray = new RAPIER.Ray(center, { x: normal[0], y: normal[1], z: normal[2] });

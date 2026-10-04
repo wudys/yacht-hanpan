@@ -12,10 +12,10 @@
         "authoritativeValuesBySlot": [
           {
             "slot": 0,
-            "value": 3
+            "value": 2
           }
         ],
-        "replayDigest": "sha256-q4-v2:4102ce173bcedd8bbe65156a861ffabede591c275617d26136a0a79e2c754658",
+        "replayDigest": "sha256-q4-v2:4111ba2aff379dc6a3e8175c91cf873bba6078cf3b48fff0302d6bfe97a0404c",
         "durationMs": 3550,
         "dieFrameCounts": [123],
         "cupFrameCount": 112
@@ -32,18 +32,18 @@
         "authoritativeValuesBySlot": [
           {
             "slot": 0,
-            "value": 1
+            "value": 6
           },
           {
             "slot": 2,
-            "value": 1
+            "value": 4
           },
           {
             "slot": 4,
             "value": 2
           }
         ],
-        "replayDigest": "sha256-q4-v2:e42e2b2dabfe53daedbcbb2adad24a32f30cbd9e7e9cb742d41d25968dfc2629",
+        "replayDigest": "sha256-q4-v2:dcded9ca2a2e46609ce0bda15b00bab5716bec6efff6d1d25e094a8181871f58",
         "durationMs": 3583,
         "dieFrameCounts": [124, 124, 124],
         "cupFrameCount": 113
@@ -60,15 +60,15 @@
         "authoritativeValuesBySlot": [
           {
             "slot": 0,
-            "value": 4
+            "value": 5
           },
           {
             "slot": 1,
-            "value": 4
+            "value": 3
           },
           {
             "slot": 2,
-            "value": 4
+            "value": 1
           },
           {
             "slot": 3,
@@ -76,10 +76,10 @@
           },
           {
             "slot": 4,
-            "value": 5
+            "value": 2
           }
         ],
-        "replayDigest": "sha256-q4-v2:67fb8b8aaa35acbbc7f3cef06d6fba601090216d8b7050cb20caf107c11f537e",
+        "replayDigest": "sha256-q4-v2:e9e0715fc1608390ac5ffd3cf8856fb974417f0f7f6e1f1c04a72e5cfa45e9f9",
         "durationMs": 3916,
         "dieFrameCounts": [131, 131, 131, 131, 131],
         "cupFrameCount": 120
@@ -96,14 +96,14 @@
         "authoritativeValuesBySlot": [
           {
             "slot": 1,
-            "value": 4
+            "value": 5
           },
           {
             "slot": 3,
             "value": 5
           }
         ],
-        "replayDigest": "sha256-q4-v2:dd84f5ff351f47a3e5e283a2272a83a22fcd9f67b0d2f13239ac885dd195d020",
+        "replayDigest": "sha256-q4-v2:99b2eb2dbde0b4fbb84e9650c4ed449e2a9b4bd50ccaa7271cea42b8e4e78d9f",
         "durationMs": 3616,
         "dieFrameCounts": [125, 125],
         "cupFrameCount": 114

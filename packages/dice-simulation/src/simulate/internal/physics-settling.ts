@@ -12,8 +12,8 @@ import { rotateVectorByQuat, topFaceAlignment } from './result-recognition';
 import { DIE_SIZE, FLOOR_TOP_Y } from './roll-simulation-constants';
 import { quatDistance, type QuaternionTuple, type VectorTuple } from './simulation-math';
 
-const REST_LINEAR_SPEED = 0.045;
-const REST_ANGULAR_SPEED = 0.18;
+export const REST_LINEAR_SPEED = 0.045;
+export const REST_ANGULAR_SPEED = 0.18;
 export interface RestSimulationDie {
   id: string;
   body: RigidBody;

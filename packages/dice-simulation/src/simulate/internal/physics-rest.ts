@@ -31,7 +31,7 @@ interface PhysicsRestEnvironment {
   readonly walls: TrayWall[];
 }
 
-export function appendPhysicsRestFrames(
+export function runPhysicsRest(
   {
     dice,
     frames,

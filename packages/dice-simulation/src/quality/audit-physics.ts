@@ -5,7 +5,7 @@ import {
   type PhysicsCompletionSnapshot,
   simulateRollTimeline,
 } from '../simulate/simulate-timeline';
-import { measurePhysicsCompletion } from './physical-roll-audit';
+import { measurePhysicsCompletion, physicsCompletionIssues } from './physical-roll-audit';
 
 const REGRESSIONS: readonly SimulationInput[] = [
   ['classic', 'classic', '103'],
@@ -26,8 +26,10 @@ function audit(input: SimulationInput) {
   });
   const simulationWallMs = performance.now() - startedAt;
   if (!raw) throw new Error('Physics audit snapshot was not collected');
+  const measurements = measurePhysicsCompletion(raw, timeline.dice);
   return {
-    ...measurePhysicsCompletion(raw, timeline.dice),
+    ...measurements,
+    qualityIssues: physicsCompletionIssues(measurements),
     durationMs: timeline.durationMs,
     simulationWallMs,
     values: timeline.dice.map((die) => die.value),
@@ -40,7 +42,17 @@ async function main() {
     throw new Error('Usage: audit:physics [tuning|validation|acceptance]');
   }
   await initializeDeterministicRapierForBun();
-  const regressions = REGRESSIONS.map((input) => ({ input, report: audit(input) }));
+  const regressions = REGRESSIONS.map((input) => {
+    try {
+      return { input, report: audit(input) };
+    } catch (error) {
+      return {
+        input,
+        error: error instanceof Error ? error.message : String(error),
+        ...(error instanceof CupReleaseError ? { diagnostics: error.diagnostics } : {}),
+      };
+    }
+  });
   const groups = [];
   for (const pourStyle of POUR_STYLES) {
     for (let count = 1; count <= 5; count += 1) {
@@ -52,6 +64,7 @@ async function main() {
       }[] = [];
       const rawStackSeeds: string[] = [];
       const rawOutsideTraySeeds: string[] = [];
+      const qualityFailures: { seed: string; issues: string[] }[] = [];
       const rolledSlots = Array.from({ length: count }, (_, index) => index as DieSlot);
       for (let sequence = 0; sequence < 50; sequence += 1) {
         const seed = `dice-quality-${partition}-${pourStyle}-${count}-${sequence}`;
@@ -60,6 +73,8 @@ async function main() {
           reports.push(report);
           if (report.rawStackedPairs > 0) rawStackSeeds.push(seed);
           if (report.rawOutsideTrayDice > 0) rawOutsideTraySeeds.push(seed);
+          if (report.qualityIssues.length > 0)
+            qualityFailures.push({ seed, issues: report.qualityIssues });
         } catch (error) {
           failures.push({
             seed,
@@ -78,6 +93,7 @@ async function main() {
         attempted: 50,
         completed: reports.length,
         failures,
+        qualityFailures,
         rawStackSeeds,
         rawOutsideTraySeeds,
         rawLiftedRolls: reports.filter((r) => r.rawLiftedDice > 0).length,
@@ -112,7 +128,12 @@ async function main() {
     }
   }
   console.log(JSON.stringify({ partition, regressions, groups }, null, 2));
-  if (groups.some((group) => group.failures.length > 0 || group.changedFaces > 0)) {
+  if (
+    regressions.some(
+      (regression) => !regression.report || regression.report.qualityIssues.length > 0,
+    ) ||
+    groups.some((group) => group.failures.length > 0 || group.qualityFailures.length > 0)
+  ) {
     process.exitCode = 1;
   }
 }

@@ -1,10 +1,13 @@
 import type { Collider, RigidBody, Rotation, World } from '@dimforge/rapier3d-deterministic';
 import RAPIER from '@dimforge/rapier3d-deterministic';
 
-import { cupWallVertices } from '../../contract/cup-geometry';
+import {
+  type CupGeometry,
+  cupWallVertices,
+  DEFAULT_CUP_GEOMETRY,
+} from '../../contract/cup-geometry';
 import type { CupTransform, SimulatedCupMotion } from './cup-motion';
 import { quatFromEuler } from './cup-motion';
-import { type CupSpec, DEFAULT_CUP_SPEC } from './cup-spec';
 import type { SimDie } from './physics-environment';
 import { rotateVectorByQuat } from './result-recognition';
 import { DIE_COLLIDER_RADIUS, DIE_SIZE, STEP } from './roll-simulation-constants';
@@ -14,10 +17,14 @@ export interface PhysicsCup {
   colliders: Collider[];
 }
 
+// The invisible mouth constraint is independent of the cup's reinforced base.
+const SHAKE_LID_THICKNESS = 0.08;
+let defaultCupWallVertices: Float32Array[] | undefined;
+
 export function createPhysicsCup(
   world: World,
   initialTransform: CupTransform,
-  spec: CupSpec,
+  spec: CupGeometry,
 ): PhysicsCup {
   const body = world.createRigidBody(
     RAPIER.RigidBodyDesc.kinematicPositionBased()
@@ -34,18 +41,26 @@ export function createPhysicsCup(
     ),
   ];
   for (let segment = 0; segment < spec.segments; segment += 1) {
-    const shape = RAPIER.ColliderDesc.convexHull(cupWallVertices(segment, spec));
+    const shape = RAPIER.ColliderDesc.convexHull(wallVerticesForPhysics(segment, spec));
     if (!shape) throw new Error('Invalid cup wall geometry');
     colliders.push(world.createCollider(shape.setRestitution(0.03).setFriction(0.3), body));
   }
   return { body, colliders };
 }
 
+function wallVerticesForPhysics(segment: number, spec: CupGeometry): Float32Array {
+  if (spec !== DEFAULT_CUP_GEOMETRY) return cupWallVertices(segment, spec);
+  // Only the frozen default spec is retained. Public geometry and custom specs
+  // still generate fresh arrays; Rapier constructs each hull/collider per world.
+  defaultCupWallVertices ??= [];
+  return (defaultCupWallVertices[segment] ??= cupWallVertices(segment, spec));
+}
+
 /** Invisible mouth constraint attached to the cup during shaking and gathering. */
-export function createCupShakeLid(world: World, cup: PhysicsCup, spec: CupSpec): Collider {
+export function createCupShakeLid(world: World, cup: PhysicsCup, spec: CupGeometry): Collider {
   const lid = world.createCollider(
-    RAPIER.ColliderDesc.cylinder(spec.baseThickness / 2, spec.innerRadius + spec.wallThickness)
-      .setTranslation(0, spec.innerHeight / 2 + spec.baseThickness / 2, 0)
+    RAPIER.ColliderDesc.cylinder(SHAKE_LID_THICKNESS / 2, spec.innerRadius + spec.wallThickness)
+      .setTranslation(0, spec.innerHeight / 2 + SHAKE_LID_THICKNESS / 2, 0)
       .setRestitution(0.03)
       .setFriction(0.3),
     cup.body,
@@ -66,7 +81,7 @@ export function updatePhysicsCup(cupBody: PhysicsCup, transform: CupTransform): 
 
 /** Resolve fast cup contacts without changing the outer tick or rollout timestep. */
 export function stepWorldWithCup(world: World, cup: PhysicsCup): void {
-  const substeps = 4;
+  const substeps = 2;
   const from = cup.body.translation();
   const to = cup.body.nextTranslation();
   const rotationFrom = cup.body.rotation();
@@ -134,8 +149,8 @@ export function applyCupPourAssist(
     const dz = p.z - center.z;
     const along = dx * axis[0] + dy * axis[1] + dz * axis[2];
     if (
-      Math.abs(along) >= DEFAULT_CUP_SPEC.innerHeight / 2 ||
-      dx * dx + dy * dy + dz * dz - along * along >= DEFAULT_CUP_SPEC.innerRadius ** 2
+      Math.abs(along) >= DEFAULT_CUP_GEOMETRY.innerHeight / 2 ||
+      dx * dx + dy * dy + dz * dz - along * along >= DEFAULT_CUP_GEOMETRY.innerRadius ** 2
     )
       continue;
     // Equal acceleration regardless of count, mass, orientation or face value.
@@ -152,7 +167,8 @@ export function applyCupPourAssist(
 export function haveDiceClearedCup(_world: World, cup: PhysicsCup, dice: SimDie[]): boolean {
   return dice.every(
     (die) =>
-      dieBoundsAlongCupAxis(cup, die, [0, 1, 0]).min > DEFAULT_CUP_SPEC.innerHeight / 2 + 0.005 &&
+      dieBoundsAlongCupAxis(cup, die, [0, 1, 0]).min >
+        DEFAULT_CUP_GEOMETRY.innerHeight / 2 + 0.005 &&
       !cup.colliders.some((collider) => die.collider.contactCollider(collider, 0.005)),
   );
 }
@@ -160,8 +176,8 @@ export function haveDiceClearedCup(_world: World, cup: PhysicsCup, dice: SimDie[
 /** Conservative finite-volume clearance, used only after every die crossed the mouth. */
 export function areDiceOutsideCup(_world: World, cup: PhysicsCup, dice: SimDie[]): boolean {
   const radius =
-    Math.max(DEFAULT_CUP_SPEC.innerRadius, DEFAULT_CUP_SPEC.bottomRadius) +
-    DEFAULT_CUP_SPEC.wallThickness;
+    Math.max(DEFAULT_CUP_GEOMETRY.innerRadius, DEFAULT_CUP_GEOMETRY.bottomRadius) +
+    DEFAULT_CUP_GEOMETRY.wallThickness;
   return dice.every((die) => {
     const x = dieBoundsAlongCupAxis(cup, die, [1, 0, 0]);
     const y = dieBoundsAlongCupAxis(cup, die, [0, 1, 0]);
@@ -171,8 +187,8 @@ export function areDiceOutsideCup(_world: World, cup: PhysicsCup, dice: SimDie[]
       x.max < -radius - 0.005 ||
       z.min > radius + 0.005 ||
       z.max < -radius - 0.005 ||
-      y.min > DEFAULT_CUP_SPEC.innerHeight / 2 + 0.005 ||
-      y.max < -DEFAULT_CUP_SPEC.innerHeight / 2 - DEFAULT_CUP_SPEC.baseThickness - 0.005;
+      y.min > DEFAULT_CUP_GEOMETRY.innerHeight / 2 + 0.005 ||
+      y.max < -DEFAULT_CUP_GEOMETRY.innerHeight / 2 - DEFAULT_CUP_GEOMETRY.baseThickness - 0.005;
     // Solver manifolds also contain predictive contacts with a positive gap.
     // Only current shape separation within the clearance tolerance blocks exit.
     return (

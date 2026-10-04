@@ -13,7 +13,7 @@ export const DEFAULT_CUP_GEOMETRY: CupGeometry = Object.freeze({
   bottomRadius: 1.14,
   innerHeight: 2,
   wallThickness: 0.08,
-  baseThickness: 0.08,
+  baseThickness: 0.1,
   segments: 24,
 });
 

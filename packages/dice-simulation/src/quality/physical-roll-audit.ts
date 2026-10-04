@@ -1,4 +1,5 @@
 import { type RollTimeline, TRAY_GEOMETRY } from '../contract';
+import { REST_ANGULAR_SPEED, REST_LINEAR_SPEED } from '../simulate/internal/physics-settling';
 import { recognizeTopFace, topFaceAlignment } from '../simulate/internal/result-recognition';
 import { DIE_SIZE, FLOOR_TOP_Y } from '../simulate/internal/roll-simulation-constants';
 import type { PhysicsCompletionSnapshot } from '../simulate/simulate-timeline';
@@ -61,4 +62,21 @@ export function measurePhysicsCompletion(
     displayCorrectionMs,
     facesPreserved,
   };
+}
+
+/**
+ * Offline audit gate only; never used to reject or reroll a production outcome.
+ * Speeds use the normal stability owner's strict bounds. A readable pose accepted
+ * by a later, permissive rest cutoff still needs review if it remains moving.
+ */
+export function physicsCompletionIssues(report: ReturnType<typeof measurePhysicsCompletion>) {
+  const issues: string[] = [];
+  if (!report.facesPreserved) issues.push('changed-faces');
+  if (report.rawStackedPairs > 0) issues.push('stacked');
+  if (report.rawOutsideTrayDice > 0) issues.push('outside-tray');
+  if (report.rawLiftedDice > 0) issues.push('lifted');
+  if (report.rawLowReadabilityDice > 0) issues.push('low-readability');
+  if (report.rawMaxLinearSpeed >= REST_LINEAR_SPEED) issues.push('linear-speed');
+  if (report.rawMaxAngularSpeed >= REST_ANGULAR_SPEED) issues.push('angular-speed');
+  return issues;
 }

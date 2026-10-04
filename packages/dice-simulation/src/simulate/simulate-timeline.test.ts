@@ -145,8 +145,8 @@ describe('deterministic physics roll', () => {
 
     expect(finalX[0]).toBeGreaterThan(finalX[1]);
     expect(timeline.dice.map(({ slot, value }) => ({ slot, value }))).toEqual([
-      { slot: 0, value: 1 },
-      { slot: 4, value: 5 },
+      { slot: 0, value: 6 },
+      { slot: 4, value: 2 },
     ]);
   });
 

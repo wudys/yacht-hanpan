@@ -1,10 +1,13 @@
 import { useFrame } from '@react-three/fiber';
 import { type CupMotion, DEFAULT_CUP_GEOMETRY } from '@repo/dice-simulation/contract';
-import { useLayoutEffect, useRef } from 'react';
+import { useLayoutEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 
 import { useRollPlaybackClock } from '@/runtime/dice/renderer/parts/playback-clock';
-import { cupExitOpacityAt, sampleCupFrames } from '@/runtime/dice/renderer/parts/timeline-sampling';
+import {
+  createCupFrameSampler,
+  cupExitOpacityAt,
+} from '@/runtime/dice/renderer/parts/timeline-sampling';
 import type { CupResources } from '@/runtime/dice/resources/cup-resources';
 
 const CUP_COLORS = {
@@ -20,6 +23,7 @@ export function TimelineCup({ cup, resources }: { cup: CupMotion; resources: Cup
   const shellMaterials = useRef<THREE.Material[]>([]);
   const shadowCasters = useRef<THREE.Mesh[]>([]);
   const playbackClock = useRollPlaybackClock();
+  const sampleFrames = useMemo(() => createCupFrameSampler(cup.frames), [cup.frames]);
 
   useLayoutEffect(() => {
     const materials = new Set<THREE.Material>();
@@ -37,7 +41,7 @@ export function TimelineCup({ cup, resources }: { cup: CupMotion; resources: Cup
   useFrame(() => {
     if (!group.current) return;
     const elapsedMs = playbackClock.elapsedMs();
-    const cupSample = sampleCupFrames(cup.frames, elapsedMs);
+    const cupSample = sampleFrames(elapsedMs);
     const exitOpacity = cupExitOpacityAt(elapsedMs, cup.releaseAtMs, cup.exitAtMs);
     if (cupSample.visible) {
       group.current.position.set(cupSample.p[0], cupSample.p[1], cupSample.p[2]);

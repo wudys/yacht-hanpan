@@ -7,63 +7,103 @@ export interface TimelineSample {
   q: [number, number, number, number];
 }
 
-export function sampleDieFrames(frames: readonly DieFrame[], timeMs: number): TimelineSample {
-  if (frames.length === 0 || timeMs < 0) {
-    return {
-      visible: false,
-      p: [0, 0, 0],
-      q: [0, 0, 0, 1],
-    };
-  }
-  if (timeMs <= frames[0].t) return { visible: true, p: frames[0].p, q: frames[0].q };
-  const last = frames[frames.length - 1];
-  if (timeMs >= last.t) return { visible: true, p: last.p, q: last.q };
-
-  const { p, q } = interpolatePose(frames, timeMs);
-  return { visible: true, p, q };
-}
-
-export function sampleCupFrames(frames: CupMotion['frames'], timeMs: number) {
-  if (frames.length === 0) {
-    return {
-      visible: true,
-      p: [1.2, 1.62, -0.08] as [number, number, number],
-      q: [0, 0, 0, 1] as [number, number, number, number],
-    };
-  }
-  if (timeMs <= frames[0].t) return frames[0];
-  const last = frames[frames.length - 1];
-  if (timeMs >= last.t) return last;
-
-  const { from, to, p, q } = interpolatePose(frames, timeMs);
-  return { visible: from.visible || to.visible, p, q };
-}
-
-function interpolatePose<Frame extends DieFrame>(frames: readonly Frame[], timeMs: number) {
-  let from = frames[0];
-  let to = frames[1];
-  for (let index = 0; index < frames.length - 1; index += 1) {
-    if (timeMs >= frames[index].t && timeMs <= frames[index + 1].t) {
-      from = frames[index];
-      to = frames[index + 1];
-      break;
+/** Each call overwrites this sampler's result; consumers copy it before sampling again. */
+export function createDieFrameSampler(frames: readonly DieFrame[]) {
+  const { sample, interpolate } = createPoseSampler(frames);
+  return (timeMs: number): TimelineSample => {
+    if (frames.length === 0 || timeMs < 0) {
+      sample.visible = false;
+      sample.p[0] = sample.p[1] = sample.p[2] = 0;
+      sample.q[0] = sample.q[1] = sample.q[2] = 0;
+      sample.q[3] = 1;
+    } else if (timeMs <= frames[0].t) {
+      copyPose(sample, frames[0], true);
+    } else if (timeMs >= frames[frames.length - 1].t) {
+      copyPose(sample, frames[frames.length - 1], true);
+    } else {
+      interpolate(timeMs);
+      sample.visible = true;
     }
-  }
-
-  const alpha = (timeMs - from.t) / (to.t - from.t);
-  const fromPosition = new THREE.Vector3(...from.p);
-  const toPosition = new THREE.Vector3(...to.p);
-  const position = fromPosition.lerp(toPosition, alpha);
-  const fromQuat = new THREE.Quaternion(from.q[0], from.q[1], from.q[2], from.q[3]);
-  const toQuat = new THREE.Quaternion(to.q[0], to.q[1], to.q[2], to.q[3]);
-  fromQuat.slerp(toQuat, alpha);
-
-  return {
-    from,
-    to,
-    p: [position.x, position.y, position.z] as TimelineSample['p'],
-    q: [fromQuat.x, fromQuat.y, fromQuat.z, fromQuat.w] as TimelineSample['q'],
+    return sample;
   };
+}
+
+/** The mutable result and interpolation scratch belong only to this sampler. */
+export function createCupFrameSampler(frames: CupMotion['frames']) {
+  const { sample, interpolate } = createPoseSampler(frames);
+  if (frames.length === 0) {
+    sample.visible = true;
+    sample.p[0] = 1.2;
+    sample.p[1] = 1.62;
+    sample.p[2] = -0.08;
+  }
+  return (timeMs: number): TimelineSample => {
+    if (frames.length === 0) return sample;
+    if (timeMs <= frames[0].t) {
+      copyPose(sample, frames[0], frames[0].visible);
+    } else if (timeMs >= frames[frames.length - 1].t) {
+      const last = frames[frames.length - 1];
+      copyPose(sample, last, last.visible);
+    } else {
+      const index = interpolate(timeMs);
+      sample.visible = frames[index - 1].visible || frames[index].visible;
+    }
+    return sample;
+  };
+}
+
+function upperFrameIndex(frames: readonly DieFrame[], timeMs: number): number {
+  // The first frame at or after timeMs keeps exact interior keys left-biased.
+  let low = 1;
+  let high = frames.length - 1;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    if (frames[middle].t < timeMs) low = middle + 1;
+    else high = middle;
+  }
+  return low;
+}
+
+function createPoseSampler(frames: readonly DieFrame[]) {
+  const sample: TimelineSample = { visible: false, p: [0, 0, 0], q: [0, 0, 0, 1] };
+  const fromPosition = new THREE.Vector3();
+  const toPosition = new THREE.Vector3();
+  const fromQuat = new THREE.Quaternion();
+  const toQuat = new THREE.Quaternion();
+  return {
+    sample,
+    interpolate(timeMs: number) {
+      const index = upperFrameIndex(frames, timeMs);
+      const from = frames[index - 1];
+      const to = frames[index];
+      const alpha = (timeMs - from.t) / (to.t - from.t);
+      fromPosition.set(from.p[0], from.p[1], from.p[2]);
+      toPosition.set(to.p[0], to.p[1], to.p[2]);
+      const position = fromPosition.lerp(toPosition, alpha);
+      fromQuat.set(from.q[0], from.q[1], from.q[2], from.q[3]);
+      toQuat.set(to.q[0], to.q[1], to.q[2], to.q[3]);
+      fromQuat.slerp(toQuat, alpha);
+      sample.p[0] = position.x;
+      sample.p[1] = position.y;
+      sample.p[2] = position.z;
+      sample.q[0] = fromQuat.x;
+      sample.q[1] = fromQuat.y;
+      sample.q[2] = fromQuat.z;
+      sample.q[3] = fromQuat.w;
+      return index;
+    },
+  };
+}
+
+function copyPose(sample: TimelineSample, frame: DieFrame, visible: boolean) {
+  sample.visible = visible;
+  sample.p[0] = frame.p[0];
+  sample.p[1] = frame.p[1];
+  sample.p[2] = frame.p[2];
+  sample.q[0] = frame.q[0];
+  sample.q[1] = frame.q[1];
+  sample.q[2] = frame.q[2];
+  sample.q[3] = frame.q[3];
 }
 
 export function cupExitOpacityAt(timeMs: number, releaseAtMs: number, exitAtMs: number): number {

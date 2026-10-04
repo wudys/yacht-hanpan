@@ -16,8 +16,8 @@ import {
   displayedBottomDepth,
 } from '@/runtime/dice/renderer/parts/displayed-bottom.test-support';
 import {
-  sampleCupFrames,
-  sampleDieFrames,
+  createCupFrameSampler,
+  createDieFrameSampler,
   type TimelineSample,
 } from '@/runtime/dice/renderer/parts/timeline-sampling';
 import type { CanvasFactory } from '@/runtime/dice/resources/canvas-factory';
@@ -124,17 +124,21 @@ describe('product replay displayed bottom', () => {
         // 240 Hz covers both saved frames and interpolation during shake/pour.
         // This bounded sampling does not claim continuous collision proof.
         for (let time = 0; time <= timeline.cup.releaseAtMs; time += 1000 / 240) times.add(time);
+        const sampleCup = createCupFrameSampler(timeline.cup.frames);
+        const dieSamplers = new Map(
+          timeline.dice.map((die) => [die.slot, createDieFrameSampler(die.frames)]),
+        );
         const exited = new Set<number>();
         let savedSamples = 0;
         let interpolatedSamples = 0;
         let pourSamples = 0;
         let worst = { depth: 0, slot: -1, timeMs: -1 };
         for (const timeMs of [...times].sort((a, b) => a - b)) {
-          const cupSample = sampleCupFrames(timeline.cup.frames, timeMs);
+          const cupSample = sampleCup(timeMs);
           const cupMatrix = poseMatrix(cupSample);
           for (const die of timeline.dice) {
             if (exited.has(die.slot)) continue;
-            const dieSample = sampleDieFrames(die.frames, timeMs);
+            const dieSample = dieSamplers.get(die.slot)!(timeMs);
             const dieMatrix = poseMatrix(dieSample, DIE_GEOMETRY.size);
             if (timeMs >= timeline.cup.pourAtMs && fullyAboveMouth(dieMatrix, cupMatrix)) {
               exited.add(die.slot);

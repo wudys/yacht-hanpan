@@ -1,11 +1,11 @@
 import { useFrame } from '@react-three/fiber';
 import { DIE_GEOMETRY, type DieTimeline } from '@repo/dice-simulation/contract';
-import { useRef } from 'react';
+import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
 
 import { DieMesh } from '@/runtime/dice/renderer/parts/DieVisual';
 import { useRollPlaybackClock } from '@/runtime/dice/renderer/parts/playback-clock';
-import { sampleDieFrames } from '@/runtime/dice/renderer/parts/timeline-sampling';
+import { createDieFrameSampler } from '@/runtime/dice/renderer/parts/timeline-sampling';
 import type { ProceduralDiceResources } from '@/runtime/dice/resources/procedural-resources';
 
 interface TimelineDieProps {
@@ -16,11 +16,12 @@ interface TimelineDieProps {
 export function TimelineDie({ die, resources }: TimelineDieProps) {
   const group = useRef<THREE.Group>(null);
   const playbackClock = useRollPlaybackClock();
+  const sampleFrames = useMemo(() => createDieFrameSampler(die.frames), [die.frames]);
 
   useFrame(() => {
     if (!group.current) return;
     const elapsedMs = playbackClock.elapsedMs();
-    const sample = sampleDieFrames(die.frames, elapsedMs);
+    const sample = sampleFrames(elapsedMs);
     group.current.position.set(sample.p[0], sample.p[1], sample.p[2]);
     group.current.quaternion.set(sample.q[0], sample.q[1], sample.q[2], sample.q[3]);
     group.current.visible = sample.visible;

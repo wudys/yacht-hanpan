@@ -327,13 +327,12 @@ export function createDicePresentation(options: DicePresentationOptions): DicePr
       publishCurrentSettled();
       return;
     }
-    const dice = presentedDice(game);
     if (turnAdvanced) {
       publishCurrentSettled();
     }
     if (rollId !== consumedRollId) {
       consumedRollId = rollId;
-      beginRoll(roll, dice);
+      beginRoll(roll, presentedDice(game));
       return;
     }
     if (activeRoll !== null) {

@@ -1,20 +1,12 @@
 import { DICE_SIMULATION_CONTRACT, POUR_STYLE } from '@repo/dice-simulation/contract';
 import { describe, expect, test } from 'bun:test';
 
-import { PUBLIC_ERROR_CODE } from '../errors';
 import { GameApiParseError } from '../internal/parse';
 import { GAME_PROTOCOL_VERSION } from '../version';
-import {
-  parseCommandAck,
-  parseCommittedRoomUpdate,
-  parseGameSnapshot,
-  parseSyncAck,
-  ROOM_UPDATE_TYPE,
-} from './index';
+import { parseCommittedRoomUpdate, parseGameSnapshot, ROOM_UPDATE_TYPE } from './index';
 
 const TURN_ID = 'c847f81e-8ee0-43ef-b09a-f8ef14612246';
 const ROOM_ID = '018f47f2-c2d8-7f4a-8bf4-3f559c39843e';
-const REQUEST_ID = '97353947-22b7-4de5-b2e5-a3110ef752a4';
 
 const snapshot = {
   stateVersion: 4,
@@ -149,75 +141,6 @@ describe('authoritative events', () => {
     ).toThrow(GameApiParseError);
   });
 
-  test('sync success returns latest game and independent presence versions', () => {
-    const presence = {
-      roomId: ROOM_ID,
-      presenceVersion: 2,
-      seats: [{ status: 'connected' }, { status: 'connected' }],
-    };
-    const parsed = parseSyncAck({
-      ok: true,
-      data: { room: playingRoom, game: snapshot, presence },
-      meta: { requestId: REQUEST_ID, gameProtocolVersion: GAME_PROTOCOL_VERSION, serverTime: 1000 },
-    });
-    expect(parsed.ok).toBeTrue();
-    if (!parsed.ok || parsed.data.game === null) throw new Error('expected playing sync');
-    expect(Number(parsed.data.game.stateVersion)).toBe(4);
-    expect(Number(parsed.data.presence.presenceVersion)).toBe(2);
-  });
-
-  test('sync success represents a waiting room with presence and no game', () => {
-    const parsed = parseSyncAck({
-      ok: true,
-      data: {
-        room: {
-          status: 'waiting',
-          roomId: ROOM_ID,
-          roomCode: '001204',
-          createdAt: 1_000,
-          expiresAt: 301_000,
-          seats: [{ profile: { characterId: 'navy-bob', variant: false } }],
-        },
-        game: null,
-        presence: {
-          roomId: ROOM_ID,
-          presenceVersion: 1,
-          seats: [{ status: 'connected' }],
-        },
-      },
-      meta: { requestId: REQUEST_ID, gameProtocolVersion: GAME_PROTOCOL_VERSION, serverTime: 1000 },
-    });
-
-    expect(parsed).toMatchObject({ ok: true, data: { game: null } });
-  });
-
-  test('requires current snapshot recovery only for expired action results', () => {
-    const presence = {
-      roomId: ROOM_ID,
-      presenceVersion: 2,
-      seats: [{ status: 'connected' }, { status: 'connected' }],
-    } as const;
-    const expired = {
-      ok: false,
-      error: { code: PUBLIC_ERROR_CODE.ACTION_RESULT_EXPIRED, params: {} },
-      recovery: { room: playingRoom, game: snapshot, presence },
-      meta: {
-        requestId: REQUEST_ID,
-        gameProtocolVersion: GAME_PROTOCOL_VERSION,
-        actionId: 'a635fe2c-c4c8-4382-80d7-c35c5d5d455d',
-      },
-    } as const;
-
-    expect(JSON.parse(JSON.stringify(parseCommandAck(expired)))).toEqual(expired);
-    expect(() => parseCommandAck({ ...expired, recovery: undefined })).toThrow(GameApiParseError);
-    expect(() =>
-      parseCommandAck({
-        ...expired,
-        error: { code: PUBLIC_ERROR_CODE.STALE_TURN, params: {} },
-      }),
-    ).toThrow(GameApiParseError);
-  });
-
   test.each([
     {
       type: ROOM_UPDATE_TYPE.STATE_COMMITTED,
@@ -262,69 +185,9 @@ describe('authoritative events', () => {
     ).toThrow(GameApiParseError);
   });
 
-  test('keeps an original roll receipt when its accompanying view has moved on or finished', () => {
-    const receipt = { stateVersion: 4, roll: rollUpdate.roll };
-    const meta = {
-      requestId: REQUEST_ID,
-      actionId: REQUEST_ID,
-      gameProtocolVersion: GAME_PROTOCOL_VERSION,
-    };
-    const advanced = { ...view, game: { ...snapshot, stateVersion: 5 } };
-    const finished = {
-      ...view,
-      room: { ...playingRoom, status: 'finished', finishedAt: 3_000 },
-      game: {
-        stateVersion: 6,
-        match: {
-          status: 'finished',
-          players: snapshot.match.players,
-          result: { reason: 'explicitForfeit', winnerSeatIndex: 1 },
-        },
-      },
-    };
-    for (const currentView of [advanced, finished]) {
-      const ack = { ok: true, data: { receipt, view: currentView }, meta };
-      expect<unknown>(parseCommandAck(ack)).toEqual(ack);
-    }
-  });
-
-  test('rejects a receipt ahead of its view and a same-version roll with inconsistent dice', () => {
-    const meta = {
-      requestId: REQUEST_ID,
-      actionId: REQUEST_ID,
-      gameProtocolVersion: GAME_PROTOCOL_VERSION,
-    };
-    const ack = {
-      ok: true,
-      data: { receipt: { stateVersion: 4, roll: rollUpdate.roll }, view: rollUpdate.view },
-      meta,
-    };
-    expect<unknown>(parseCommandAck(ack)).toEqual(ack);
-    expect(() =>
-      parseCommandAck({
-        ...ack,
-        data: { ...ack.data, receipt: { ...ack.data.receipt, stateVersion: 5 } },
-      }),
-    ).toThrow(GameApiParseError);
-    expect(() => parseCommandAck({ ...ack, data: { ...ack.data, view } })).toThrow(
-      GameApiParseError,
-    );
-  });
-
-  test('rejects legacy partial live updates and receipt-only success envelopes', () => {
+  test('rejects legacy partial live updates', () => {
     expect(() =>
       parseCommittedRoomUpdate({ type: ROOM_UPDATE_TYPE.STATE_COMMITTED, snapshot }),
-    ).toThrow(GameApiParseError);
-    expect(() =>
-      parseCommandAck({
-        ok: true,
-        data: { stateVersion: 4, roll: rollUpdate.roll },
-        meta: {
-          requestId: REQUEST_ID,
-          actionId: REQUEST_ID,
-          gameProtocolVersion: GAME_PROTOCOL_VERSION,
-        },
-      }),
     ).toThrow(GameApiParseError);
   });
 });

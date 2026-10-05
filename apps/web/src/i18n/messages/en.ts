@@ -86,6 +86,7 @@ We use Google and Sentry services, both based in the United States. Network info
   'game.diceControls': 'Dice controls',
   'game.portraitRequired': 'Please rotate your device to portrait mode.',
   'game.turn': 'Turn',
+  'game.turnStartCue': 'Your turn has started.',
   'game.myTurn': 'Your Turn',
   'game.opponentTurn': 'Opponent’s Turn',
   'game.reroll': 'Roll again',

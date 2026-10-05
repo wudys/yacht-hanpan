@@ -12,3 +12,20 @@ export type PlayerScoreSummaryView = Readonly<{
 }>;
 
 export type ScoreGridMode = 'disabled' | 'viewer-turn' | 'opponent-turn';
+
+export type ScoreDisplayOwner = 'viewer' | 'opponent';
+
+export type ScoreCellDisplay =
+  | Readonly<{ state: 'empty'; value: null }>
+  | Readonly<{ state: 'recorded' | 'preview'; value: number }>;
+
+export type ScoreCellInput = 'selectable' | 'recorded' | 'disabled';
+
+export type ScoreRecordFeedback = Readonly<{
+  identity: string;
+  categoryId: CategoryId;
+  score: number;
+  phase: 'confirming' | 'outgoing' | 'incoming';
+  startedAt: number;
+  bonusEarned: boolean;
+}>;

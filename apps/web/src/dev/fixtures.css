@@ -33,3 +33,12 @@
   left: 4px;
   z-index: 2;
 }
+
+/* Freeze the product keyframes at their injected epoch for repeatable captures. */
+.web-app-shell[data-feedback-fixture] .game-board * {
+  animation-play-state: paused !important;
+}
+
+.web-app-shell[data-feedback-fixture] .score-feedback__ring[data-yacht-ring='available'] rect {
+  animation-delay: var(--fixture-feedback-delay);
+}

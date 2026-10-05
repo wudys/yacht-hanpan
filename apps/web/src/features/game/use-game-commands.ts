@@ -190,7 +190,7 @@ export function useGameCommands(
 
   const selectScore = useCallback(
     (categoryId: Parameters<GameSession['selectScoreCategory']>[0]): void => {
-      runCommand('score', (session) => session.selectScoreCategory(categoryId), PRODUCT_CUE.SCORE);
+      runCommand('score', (session) => session.selectScoreCategory(categoryId));
     },
     [runCommand],
   );

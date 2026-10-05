@@ -1,10 +1,21 @@
 import { requireGameAsset, resolveCharacterImageAssetId } from '@repo/game-assets';
-import { MAX_ROLLS_PER_TURN } from '@repo/yacht-rules';
+import { MAX_ROLLS_PER_TURN, UPPER_CATEGORY_IDS } from '@repo/yacht-rules';
 import { type CSSProperties, type ReactNode, useState } from 'react';
 
-import { createFixtureGame, createFixtureResult } from '@/dev/fixture-models';
+import {
+  createFixtureFeedbackGame,
+  createFixtureGame,
+  createFixtureResult,
+  type FixtureFeedbackOptions,
+} from '@/dev/fixture-models';
 import { createGameBoardPresentation } from '@/features/game/game-presentation';
-import { type CategoryLabels, GameBoard, GameResultView, ScoreTable } from '@/features/game/view';
+import {
+  type CategoryLabels,
+  GameBoard,
+  GameResultView,
+  type ScoreRecordFeedback,
+  ScoreTable,
+} from '@/features/game/view';
 import { AchievementSequence } from '@/features/game/view/AchievementSequence';
 import { LobbyView } from '@/features/lobby/view/LobbyView';
 import { type Locale, type MessageKey, type MessageKeyWithoutParams, translate } from '@/i18n';
@@ -25,22 +36,43 @@ export type VisualFixtureProps = Readonly<{
   mode: string;
   locale: Locale;
   replay?: ReactNode;
+  feedback?: FixtureFeedbackOptions;
 }>;
 
-export function VisualFixture({ anchor, mode, locale, replay }: VisualFixtureProps) {
+export function VisualFixture({ anchor, mode, locale, replay, feedback }: VisualFixtureProps) {
   const t = (key: MessageKeyWithoutParams) => translate(locale, key);
   const result = createFixtureResult(mode);
-  const model = anchor === 'result' ? result.model : createFixtureGame(mode);
+  const feedbackGame = feedback ? createFixtureFeedbackGame(feedback) : undefined;
+  const model =
+    feedbackGame?.model ?? (anchor === 'result' ? result.model : createFixtureGame(mode));
+  const [feedbackStartedAt] = useState(() => performance.now() - (feedback?.elapsed ?? 0));
+  const recordFeedback: ScoreRecordFeedback | null =
+    feedbackGame?.record && feedback
+      ? {
+          identity: `fixture-${feedback.scenario}`,
+          categoryId: feedbackGame.record.categoryId,
+          score: feedbackGame.record.score,
+          startedAt: feedbackStartedAt,
+          bonusEarned: feedback.scenario === 'bonus',
+          phase:
+            feedback.elapsed >= 900
+              ? 'incoming'
+              : feedback.elapsed >= 800
+                ? 'outgoing'
+                : 'confirming',
+        }
+      : null;
   const categories = Object.fromEntries(
     model.scoreRows.map(({ categoryId }) => [categoryId, t(`category.${categoryId}`)]),
   ) as CategoryLabels;
   const viewerImage = requireGameAsset(resolveCharacterImageAssetId('navy-bob', false)).url;
-  const opponentImage = requireGameAsset(resolveCharacterImageAssetId('blonde-buns', false)).url;
+  const opponentImage = requireGameAsset(
+    resolveCharacterImageAssetId(feedback?.sameAvatar ? 'navy-bob' : 'blonde-buns', false),
+  ).url;
   const viewer = {
     label: t('game.you'),
     imageUrl: viewerImage,
     imageAlt: t('game.you'),
-    selfLabel: t('game.you'),
     total: model.viewer.total,
     upperSubtotal: model.viewer.upperSubtotal,
     upperBonus: model.viewer.upperBonus,
@@ -54,14 +86,26 @@ export function VisualFixture({ anchor, mode, locale, replay }: VisualFixturePro
     upperBonus: model.opponent.upperBonus,
   };
 
-  const [group, setGroup] = useState<'upper' | 'lower'>('lower');
+  const [group, setGroup] = useState<'upper' | 'lower'>(() =>
+    recordFeedback &&
+    UPPER_CATEGORY_IDS.some((categoryId) => categoryId === recordFeedback.categoryId)
+      ? 'upper'
+      : 'lower',
+  );
   const [lastIntent, setLastIntent] = useState('none');
   const record = (intent: string) => () => setLastIntent(intent);
   const { turn } = model;
-  const summaryPlayer = turn?.isViewerTurn ? viewer : opponent;
+  const displayOwner =
+    recordFeedback && recordFeedback.phase !== 'incoming'
+      ? (feedback?.recorder ?? 'viewer')
+      : turn?.isViewerTurn
+        ? 'viewer'
+        : 'opponent';
+  const summaryPlayer = displayOwner === 'viewer' ? viewer : opponent;
   const boardPresentation = createGameBoardPresentation(model, locale);
-  const stageFaces: readonly (keyof typeof categories)[] =
-    mode === 'before-roll'
+  const stageFaces: readonly (keyof typeof categories)[] = feedback
+    ? (turn?.dice ?? []).filter((die) => !die.held).map((die) => UPPER_CATEGORY_IDS[die.value - 1]!)
+    : mode === 'before-roll'
       ? []
       : anchor === 'achievement'
         ? Array.from({ length: 3 }, () => (mode === 'yacht' ? 'fives' : 'fours'))
@@ -71,14 +115,32 @@ export function VisualFixture({ anchor, mode, locale, replay }: VisualFixturePro
       rolling={replay !== undefined}
       rollRailHidden={replay !== undefined}
       model={model}
+      scoreDisplay={{
+        owner: displayOwner,
+        rows: model.scoreRows,
+        previewVisible: Boolean(turn?.isViewerTurn && turn.dice.length > 0),
+        showFirstRollGuide: recordFeedback ? false : (turn?.showFirstRollGuide ?? false),
+      }}
+      recordFeedback={recordFeedback}
+      yachtAvailable={feedback?.scenario === 'yacht-available'}
+      turnCue={
+        feedback?.scenario === 'turn'
+          ? { identity: 'fixture-turn', startedAt: feedbackStartedAt }
+          : null
+      }
+      turnCueLabel={t('game.myTurn')}
       rollAction={boardPresentation.rollAction}
-      summaryPlayer={summaryPlayer}
+      summaryPlayer={{
+        imageUrl: summaryPlayer.imageUrl,
+        imageAlt: summaryPlayer.imageAlt,
+        label: summaryPlayer.label,
+      }}
       bonusEarned={summaryPlayer.upperBonus > 0}
       categories={categories}
       activeGroup={group}
       labels={{
         turn: `${t('game.turn')} ${turn?.ordinal}/12`,
-        timer: `60${t('game.seconds')}`,
+        timer: `${feedback ? 90 : 60}${t('game.seconds')}`,
         settings: t('game.settings'),
         diceStage: t('game.diceStage'),
         heldDice: t('game.diceControls'),
@@ -115,7 +177,7 @@ export function VisualFixture({ anchor, mode, locale, replay }: VisualFixturePro
           </div>
         )
       }
-      interactionLocked={mode === 'pending' || anchor === 'achievement'}
+      interactionLocked={recordFeedback !== null || mode === 'pending' || anchor === 'achievement'}
       onRoll={record('roll')}
       onSetDieHeld={(slot) => setLastIntent(`hold:${slot}`)}
       onSelectScore={(category) => setLastIntent(`score:${category}`)}
@@ -211,8 +273,11 @@ export function VisualFixture({ anchor, mode, locale, replay }: VisualFixturePro
       className='web-app-shell'
       data-anchor={anchor}
       data-last-intent={lastIntent}
+      data-feedback-fixture={feedback?.scenario}
+      data-feedback-elapsed={feedback?.elapsed}
       style={
         {
+          '--fixture-feedback-delay': `${-(feedback?.elapsed ?? 0)}ms`,
           '--web-wrapper-pattern-image': `url("${requireGameAsset('brand.wrapper-pattern').url}")`,
         } as CSSProperties
       }
@@ -222,7 +287,8 @@ export function VisualFixture({ anchor, mode, locale, replay }: VisualFixturePro
         {replay}
       </GameFrame>
       <p className='anchor-fixture-label'>
-        DEV-01 · {anchor} · {locale} · layout fixture
+        DEV-01 · {anchor} · {locale} ·{' '}
+        {feedback ? `${feedback.scenario} · ${feedback.elapsed}ms · paused` : 'layout fixture'}
       </p>
     </div>
   );

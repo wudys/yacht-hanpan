@@ -1,28 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
-
-export function useViewerTurnSummaryEmphasis(
-  identity: string | null,
-  boardVisible: boolean,
-): boolean {
-  const consumedIdentityRef = useRef<string | null>(null);
-  const [emphasized, setEmphasized] = useState(false);
-
-  useEffect(() => {
-    if (!boardVisible || identity === null) {
-      setEmphasized(false);
-      return undefined;
-    }
-    if (consumedIdentityRef.current !== identity) {
-      consumedIdentityRef.current = identity;
-      setEmphasized(true);
-    }
-
-    const timer = globalThis.setTimeout(() => setEmphasized(false), 300);
-    return () => globalThis.clearTimeout(timer);
-  }, [boardVisible, identity]);
-
-  return emphasized;
-}
+import { useEffect, useState } from 'react';
 
 export function useDelayedRollSpinner(pending: boolean, identity: object | null): boolean {
   const [visibleIdentity, setVisibleIdentity] = useState<object | null>(null);

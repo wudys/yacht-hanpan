@@ -5,8 +5,19 @@ import { memo, type ReactNode, useMemo } from 'react';
 import { GamePresence } from '@/features/game/view/board/GamePresence';
 import { GameTimer } from '@/features/game/view/board/GameTimer';
 import { PlayerSummary, type PlayerSummaryProps } from '@/features/game/view/board/PlayerSummary';
-import type { DiceSlotViewModel, GameViewModel } from '@/features/game/view/game-view-model';
-import { type CategoryLabels, ScoreGrid, type ScoreGridMode } from '@/features/game/view/score';
+import { type TurnCueFeedback, TurnStartCue } from '@/features/game/view/board/TurnStartCue';
+import type {
+  DiceSlotViewModel,
+  GameViewModel,
+  ScoreRowViewModel,
+} from '@/features/game/view/game-view-model';
+import {
+  type CategoryLabels,
+  type ScoreDisplayOwner,
+  ScoreGrid,
+  type ScoreGridMode,
+  type ScoreRecordFeedback,
+} from '@/features/game/view/score';
 import { Button, IconButton } from '@/ui/button';
 
 const MemoPlayerSummary = memo(PlayerSummary);
@@ -15,6 +26,16 @@ const MemoScoreGrid = memo(ScoreGrid);
 export type GameBoardProps = Readonly<{
   model: Pick<GameViewModel, 'turn' | 'scoreRows' | 'actions'>;
   rollAction: Readonly<{ label: string; readOnly: boolean }>;
+  scoreDisplay: Readonly<{
+    owner: ScoreDisplayOwner;
+    rows: readonly ScoreRowViewModel[];
+    previewVisible: boolean;
+    showFirstRollGuide: boolean;
+  }>;
+  recordFeedback?: ScoreRecordFeedback | null;
+  yachtAvailable?: boolean;
+  turnCue?: TurnCueFeedback | null;
+  turnCueLabel?: string;
   summaryPlayer: PlayerSummaryProps['player'];
   bonusEarned: boolean;
   categories: CategoryLabels;
@@ -48,7 +69,6 @@ export type GameBoardProps = Readonly<{
   interactionLocked?: boolean;
   rollPending?: boolean;
   rollProgress?: ReactNode;
-  summaryEmphasized?: boolean;
   timerWarning?: boolean;
   timerContent?: ReactNode;
   presenceContent?: ReactNode;
@@ -92,6 +112,11 @@ export function GameBoard({
   model,
   rollAction,
   summaryPlayer,
+  scoreDisplay,
+  recordFeedback,
+  yachtAvailable = false,
+  turnCue,
+  turnCueLabel = '',
   bonusEarned,
   categories,
   activeGroup,
@@ -104,7 +129,6 @@ export function GameBoard({
   interactionLocked = false,
   rollPending = false,
   rollProgress,
-  summaryEmphasized = false,
   timerWarning = false,
   timerContent,
   presenceContent,
@@ -123,17 +147,9 @@ export function GameBoard({
       bonus: labels.bonus,
       bonusStatus: labels.bonusStatus,
       bonusInfo: labels.bonusInfo,
-      turnState: labels.turnState,
       scoreboard: labels.scoreboard,
     }),
-    [
-      labels.total,
-      labels.bonus,
-      labels.bonusStatus,
-      labels.bonusInfo,
-      labels.turnState,
-      labels.scoreboard,
-    ],
+    [labels.total, labels.bonus, labels.bonusStatus, labels.bonusInfo, labels.scoreboard],
   );
   const scoreLabels = useMemo(
     () => ({
@@ -183,6 +199,9 @@ export function GameBoard({
       </header>
 
       <section className='dice-board' data-game-band='dice' data-rolling={rolling}>
+        {turnCue ? (
+          <TurnStartCue key={turnCue.identity} cue={turnCue} label={turnCueLabel} />
+        ) : null}
         {rolling ? physicsArea : null}
         <div className='held-dice-rack' aria-label={labels.heldDice}>
           {DIE_SLOTS.map((slot) => {
@@ -247,21 +266,26 @@ export function GameBoard({
       <div className='game-board__scoring-panel'>
         <MemoPlayerSummary
           player={summaryPlayer}
+          recordFeedback={recordFeedback}
           labels={summaryLabels}
-          isViewerTurn={turn?.isViewerTurn ?? false}
+          displayOwner={scoreDisplay.owner}
           bonusEarned={bonusEarned}
-          emphasized={summaryEmphasized}
           bonusPopover={bonusPopover}
           onOpenBonus={onOpenBonus}
           onOpenScoreboard={onOpenScoreboard}
         />
 
         <section className='game-board__score' data-game-band='score'>
-          {turn?.showFirstRollGuide ? (
+          {scoreDisplay.showFirstRollGuide ? (
             <p className='game-board__first-roll-guide'>{labels.firstRollGuide}</p>
           ) : null}
           <MemoScoreGrid
-            rows={model.scoreRows}
+            recordFeedback={recordFeedback}
+            yachtAvailable={yachtAvailable}
+            rows={scoreDisplay.rows}
+            inputRows={model.scoreRows}
+            displayOwner={scoreDisplay.owner}
+            previewVisible={scoreDisplay.previewVisible}
             categories={categories}
             activeGroup={activeGroup}
             mode={scoreMode}

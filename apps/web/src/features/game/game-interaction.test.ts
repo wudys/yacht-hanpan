@@ -8,6 +8,7 @@ const ready = {
   connected: true,
   deadlineReady: true,
   turnReady: true,
+  recordFeedbackActive: false,
   layer: 'board',
   recoveryActive: false,
   hasCommandNotice: false,
@@ -15,8 +16,11 @@ const ready = {
 } as const;
 
 describe('Game input scopes', () => {
-  test('turn handoff blocks gameplay while allowing forfeit and exploration', () => {
-    expect(deriveGameInputScopes({ ...ready, turnReady: false })).toMatchObject({
+  test.each([
+    { turnReady: false, recordFeedbackActive: false },
+    { turnReady: true, recordFeedbackActive: true },
+  ])('turn handoff blocks gameplay while allowing forfeit and exploration', (handoff) => {
+    expect(deriveGameInputScopes({ ...ready, ...handoff })).toMatchObject({
       commandBlocked: false,
       gameplayBlocked: true,
       boardInteractionLocked: true,

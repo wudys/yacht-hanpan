@@ -1,4 +1,9 @@
-import { MAX_ROLLS_PER_TURN, type Scorecard } from '@repo/yacht-rules';
+import {
+  type CategoryId,
+  MAX_ROLLS_PER_TURN,
+  type Scorecard,
+  type SeatIndex,
+} from '@repo/yacht-rules';
 
 import {
   deriveGameViewModel,
@@ -168,4 +173,108 @@ function resultConfiguration(mode: FixtureResultMode): Readonly<{
 
 function player(scorecard: Scorecard, timeoutCount: 0 | 1 | 2 = 0): FixturePlayer {
   return { scorecard, timeoutCount };
+}
+
+export type FixtureFeedbackOptions = Readonly<{
+  scenario:
+    'score' | 'zero' | 'bonus' | 'long' | 'yacht' | 'yacht-zero' | 'turn' | 'yacht-available';
+  elapsed: number;
+  recorder: 'viewer' | 'opponent';
+  sameAvatar: boolean;
+}>;
+
+export function parseFixtureFeedback(params: URLSearchParams): FixtureFeedbackOptions | undefined {
+  const scenario = params.get('feedback');
+  if (
+    scenario !== 'score' &&
+    scenario !== 'zero' &&
+    scenario !== 'bonus' &&
+    scenario !== 'long' &&
+    scenario !== 'yacht' &&
+    scenario !== 'yacht-zero' &&
+    scenario !== 'turn' &&
+    scenario !== 'yacht-available'
+  )
+    return undefined;
+  const elapsed = Number(params.get('elapsed') ?? 350);
+  return {
+    scenario,
+    elapsed: Number.isFinite(elapsed) ? Math.max(0, Math.min(elapsed, 999)) : 350,
+    recorder: params.get('recorder') === 'opponent' ? 'opponent' : 'viewer',
+    sameAvatar: params.get('sameAvatar') === '1',
+  };
+}
+
+export function createFixtureFeedbackGame(options: FixtureFeedbackOptions): Readonly<{
+  model: GameViewModel;
+  record: Readonly<{ categoryId: CategoryId; score: number }> | null;
+}> {
+  const recorderSeat: SeatIndex = options.recorder === 'viewer' ? 0 : 1;
+  if (options.scenario === 'turn') return { model: createFixtureGame('before-roll'), record: null };
+  if (options.scenario === 'yacht-available') {
+    return {
+      model: deriveGameViewModel(
+        {
+          match: {
+            status: 'playing',
+            players: achievementPlayers,
+            currentTurn: {
+              seatIndex: recorderSeat,
+              rollCount: 1,
+              dice: [{ value: 5 }, { value: 5 }, { value: 5 }, { value: 5 }, { value: 5 }],
+              heldSlots: [0, 1],
+            },
+          },
+        },
+        0,
+      ),
+      record: null,
+    };
+  }
+  const categoryId: CategoryId =
+    options.scenario === 'zero'
+      ? 'twos'
+      : options.scenario === 'long'
+        ? 'large-straight'
+        : options.scenario === 'yacht' || options.scenario === 'yacht-zero'
+          ? 'yacht'
+          : 'sixes';
+  const score =
+    options.scenario === 'zero' || options.scenario === 'yacht-zero'
+      ? 0
+      : options.scenario === 'long'
+        ? 30
+        : options.scenario === 'yacht'
+          ? 50
+          : 18;
+  const before: Scorecard =
+    options.scenario === 'bonus'
+      ? {
+          ones: 3,
+          twos: 6,
+          threes: 9,
+          fours: 12,
+          fives: 15,
+          choice: 30,
+          'four-of-a-kind': 24,
+          'full-house': 28,
+        }
+      : { ones: 3, fives: 10, 'full-house': 18 };
+  const after: FixturePlayer = { scorecard: { ...before, [categoryId]: score }, timeoutCount: 0 };
+  const model = deriveGameViewModel(
+    {
+      match: {
+        status: 'playing',
+        players: recorderSeat === 0 ? [after, players[1]] : [players[0], after],
+        currentTurn: {
+          seatIndex: recorderSeat === 0 ? 1 : 0,
+          rollCount: 0,
+          dice: null,
+          heldSlots: [],
+        },
+      },
+    },
+    0,
+  );
+  return { model, record: { categoryId, score } };
 }

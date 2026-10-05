@@ -1,6 +1,11 @@
 import { expect } from '@playwright/test';
 
 import { joinProductGame, PRODUCT_GAME_ORIGIN } from '../helpers/product-game';
+import {
+  disposeScoreFeedback,
+  observeScoreFeedback,
+  readScoreFeedback,
+} from '../helpers/score-feedback';
 import { test } from '../helpers/test';
 
 test('held dice survive rerolls and a zero score remains selectable after the last roll', async ({
@@ -260,11 +265,43 @@ test('two browsers finish all twelve turns and return from the authoritative res
           expect(Number.isInteger(preview)).toBe(true);
           expect(preview).toBeGreaterThanOrEqual(0);
           recorded[seat]!.push(preview);
+          const finalRecord = group === 'lower' && category === 'yacht' && seat === 1;
+          const finalAudits = finalRecord
+            ? await Promise.all(players.map(observeScoreFeedback))
+            : [];
           await cell.click();
+          if (finalRecord) {
+            for (const [viewer, client] of players.entries()) {
+              const audit = finalAudits[viewer]!;
+              await expect
+                .poll(async () =>
+                  (await readScoreFeedback(audit)).some(
+                    (event) =>
+                      event.phase === 'confirming' &&
+                      event.category === 'yacht' &&
+                      event.owner === (viewer === seat ? 'viewer' : 'opponent') &&
+                      event.score === String(preview),
+                  ),
+                )
+                .toBe(true);
+              await expect(client.locator('[data-product-view="result"]')).toBeVisible();
+              const observations = await readScoreFeedback(audit);
+              const confirming = observations.find(
+                (event) => event.phase === 'confirming' && event.category === 'yacht',
+              )!;
+              const result = observations.find(
+                (event) => event.at > confirming.at && event.owner === null,
+              );
+              expect(result).toBeDefined();
+              expect(result!.at - confirming.at).toBeGreaterThanOrEqual(950);
+              await disposeScoreFeedback(audit);
+            }
+          }
           await expect(
             current.locator('[data-product-view="game"][data-viewer-turn="true"]'),
           ).toHaveCount(0);
           if (group === 'lower' && category === 'choice' && seat === 0) {
+            await expect(current.locator('[data-player-summary="opponent"]')).toBeVisible();
             const opponentChoice = current.locator('button[data-score-category="choice"]');
             await expect(current.locator('[data-score-grid]')).toHaveAttribute(
               'data-mode',

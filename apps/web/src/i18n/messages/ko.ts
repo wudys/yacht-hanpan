@@ -84,6 +84,7 @@ Google(미국)과 Sentry(미국) 서비스와 연계됩니다. 전송 시 IP 등
   'game.diceControls': '주사위 조작',
   'game.portraitRequired': '기기를 세로로 돌려 주세요.',
   'game.turn': '턴',
+  'game.turnStartCue': '내 턴이 시작됐어요.',
   'game.myTurn': '내 턴',
   'game.opponentTurn': '상대 턴',
   'game.reroll': '다시 굴리기',

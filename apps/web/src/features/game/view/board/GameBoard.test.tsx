@@ -57,18 +57,24 @@ const labels = {
 test('composes the fixed game bands around an injected physics stage', () => {
   const view = renderToStaticMarkup(
     <GameBoard
+      scoreDisplay={{
+        owner: 'viewer',
+        rows: model.scoreRows,
+        previewVisible: true,
+        showFirstRollGuide: false,
+      }}
       bonusEarned={false}
       rollAction={{ label: 'Roll again', readOnly: false }}
       model={model}
       summaryPlayer={{
         imageUrl: '/viewer.webp',
         imageAlt: 'You',
+        label: 'You',
       }}
       categories={categories}
       activeGroup='lower'
       labels={labels}
       diceStage={<div data-physics-stage='true' />}
-      summaryEmphasized
     />,
   );
 
@@ -82,7 +88,6 @@ test('composes the fixed game bands around an injected physics stage', () => {
   expect(view).toContain('data-die-face="1"');
   expect(view.match(/data-die-pip=/g)?.length).toBe(1);
   expect(view.match(/data-player-summary=/g)?.length).toBe(1);
-  expect(view).toContain('data-summary-emphasized="true"');
   expect(view).toContain('data-bonus-info-action="true"');
   expect(view.match(/data-score-cell=/g)?.length).toBe(6);
   expect(view.match(/>18</g)?.length).toBe(1);
@@ -91,6 +96,12 @@ test('composes the fixed game bands around an injected physics stage', () => {
 test('renders the authoritative held order without changing die slot identity', () => {
   const view = renderToStaticMarkup(
     <GameBoard
+      scoreDisplay={{
+        owner: 'viewer',
+        rows: model.scoreRows,
+        previewVisible: true,
+        showFirstRollGuide: false,
+      }}
       bonusEarned={false}
       rollAction={{ label: 'Roll again', readOnly: false }}
       model={{
@@ -107,7 +118,7 @@ test('renders the authoritative held order without changing die slot identity', 
           ],
         },
       }}
-      summaryPlayer={{ imageAlt: 'You' }}
+      summaryPlayer={{ imageAlt: 'You', label: 'You' }}
       categories={categories}
       activeGroup='lower'
       labels={labels}
@@ -122,6 +133,12 @@ test('renders the authoritative held order without changing die slot identity', 
 test('packs held dice to the left while retaining their authoritative slot identity', () => {
   const view = renderToStaticMarkup(
     <GameBoard
+      scoreDisplay={{
+        owner: 'viewer',
+        rows: model.scoreRows,
+        previewVisible: true,
+        showFirstRollGuide: false,
+      }}
       bonusEarned={false}
       rollAction={{ label: 'Roll again', readOnly: false }}
       model={{
@@ -138,7 +155,7 @@ test('packs held dice to the left while retaining their authoritative slot ident
           ],
         },
       }}
-      summaryPlayer={{ imageAlt: 'You' }}
+      summaryPlayer={{ imageAlt: 'You', label: 'You' }}
       categories={categories}
       activeGroup='lower'
       labels={labels}
@@ -153,12 +170,19 @@ test('packs held dice to the left while retaining their authoritative slot ident
 test('keeps the authoritative board presentation while input is locked', () => {
   const view = renderToStaticMarkup(
     <GameBoard
+      scoreDisplay={{
+        owner: 'viewer',
+        rows: model.scoreRows,
+        previewVisible: true,
+        showFirstRollGuide: false,
+      }}
       bonusEarned={false}
       rollAction={{ label: 'Roll again', readOnly: false }}
       model={model}
       summaryPlayer={{
         imageUrl: '/viewer.webp',
         imageAlt: 'You',
+        label: 'You',
       }}
       categories={categories}
       activeGroup='lower'
@@ -181,6 +205,12 @@ test.each([undefined, 'Applying result'])(
   (progress) => {
     const view = renderToStaticMarkup(
       <GameBoard
+        scoreDisplay={{
+          owner: 'viewer',
+          rows: model.scoreRows,
+          previewVisible: true,
+          showFirstRollGuide: false,
+        }}
         bonusEarned={false}
         rollAction={{ label: 'Roll complete', readOnly: true }}
         rollProgress={progress}
@@ -189,7 +219,7 @@ test.each([undefined, 'Applying result'])(
           turn: { ...model.turn!, rollCount: 3 },
           actions: { ...model.actions, canRoll: false },
         }}
-        summaryPlayer={{ imageAlt: 'You' }}
+        summaryPlayer={{ imageAlt: 'You', label: 'You' }}
         categories={categories}
         activeGroup='lower'
         labels={labels}
@@ -208,6 +238,16 @@ test.each([undefined, 'Applying result'])(
 test('shows the opponent scorecard immediately on an opponent pre-roll turn', () => {
   const view = renderToStaticMarkup(
     <GameBoard
+      scoreDisplay={{
+        owner: 'opponent',
+        rows: model.scoreRows.map((row) =>
+          row.categoryId === 'choice'
+            ? { ...row, viewerScore: 19, opponentScore: 7, previewScore: null, selectable: false }
+            : row,
+        ),
+        previewVisible: false,
+        showFirstRollGuide: false,
+      }}
       bonusEarned={false}
       rollAction={{ label: 'Their turn', readOnly: true }}
       model={{
@@ -225,7 +265,7 @@ test('shows the opponent scorecard immediately on an opponent pre-roll turn', ()
             : row,
         ),
       }}
-      summaryPlayer={{ imageAlt: 'Opponent' }}
+      summaryPlayer={{ imageAlt: 'Opponent', label: 'Opponent' }}
       categories={categories}
       activeGroup='lower'
       labels={labels}
@@ -247,7 +287,13 @@ test('uses injected HUD content and distinguishes an empty presence slot from th
     categories,
     labels: { ...labels, presence: 'Fallback connection notice' },
     rollAction: { label: 'Roll again', readOnly: false },
-    summaryPlayer: { imageAlt: 'You' },
+    scoreDisplay: {
+      owner: 'viewer' as const,
+      rows: model.scoreRows,
+      previewVisible: true,
+      showFirstRollGuide: false,
+    },
+    summaryPlayer: { imageAlt: 'You', label: 'You' },
     bonusEarned: false,
     activeGroup: 'upper' as const,
   };
@@ -260,4 +306,64 @@ test('uses injected HUD content and distinguishes an empty presence slot from th
   expect(utils).not.toContain('Fallback connection notice');
   expect(utils).not.toContain('52 seconds');
   expect(utils).toContain('Injected timer');
+});
+
+test.each(['viewer', 'opponent'] as const)(
+  'keeps gameplay authority while displaying the %s score panel',
+  (owner) => {
+    const view = renderToStaticMarkup(
+      <GameBoard
+        model={model}
+        scoreDisplay={{
+          owner,
+          rows: model.scoreRows.map((row) => ({ ...row, viewerScore: 0, opponentScore: 20 })),
+          previewVisible: false,
+          showFirstRollGuide: false,
+        }}
+        summaryPlayer={{
+          imageUrl: '/same-avatar.webp',
+          imageAlt: owner,
+          label: owner === 'viewer' ? 'You' : 'Opponent',
+        }}
+        bonusEarned={false}
+        categories={categories}
+        activeGroup='lower'
+        labels={labels}
+        rollAction={{ label: 'Roll again', readOnly: false }}
+      />,
+    );
+    const choiceCell = view.match(
+      /<button class="score-category-cell"[^>]*data-score-category="choice"[\s\S]*?<\/button>/u,
+    )?.[0];
+    expect(view).toContain('data-viewer-turn="true"');
+    expect(view).toContain(`data-player-summary="${owner}"`);
+    expect(choiceCell).toContain('data-input-available="true"');
+    expect(choiceCell).toContain(`choice · ${owner === 'viewer' ? 0 : 20}`);
+    expect(view).toContain('Roll again');
+    expect(view.match(/<button class="held-dice-rack__slot"[^>]*>/u)?.[0]).not.toContain(
+      'disabled',
+    );
+  },
+);
+
+test('can retain a recorder score panel without restoring the previous first-roll guide', () => {
+  const view = renderToStaticMarkup(
+    <GameBoard
+      model={{ ...model, turn: { ...model.turn!, showFirstRollGuide: true } }}
+      scoreDisplay={{
+        owner: 'opponent',
+        rows: model.scoreRows,
+        previewVisible: false,
+        showFirstRollGuide: false,
+      }}
+      summaryPlayer={{ imageAlt: 'Opponent', label: '상대' }}
+      bonusEarned={false}
+      categories={categories}
+      activeGroup='lower'
+      labels={labels}
+      rollAction={{ label: 'Roll again', readOnly: false }}
+    />,
+  );
+  expect(view).not.toContain('First roll guide');
+  expect(view).toContain('>상대</strong>');
 });

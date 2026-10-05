@@ -1,11 +1,24 @@
 import { requireGameAsset } from '@repo/game-assets';
 import type { CategoryId } from '@repo/yacht-rules';
 
-import type { ScoreRowViewModel } from '@/features/game/view/game-view-model';
-import type { ScoreGridMode } from '@/features/game/view/score/types';
+import {
+  RecordTransition,
+  ScoreRecordEffect,
+  YachtRing,
+} from '@/features/game/view/score/RecordFeedback';
+import type {
+  ScoreCellDisplay,
+  ScoreCellInput,
+  ScoreGridMode,
+  ScoreRecordFeedback,
+} from '@/features/game/view/score/types';
 
 export type ScoreCategoryCellProps = Readonly<{
-  row: ScoreRowViewModel;
+  recordFeedback?: ScoreRecordFeedback | null;
+  yachtAvailable?: boolean;
+  categoryId: CategoryId;
+  display: ScoreCellDisplay;
+  input: ScoreCellInput;
   label: string;
   mode: ScoreGridMode;
   emptyValueLabel: string;
@@ -15,7 +28,11 @@ export type ScoreCategoryCellProps = Readonly<{
 }>;
 
 export function ScoreCategoryCell({
-  row,
+  categoryId,
+  recordFeedback,
+  yachtAvailable = false,
+  display,
+  input,
   label,
   mode,
   emptyValueLabel,
@@ -23,55 +40,56 @@ export function ScoreCategoryCell({
   onSelect,
   onBlockedSelect,
 }: ScoreCategoryCellProps) {
-  const recordedScore = mode === 'opponent-turn' ? row.opponentScore : row.viewerScore;
-  const value =
-    recordedScore ??
-    (mode === 'viewer-turn' && row.previewScore !== null ? row.previewScore : null);
-  const valueState =
-    recordedScore !== null
-      ? 'recorded'
-      : mode === 'viewer-turn' && row.previewScore !== null
-        ? 'preview'
-        : 'empty';
-  const selectable =
-    mode === 'viewer-turn' && row.viewerScore === null && row.selectable && !interactionLocked;
-  const recordedSelectionBlocked =
-    mode === 'viewer-turn' && row.viewerScore !== null && !interactionLocked;
+  const { value, state: valueState } = display;
+  const confirmed =
+    recordFeedback !== null &&
+    recordFeedback !== undefined &&
+    recordFeedback.phase !== 'incoming' &&
+    recordFeedback.categoryId === categoryId;
+  const selectable = input === 'selectable' && !interactionLocked;
+  const recordedSelectionBlocked = input === 'recorded' && !interactionLocked;
 
   return (
     <button
       className='score-category-cell'
       type='button'
       data-score-cell='true'
-      data-score-category={row.categoryId}
+      data-score-category={categoryId}
+      data-score-confirmed={confirmed || undefined}
+      data-yacht-available={yachtAvailable || undefined}
       data-mode={mode}
       data-value-state={valueState}
       data-input-available={selectable}
       aria-label={`${label} · ${value ?? emptyValueLabel}`}
-      data-interaction-locked={
-        mode === 'viewer-turn' && row.viewerScore === null && row.selectable && interactionLocked
-          ? 'true'
-          : 'false'
-      }
+      data-interaction-locked={input === 'selectable' && interactionLocked ? 'true' : 'false'}
       disabled={!selectable && !recordedSelectionBlocked && !interactionLocked}
       aria-disabled={!selectable}
       onClick={() => {
         if (selectable) {
-          onSelect?.(row.categoryId);
+          onSelect?.(categoryId);
         } else if (recordedSelectionBlocked) {
-          onBlockedSelect?.(row.categoryId);
+          onBlockedSelect?.(categoryId);
         }
       }}
     >
       <img
         className='score-category-cell__icon'
-        src={requireGameAsset(`score.${row.categoryId}`).url}
+        src={requireGameAsset(`score.${categoryId}`).url}
         alt=''
       />
       <span className='score-category-cell__label'>{label}</span>
-      <span className='score-category-cell__value' data-score-value-kind={valueState}>
+      <RecordTransition
+        key={`${recordFeedback?.identity ?? 'idle'}:${recordFeedback?.phase ?? 'idle'}`}
+        feedback={recordFeedback}
+        className='score-category-cell__value'
+        data-score-value-kind={valueState}
+      >
         {value}
-      </span>
+      </RecordTransition>
+      {confirmed && recordFeedback ? (
+        <ScoreRecordEffect key={recordFeedback.identity} feedback={recordFeedback} />
+      ) : null}
+      {yachtAvailable && !confirmed ? <YachtRing /> : null}
     </button>
   );
 }

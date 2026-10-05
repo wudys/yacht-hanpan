@@ -1,19 +1,23 @@
 import type { ServerClock } from '@repo/game-client-sdk';
-import type { CategoryId, DieSlot } from '@repo/yacht-rules';
+import {
+  type CategoryId,
+  type DieSlot,
+  findSpecialCombinations,
+  SPECIAL_COMBINATION,
+} from '@repo/yacht-rules';
 import {
   memo,
   type ReactNode,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
+  useRef,
   useState,
   useSyncExternalStore,
 } from 'react';
 
-import {
-  useDelayedRollSpinner,
-  useViewerTurnSummaryEmphasis,
-} from '@/features/game/game-display-hooks';
+import { useDelayedRollSpinner } from '@/features/game/game-display-hooks';
 import {
   deriveGameInputScopes,
   deriveGameInteraction,
@@ -31,6 +35,7 @@ import { GamePresenceNotice, GamePresenceProvider } from '@/features/game/hud/Ga
 import { SettledDiceControls } from '@/features/game/SettledDiceControls';
 import { useGameCommands } from '@/features/game/use-game-commands';
 import { useGameResultLifecycle } from '@/features/game/use-game-result-lifecycle';
+import { useTurnFeedback } from '@/features/game/use-turn-feedback';
 import {
   BonusInfoPopover,
   deriveGameViewModel,
@@ -138,22 +143,11 @@ export default function GameScreen({
     () => (model === null ? null : createGameScorePresentation(holderSnapshot.room, model, locale)),
     [holderSnapshot.room, model, locale],
   );
-  const summaryIsViewer = model?.turn?.isViewerTurn ?? true;
-  const summaryScore = summaryIsViewer ? scorePresentation?.viewer : scorePresentation?.opponent;
-  const summaryPlayer = useMemo(
-    () => ({
-      imageUrl: summaryScore?.imageUrl,
-      imageAlt: translate(locale, summaryIsViewer ? 'game.you' : 'game.opponent'),
-      selfLabel: summaryIsViewer ? translate(locale, 'game.you') : undefined,
-    }),
-    [locale, summaryIsViewer, summaryScore?.imageUrl],
-  );
   const opponentSeatPresence =
     holderSnapshot.authority === null || presence === null || presence.seats.length !== 2
       ? null
       : presence.seats[holderSnapshot.authority.seatIndex === 0 ? 1 : 0];
   const finished = game?.match.status === 'finished';
-  useScreenTelemetry(game ? (finished ? 'result' : 'game') : null);
   const deadlineAt = game?.match.status === 'playing' ? game.match.currentTurn.deadlineAt : null;
   const startedAt = game?.match.status === 'playing' ? game.match.currentTurn.startedAt : null;
   const {
@@ -170,10 +164,6 @@ export default function GameScreen({
     game.match.currentTurn.seatIndex === holderSnapshot.authority.seatIndex
       ? `${holderSnapshot.authority.roomId}:${game.match.currentTurn.turnId}`
       : null;
-  const summaryEmphasized = useViewerTurnSummaryEmphasis(viewerTurnIdentity, layer === 'board');
-  useEffect(() => {
-    void audio.setScene(finished ? 'result' : 'game');
-  }, [audio, finished]);
 
   const returnToLobby = useGameResultLifecycle(
     sessions,
@@ -198,6 +188,51 @@ export default function GameScreen({
   const connected = holderSnapshot.sessionSnapshot?.connection === 'connected';
   const recoveryActive = recoverySnapshot.status !== 'idle';
   const hasCommandNotice = rateLimited || commandRetryError !== null;
+  const onRecordStart = useCallback(() => {
+    if (preferences.getSnapshot().sfxEnabled) audio.playCue(PRODUCT_CUE.SCORE);
+  }, [audio, preferences]);
+  const turnFeedback = useTurnFeedback(
+    {
+      session: holderSnapshot.session,
+      game,
+      presentation: holderSnapshot.sessionSnapshot?.presentation ?? null,
+      viewerSeat: viewerSeatIndex ?? null,
+      suspended: recoveryActive || (!connected && !finished),
+      scoreVisible: (layer === 'board' || layer === 'bonus') && !hasCommandNotice,
+      boardVisible: layer === 'board' && !hasCommandNotice && !recordedCategoryNoticeOpen,
+      canStartTurn:
+        connected &&
+        !hasPendingCommand &&
+        !hasCommandNotice &&
+        !recordedCategoryNoticeOpen &&
+        (phase === 'hidden' || phase === 'settled'),
+      rollPending,
+    },
+    clock,
+    onRecordStart,
+    setActiveGroup,
+  );
+  const { record } = turnFeedback;
+  const recordFeedbackActive = record !== null;
+  const resultVisible = finished && !record?.final;
+  useScreenTelemetry(game ? (resultVisible ? 'result' : 'game') : null);
+  useEffect(() => {
+    void audio.setScene(resultVisible ? 'result' : 'game');
+  }, [audio, resultVisible]);
+
+  const summaryIsViewer =
+    record !== null && (record.final || record.phase !== 'incoming')
+      ? record.record.seatIndex === viewerSeatIndex
+      : (model?.turn?.isViewerTurn ?? true);
+  const summaryScore = summaryIsViewer ? scorePresentation?.viewer : scorePresentation?.opponent;
+  const summaryPlayer = useMemo(
+    () => ({
+      imageUrl: summaryScore?.imageUrl,
+      imageAlt: translate(locale, summaryIsViewer ? 'game.you' : 'game.opponent'),
+      label: translate(locale, summaryIsViewer ? 'game.you' : 'game.opponent'),
+    }),
+    [locale, summaryIsViewer, summaryScore?.imageUrl],
+  );
   const inputScopes = useMemo(
     () =>
       deriveGameInputScopes({
@@ -206,6 +241,7 @@ export default function GameScreen({
         connected,
         deadlineReady,
         turnReady,
+        recordFeedbackActive,
         layer,
         recoveryActive,
         hasCommandNotice,
@@ -217,6 +253,7 @@ export default function GameScreen({
       connected,
       deadlineReady,
       turnReady,
+      recordFeedbackActive,
       layer,
       recoveryActive,
       hasCommandNotice,
@@ -233,6 +270,38 @@ export default function GameScreen({
     [boardModel, locale],
   );
   const turn = model?.turn;
+  const currentTurn = game?.match.status === 'playing' ? game.match.currentTurn : null;
+  const currentDice = currentTurn?.dice;
+  const yachtAvailable =
+    !rollPending &&
+    currentTurn !== null &&
+    currentDice !== null &&
+    currentDice !== undefined &&
+    (phase === 'achievement' || phase === 'settled') &&
+    game?.match.players[currentTurn.seatIndex].scorecard.yacht === undefined &&
+    findSpecialCombinations([
+      currentDice[0].value,
+      currentDice[1].value,
+      currentDice[2].value,
+      currentDice[3].value,
+      currentDice[4].value,
+    ]).includes(SPECIAL_COMBINATION.YACHT);
+  const acceptedPresentation = holderSnapshot.sessionSnapshot?.presentation;
+  const yachtRollId =
+    yachtAvailable && acceptedPresentation?.kind === 'roll'
+      ? acceptedPresentation.roll.replay.rollId
+      : null;
+  const consumedYacht = useRef<Readonly<{ session: object | null; rollId: string }> | null>(null);
+  useLayoutEffect(() => {
+    if (yachtRollId === null) return;
+    if (
+      consumedYacht.current?.session === holderSnapshot.session &&
+      consumedYacht.current.rollId === yachtRollId
+    )
+      return;
+    consumedYacht.current = { session: holderSnapshot.session, rollId: yachtRollId };
+    if (!recoveryActive && document.visibilityState !== 'hidden') setActiveGroup('lower');
+  }, [holderSnapshot.session, recoveryActive, yachtRollId]);
   const canHold = interaction?.canHold ?? false;
   const canScore = interaction?.canScore ?? false;
   const canExplainRecordedCategory = interaction?.canExplainRecordedCategory ?? false;
@@ -338,7 +407,7 @@ export default function GameScreen({
   const { authority } = holderSnapshot;
   const { viewer, opponent, categories, scoreLabels } = scorePresentation;
 
-  if (game.match.status === 'finished') {
+  if (game.match.status === 'finished' && resultVisible) {
     const resultPresentation = createResultPresentation(
       game.match.result,
       authority.seatIndex,
@@ -432,12 +501,42 @@ export default function GameScreen({
             ) : null
           }
           model={boardModel}
+          recordFeedback={
+            record?.visible
+              ? {
+                  identity: String(record.record.stateVersion),
+                  categoryId: record.record.categoryId,
+                  score: record.record.score,
+                  phase: record.phase,
+                  startedAt: record.startedAt,
+                  bonusEarned: record.bonusEarned,
+                }
+              : null
+          }
+          yachtAvailable={yachtAvailable && !recordFeedbackActive}
+          turnCue={
+            turnFeedback.turnCue === null
+              ? null
+              : {
+                  identity: turnFeedback.turnCue.turnId,
+                  startedAt: turnFeedback.turnCue.startedAt,
+                }
+          }
+          turnCueLabel={translate(locale, 'game.turnStartCue')}
+          scoreDisplay={{
+            owner: summaryIsViewer ? 'viewer' : 'opponent',
+            rows: boardModel.scoreRows,
+            previewVisible:
+              !recordFeedbackActive &&
+              Boolean(boardModel.turn?.isViewerTurn && boardModel.turn.dice.length > 0),
+            showFirstRollGuide:
+              !recordFeedbackActive && (boardModel.turn?.showFirstRollGuide ?? false),
+          }}
           rollAction={boardPresentation.rollAction}
           summaryPlayer={summaryPlayer}
           bonusEarned={summaryScore.upperBonus > 0}
           categories={categories}
           activeGroup={activeGroup}
-          summaryEmphasized={summaryEmphasized}
           timerContent={
             <GameDeadlineDisplay
               clock={clock}

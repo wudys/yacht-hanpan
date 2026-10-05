@@ -2,10 +2,22 @@ import { type CategoryId, LOWER_CATEGORY_IDS, UPPER_CATEGORY_IDS } from '@repo/y
 
 import type { ScoreRowViewModel } from '@/features/game/view/game-view-model';
 import { ScoreCategoryCell } from '@/features/game/view/score/ScoreCategoryCell';
-import type { CategoryLabels, ScoreGridMode } from '@/features/game/view/score/types';
+import type {
+  CategoryLabels,
+  ScoreCellDisplay,
+  ScoreCellInput,
+  ScoreDisplayOwner,
+  ScoreGridMode,
+  ScoreRecordFeedback,
+} from '@/features/game/view/score/types';
 
 export type ScoreGridProps = Readonly<{
+  recordFeedback?: ScoreRecordFeedback | null;
+  yachtAvailable?: boolean;
   rows: readonly ScoreRowViewModel[];
+  inputRows: readonly ScoreRowViewModel[];
+  displayOwner: ScoreDisplayOwner;
+  previewVisible: boolean;
   categories: CategoryLabels;
   activeGroup: 'upper' | 'lower';
   mode: ScoreGridMode;
@@ -24,6 +36,11 @@ export type ScoreGridProps = Readonly<{
 
 export function ScoreGrid({
   rows,
+  recordFeedback,
+  yachtAvailable = false,
+  inputRows,
+  displayOwner,
+  previewVisible,
   categories,
   activeGroup,
   mode,
@@ -34,6 +51,7 @@ export function ScoreGrid({
   onBlockedSelect,
 }: ScoreGridProps) {
   const categoryIds = activeGroup === 'upper' ? UPPER_CATEGORY_IDS : LOWER_CATEGORY_IDS;
+  const inputRowsByCategory = new Map(inputRows.map((row) => [row.categoryId, row]));
   const rowsByCategory = new Map(rows.map((row) => [row.categoryId, row]));
 
   return (
@@ -65,10 +83,30 @@ export function ScoreGrid({
       <div className='score-grid__cells' role='tabpanel'>
         {categoryIds.map((categoryId) => {
           const row = rowsByCategory.get(categoryId);
+          const inputRow = inputRowsByCategory.get(categoryId);
+          const recordedScore = displayOwner === 'viewer' ? row?.viewerScore : row?.opponentScore;
+          const display: ScoreCellDisplay =
+            recordedScore !== null && recordedScore !== undefined
+              ? { state: 'recorded', value: recordedScore }
+              : previewVisible && row?.previewScore !== null && row?.previewScore !== undefined
+                ? { state: 'preview', value: row.previewScore }
+                : { state: 'empty', value: null };
+          const input: ScoreCellInput =
+            mode !== 'viewer-turn' || inputRow === undefined
+              ? 'disabled'
+              : inputRow.viewerScore !== null
+                ? 'recorded'
+                : inputRow.selectable
+                  ? 'selectable'
+                  : 'disabled';
           return row ? (
             <ScoreCategoryCell
               key={categoryId}
-              row={row}
+              categoryId={categoryId}
+              recordFeedback={recordFeedback}
+              yachtAvailable={categoryId === 'yacht' && yachtAvailable}
+              display={display}
+              input={input}
               label={categories[categoryId]}
               mode={mode}
               emptyValueLabel={labels.emptyValue}

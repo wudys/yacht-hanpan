@@ -1,22 +1,23 @@
 import { requireGameAsset } from '@repo/game-assets';
 import { type ReactNode, useId, useLayoutEffect, useRef } from 'react';
 
+import { BonusRecordEffect, RecordTransition } from '@/features/game/view/score/RecordFeedback';
+import type { ScoreDisplayOwner, ScoreRecordFeedback } from '@/features/game/view/score/types';
 import { IconButton } from '@/ui/button';
 import { PlayerAvatar } from '@/ui/profile';
 
 export type PlayerSummaryProps = Readonly<{
-  player: Readonly<{ imageUrl?: string; imageAlt: string; selfLabel?: string }>;
+  recordFeedback?: ScoreRecordFeedback | null;
+  player: Readonly<{ imageUrl?: string; imageAlt: string; label: string }>;
   labels: Readonly<{
     total: string;
     bonus: string;
     bonusStatus: string;
     bonusInfo: string;
-    turnState: string;
     scoreboard: string;
   }>;
-  isViewerTurn: boolean;
+  displayOwner: ScoreDisplayOwner;
   bonusEarned: boolean;
-  emphasized: boolean;
   bonusPopover?: ReactNode;
   onOpenBonus?: () => void;
   onOpenScoreboard?: () => void;
@@ -24,14 +25,16 @@ export type PlayerSummaryProps = Readonly<{
 
 export function PlayerSummary({
   player,
+  recordFeedback,
   labels,
-  isViewerTurn,
+  displayOwner,
   bonusEarned,
-  emphasized,
   bonusPopover,
   onOpenBonus,
   onOpenScoreboard,
 }: PlayerSummaryProps) {
+  const transitionKey = `${recordFeedback?.identity ?? 'idle'}:${recordFeedback?.phase ?? 'idle'}`;
+  const celebrateBonus = recordFeedback?.bonusEarned && recordFeedback.phase !== 'incoming';
   const bonusStatusId = useId();
   const summaryRef = useRef<HTMLElement>(null);
   const bonusLabelRef = useRef<HTMLSpanElement>(null);
@@ -71,7 +74,7 @@ export function PlayerSummary({
     observer.observe(action);
     observer.observe(popover);
     return () => observer.disconnect();
-  }, [isBonusOpen, labels.bonus, labels.total, labels.turnState]);
+  }, [isBonusOpen, labels.bonus, labels.total, player.label, recordFeedback?.phase]);
 
   return (
     <section
@@ -80,17 +83,23 @@ export function PlayerSummary({
       role='group'
       aria-label={`${labels.total} · ${labels.bonusStatus}`}
       data-game-band='summary'
-      data-player-summary={isViewerTurn ? 'viewer' : 'opponent'}
-      data-summary-emphasized={emphasized ? 'true' : 'false'}
+      data-player-summary={displayOwner}
     >
-      <PlayerAvatar
-        imageUrl={player.imageUrl}
-        alt={player.imageAlt}
-        selfLabel={player.selfLabel}
-        size='sm'
-      />
-      <strong className='player-summary__turn'>{labels.turnState}</strong>
-      <span className='player-summary__score'>{labels.total}</span>
+      <RecordTransition
+        key={`identity:${transitionKey}`}
+        feedback={recordFeedback}
+        className='player-summary__identity'
+      >
+        <PlayerAvatar imageUrl={player.imageUrl} alt={player.imageAlt} size='sm' />
+        <strong className='player-summary__identity-label'>{player.label}</strong>
+      </RecordTransition>
+      <RecordTransition
+        key={`score:${transitionKey}`}
+        feedback={recordFeedback}
+        className='player-summary__score'
+      >
+        {labels.total}
+      </RecordTransition>
       <div className='player-summary__bonus-anchor' ref={bonusAnchorRef} data-open={isBonusOpen}>
         <button
           className='player-summary__bonus-action'
@@ -103,7 +112,13 @@ export function PlayerSummary({
           aria-expanded={isBonusOpen}
           onClick={onOpenBonus}
         >
-          <span className='player-summary__bonus' ref={bonusLabelRef} data-earned={bonusEarned}>
+          <RecordTransition
+            key={`bonus:${transitionKey}`}
+            feedback={recordFeedback}
+            className='player-summary__bonus'
+            ref={bonusLabelRef}
+            data-earned={bonusEarned}
+          >
             <span
               className='player-summary__bonus-icon'
               aria-hidden='true'
@@ -112,7 +127,10 @@ export function PlayerSummary({
               }}
             />
             {labels.bonus}
-          </span>
+            {celebrateBonus && recordFeedback ? (
+              <BonusRecordEffect key={recordFeedback.identity} feedback={recordFeedback} />
+            ) : null}
+          </RecordTransition>
         </button>
         <span id={bonusStatusId} hidden>
           {labels.bonusStatus}

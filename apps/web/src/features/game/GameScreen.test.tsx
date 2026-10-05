@@ -2,22 +2,16 @@
 /* eslint-disable testing-library/no-manual-cleanup -- explicit cleanup prevents pending external-store updates from crossing tests. */
 
 import type { ClientError } from '@repo/game-client-sdk/errors';
-import {
-  type CommandResult,
-  createGameSession,
-  type CreateGameSessionOptions,
-} from '@repo/game-client-sdk/session';
+import type { CommandResult } from '@repo/game-client-sdk/session';
 import {
   CATEGORY_ID,
   type GameSnapshot,
   type GameSnapshotInput,
   parsePresenceSnapshot,
-  parsePublicRoom,
-  parseRoomView,
   type PublicRoom,
   type ResolvedRollArtifact,
 } from '@repo/game-protocol/socket';
-import { createCompatibilityContract, GAME_PROTOCOL_VERSION } from '@repo/game-protocol/version';
+import { createCompatibilityContract } from '@repo/game-protocol/version';
 import { CATEGORY_IDS } from '@repo/yacht-rules';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { StrictMode } from 'react';
@@ -30,7 +24,6 @@ import { PRODUCT_CUE } from '@/runtime/audio/product-cues';
 import { createDicePresentation } from '@/runtime/dice/dice-presentation';
 import type { RollPlayback } from '@/runtime/dice/replay';
 import { createPreferencesStore } from '@/runtime/preferences/preferences-store';
-import { createGameSessionHolder } from '@/runtime/session/game-session-holder';
 import {
   authority,
   commandSuccess,
@@ -141,12 +134,6 @@ function createHarness(
   return { ...harness, feedback };
 }
 
-function getViewerSummary(): HTMLElement {
-  return screen.getByText(
-    (_content, element) => element?.getAttribute('data-game-band') === 'summary',
-  );
-}
-
 function getPreviewScoreButtons(): HTMLElement[] {
   return screen
     .getAllByRole('button', { hidden: true })
@@ -173,140 +160,32 @@ test('starts on upper scores and preserves the selected tab across game updates'
   expect(getLowerScoreTab().getAttribute('aria-selected')).toBe('true');
 });
 
-test('emphasizes each authoritative viewer turn once across updates and session replacement', () => {
-  vi.useFakeTimers();
-  try {
-    const harness = createHarness();
-    const view = render(
-      <StrictMode>
-        <GameScreen {...harness} locale={LOCALE.EN} />
-      </StrictMode>,
-    );
-
-    expect(getViewerSummary().getAttribute('data-summary-emphasized')).toBe('true');
-    act(() => {
-      vi.advanceTimersByTime(300);
-    });
-    expect(getViewerSummary().getAttribute('data-summary-emphasized')).toBe('false');
-
-    act(() => {
-      harness.sessions.publish({
-        ...playingGame,
-        stateVersion: 8,
-        match: {
-          ...initialPlayingMatch,
-          currentTurn: { ...initialPlayingMatch.currentTurn, rollCount: 2 },
+test('settled snapshots do not infer a turn cue across updates, session replacement, or board remount', () => {
+  const harness = createHarness();
+  render(
+    <StrictMode>
+      <GameScreen {...harness} locale={LOCALE.EN} />
+    </StrictMode>,
+  );
+  expect(screen.queryByText('YOUR TURN')).toBeNull();
+  act(() => harness.sessions.replaceSession(createSessionMock()));
+  expect(screen.queryByText('YOUR TURN')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Scoreboard' }));
+  act(() =>
+    harness.sessions.publish({
+      ...playingGame,
+      stateVersion: 8,
+      match: {
+        ...initialPlayingMatch,
+        currentTurn: {
+          ...initialPlayingMatch.currentTurn,
+          turnId: '11111111-1111-4111-8111-000000000002',
         },
-      } satisfies GameSnapshotInput);
-      harness.sessions.replaceSession(createSessionMock());
-    });
-    expect(getViewerSummary().getAttribute('data-summary-emphasized')).toBe('false');
-
-    act(() => {
-      const nextRoom = parsePublicRoom({
-        ...room,
-        roomId: '019976a2-d8d8-7000-8000-000000000002',
-      });
-      const nextView = parseRoomView({
-        room: nextRoom,
-        game: playingGame,
-        presence: {
-          roomId: nextRoom.roomId,
-          presenceVersion: 1,
-          seats: [{ status: 'connected' }, { status: 'connected' }],
-        },
-      });
-      harness.sessions.replaceSession(
-        createSessionMock({ ...harness.session.getSnapshot(), ...nextView }),
-        { ...authority, roomId: nextRoom.roomId },
-      );
-    });
-    expect(getViewerSummary().getAttribute('data-summary-emphasized')).toBe('true');
-    act(() => {
-      vi.advanceTimersByTime(300);
-    });
-
-    act(() => {
-      harness.sessions.publish({
-        ...playingGame,
-        stateVersion: 9,
-        match: {
-          ...initialPlayingMatch,
-          currentTurn: {
-            ...initialPlayingMatch.currentTurn,
-            turnId: '11111111-1111-4111-8111-000000000002',
-            seatIndex: 1,
-          },
-        },
-      } satisfies GameSnapshotInput);
-    });
-    expect(getViewerSummary().getAttribute('data-summary-emphasized')).toBe('false');
-
-    act(() => {
-      harness.sessions.publish({
-        ...playingGame,
-        stateVersion: 10,
-        match: {
-          ...initialPlayingMatch,
-          currentTurn: {
-            ...initialPlayingMatch.currentTurn,
-            turnId: '11111111-1111-4111-8111-000000000003',
-          },
-        },
-      } satisfies GameSnapshotInput);
-    });
-    expect(getViewerSummary().getAttribute('data-summary-emphasized')).toBe('true');
-
-    act(() => harness.sessions.publish(finishedGame('scoresCompleted', 0)));
-    expect(
-      screen.queryByText(
-        (_content, element) => element?.getAttribute('data-player-summary') === 'viewer',
-      ),
-    ).toBeNull();
-    view.unmount();
-    harness.feedback.dispose();
-    expect(vi.getTimerCount()).toBe(0);
-  } finally {
-    cleanup();
-    vi.useRealTimers();
-  }
-});
-
-test('does not replay a consumed turn after the scoreboard remounts the board', () => {
-  vi.useFakeTimers();
-  try {
-    const harness = createHarness();
-    render(
-      <StrictMode>
-        <GameScreen {...harness} locale={LOCALE.EN} />
-      </StrictMode>,
-    );
-
-    expect(getViewerSummary().getAttribute('data-summary-emphasized')).toBe('true');
-    fireEvent.click(screen.getByRole('button', { name: 'Scoreboard' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
-    expect(getViewerSummary().getAttribute('data-summary-emphasized')).toBe('false');
-
-    fireEvent.click(screen.getByRole('button', { name: 'Scoreboard' }));
-    act(() => {
-      harness.sessions.publish({
-        ...playingGame,
-        stateVersion: 8,
-        match: {
-          ...initialPlayingMatch,
-          currentTurn: {
-            ...initialPlayingMatch.currentTurn,
-            turnId: '11111111-1111-4111-8111-000000000002',
-          },
-        },
-      } satisfies GameSnapshotInput);
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
-    expect(getViewerSummary().getAttribute('data-summary-emphasized')).toBe('true');
-  } finally {
-    cleanup();
-    vi.useRealTimers();
-  }
+      },
+    } satisfies GameSnapshotInput),
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+  expect(screen.queryByText('YOUR TURN')).toBeNull();
 });
 
 test.each([null, 61_000])(
@@ -1560,7 +1439,7 @@ test('keeps Result score identity independent of winner and omits Game controls'
   expect(screen.queryByRole('button', { name: 'Settings' })).toBeNull();
 });
 
-test('score confirmation belongs to the submitting player after the next-turn snapshot, only once', async () => {
+test('settled final state keeps pending command lifetime without creating receipt-only score feedback', async () => {
   const harness = createHarness();
   const result = deferred<CommandResult>();
   vi.mocked(harness.session.selectScoreCategory).mockReturnValue(result.promise);
@@ -1572,159 +1451,13 @@ test('score confirmation belongs to the submitting player after the next-turn sn
   expect(harness.sessionCredentialStore.removeRoom).toHaveBeenCalledOnce();
   expect(harness.session.dispose).not.toHaveBeenCalled();
   await act(async () => result.resolve(commandSuccess()));
-  expect(harness.audio.playCue).toHaveBeenCalledExactlyOnceWith(PRODUCT_CUE.SCORE);
+  expect(harness.audio.playCue).not.toHaveBeenCalled();
   expect(harness.session.dispose).toHaveBeenCalledOnce();
   view.unmount();
   render(<GameScreen {...harness} locale={LOCALE.EN} />);
   act(() => harness.sessions.publish(finishedGame('scoresCompleted', 0)));
-  expect(harness.audio.playCue).toHaveBeenCalledTimes(1);
+  expect(harness.audio.playCue).not.toHaveBeenCalled();
 });
-
-test.each(['ack-first', 'live-first', 'ack-timeout'] as const)(
-  'the real SDK completes final score handling before Result teardown (%s)',
-  async (order) => {
-    const scores = Object.fromEntries(Object.values(CATEGORY_ID).map((category) => [category, 0]));
-    const beforeScores = { ...scores };
-    delete beforeScores.yacht;
-    const playing = parseRoomView({
-      room,
-      presence: {
-        roomId: authority.roomId,
-        presenceVersion: 1,
-        seats: [{ status: 'connected' }, { status: 'connected' }],
-      },
-      game: {
-        ...playingGame,
-        match: {
-          ...initialPlayingMatch,
-          players: [
-            { scorecard: beforeScores, timeoutCount: 0 },
-            { scorecard: scores, timeoutCount: 0 },
-          ],
-          currentTurn: {
-            ...initialPlayingMatch.currentTurn,
-            heldSlots: [],
-            dice: Array.from({ length: 5 }, () => ({ value: 6 })),
-          },
-        },
-      },
-    });
-    const finished = parseRoomView({
-      ...playing,
-      room: { ...room, status: 'finished', finishedAt: 10_000 },
-      game: finishedGame('scoresCompleted', 0, [
-        { scorecard: { ...scores, yacht: 50 }, timeoutCount: 0 },
-        { scorecard: scores, timeoutCount: 0 },
-      ]),
-    });
-    const meta = {
-      requestId: '11111111-1111-4111-8111-000000000003',
-      gameProtocolVersion: GAME_PROTOCOL_VERSION,
-      serverTime: 10_000,
-    };
-    type TestSocket = ReturnType<NonNullable<CreateGameSessionOptions['socketFactory']>['create']>;
-    let synchronizationView = playing;
-    const socket = {
-      connect: vi.fn<TestSocket['connect']>(async (): Promise<void> => {
-        socket.onConnected.mock.lastCall?.[0]();
-      }),
-      disconnect: vi.fn<TestSocket['disconnect']>(),
-      dispose: vi.fn<TestSocket['dispose']>(),
-      emitSync: vi.fn<TestSocket['emitSync']>((ack) =>
-        ack({ ok: true, data: synchronizationView, meta }),
-      ),
-      emitCommand: vi.fn<TestSocket['emitCommand']>(),
-      onConnected: vi.fn<TestSocket['onConnected']>(() => () => {}),
-      onDisconnected: vi.fn<TestSocket['onDisconnected']>(() => () => {}),
-      onReplaced: vi.fn<TestSocket['onReplaced']>(() => () => {}),
-      onRoomUpdate: vi.fn<TestSocket['onRoomUpdate']>(() => () => {}),
-      onConnectionError: vi.fn<TestSocket['onConnectionError']>(() => () => {}),
-    } satisfies TestSocket;
-    const sessions = createGameSessionHolder({
-      createSession: (credentials) =>
-        createGameSession({
-          authority: credentials,
-          contract: createCompatibilityContract('test-release'),
-          socketUrl: 'https://game.example.test',
-          socketFactory: { create: () => socket },
-          retryPolicy: { acknowledgementTimeoutMs: 100, maximumAttempts: 1, retryDelayMs: 0 },
-        }),
-    });
-    const session = sessions.installAuthority(authority);
-    expect(await session.connect()).toEqual({ ok: true });
-    const audio = createAudioMock();
-    const recovery = createRecoveryFake();
-    const sessionCredentialStore = createSessionCredentialStoreSpy();
-    const preferences = createPreferencesStore({ getItem: () => null, setItem: () => {} });
-    const feedback = startGameAudioFeedback({
-      audio,
-      sessions,
-      recovery,
-      preferences,
-      clock: { now: () => 10_000 },
-    });
-    feedbackDisposers.add(feedback.dispose);
-    feedbackDisposers.add(sessions.dispose);
-    const score = vi.spyOn(session, 'selectScoreCategory');
-    render(
-      <GameScreen
-        audio={audio}
-        feedback={feedback}
-        recovery={recovery}
-        sessions={sessions}
-        sessionCredentialStore={sessionCredentialStore}
-        preferences={preferences}
-        presentation={createPresentationFake()}
-        clock={{ now: () => 10_000 }}
-        locale={LOCALE.EN}
-      />,
-    );
-    fireEvent.click(getLowerScoreTab());
-    audio.playCue.mockClear();
-    fireEvent.click(screen.getByRole('button', { name: /Yacht/u }));
-    const [command, acknowledge] = socket.emitCommand.mock.lastCall!;
-    synchronizationView = finished;
-    if (order !== 'ack-first') {
-      act(() =>
-        socket.onRoomUpdate.mock.lastCall?.[0]({ type: 'state:committed', view: finished }),
-      );
-      expect(screen.getByRole('heading', { name: 'Game result' })).not.toBeNull();
-      expect(sessionCredentialStore.removeRoom).toHaveBeenCalledOnce();
-      expect(session.getSnapshot().connection).toBe('connected');
-    }
-    if (order === 'ack-timeout') {
-      await act(async () => {
-        await expect(score.mock.results[0]?.value).resolves.toMatchObject({
-          ok: false,
-          error: { kind: 'transport', code: 'ACK_TIMEOUT' },
-        });
-      });
-      expect(audio.playCue).not.toHaveBeenCalled();
-    } else {
-      await act(async () => {
-        acknowledge({
-          ok: true,
-          data: { receipt: { stateVersion: 8 }, view: finished },
-          meta: {
-            requestId: meta.requestId,
-            gameProtocolVersion: GAME_PROTOCOL_VERSION,
-            actionId: command.actionId,
-          },
-        });
-      });
-      await expect(score.mock.results[0]?.value).resolves.toEqual({
-        ok: true,
-        actionId: command.actionId,
-        requestId: meta.requestId,
-        data: { stateVersion: 8 },
-      });
-      expect(audio.playCue).toHaveBeenCalledExactlyOnceWith(PRODUCT_CUE.SCORE);
-    }
-    expect(session.getSnapshot().connection).toBe('disposed');
-    expect(screen.getByRole('heading', { name: 'Game result' })).not.toBeNull();
-    expect(sessionCredentialStore.removeRoom).toHaveBeenCalledOnce();
-  },
-);
 
 test('score rejection produces neither click nor success cue', async () => {
   const harness = createHarness();
@@ -1763,7 +1496,7 @@ test.each(['failure', 'rejection'] as const)(
   },
 );
 
-test('score click submits the category and plays SCORE once after the original receipt', async () => {
+test('score click submits the category without a success cue from a receipt alone', async () => {
   const harness = createHarness();
   const response = deferred<CommandResult>();
   harness.session.selectScoreCategory.mockReturnValue(response.promise);
@@ -1774,9 +1507,9 @@ test('score click submits the category and plays SCORE once after the original r
   act(() => harness.sessions.publish({ ...playingGame, stateVersion: 8 }));
   expect(harness.audio.playCue).not.toHaveBeenCalled();
   await act(async () => response.resolve(commandSuccess()));
-  expect(harness.audio.playCue).toHaveBeenCalledExactlyOnceWith(PRODUCT_CUE.SCORE);
+  expect(harness.audio.playCue).not.toHaveBeenCalled();
   act(() => harness.sessions.publish({ ...playingGame, stateVersion: 8 }));
-  expect(harness.audio.playCue).toHaveBeenCalledOnce();
+  expect(harness.audio.playCue).not.toHaveBeenCalled();
 });
 
 test.each([

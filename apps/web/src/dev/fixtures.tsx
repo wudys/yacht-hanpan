@@ -3,6 +3,7 @@ import '@/dev/fixtures.css';
 
 import { createRoot } from 'react-dom/client';
 
+import { parseFixtureFeedback } from '@/dev/fixture-models';
 import { VisualFixture } from '@/dev/VisualFixture';
 import { normalizeLocale } from '@/i18n';
 
@@ -29,5 +30,12 @@ if (anchor === 'replay') {
     ),
   );
 } else {
-  createRoot(root).render(<VisualFixture anchor={anchor} mode={mode} locale={locale} />);
+  createRoot(root).render(
+    <VisualFixture
+      anchor={anchor}
+      mode={mode}
+      locale={locale}
+      feedback={anchor === 'game' ? parseFixtureFeedback(params) : undefined}
+    />,
+  );
 }

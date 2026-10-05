@@ -36,6 +36,17 @@ export function assertSnapshotIsBorrowed(session: GameSession): void {
     // @ts-expect-error Authoritative outcomes are nested borrowed values.
     snapshot.presentation.roll.outcome.authoritativeValuesBySlot[0]!.value = 6;
   }
+  if (snapshot.presentation?.kind === 'score') {
+    // @ts-expect-error Accepted score facts cannot be changed by a subscriber.
+    snapshot.presentation.record.score = 50;
+    // @ts-expect-error A score record belongs to its authoritative version.
+    snapshot.presentation.record.stateVersion++;
+  }
+  if (snapshot.presentation?.kind === 'turn') {
+    const { turnId } = snapshot.presentation;
+    // @ts-expect-error A fresh turn identity is owned by the session.
+    snapshot.presentation.turnId = turnId;
+  }
 }
 
 export async function assertReceiptIsBorrowed(session: GameSession): Promise<void> {

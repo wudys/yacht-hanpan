@@ -8,8 +8,19 @@ import {
   type RoomView,
 } from '@repo/game-protocol/socket';
 
+import { freshScoreRecord, isFreshTimeoutTurn, type ScoreRecord } from './score-transition';
+
+export type { ScoreRecord } from './score-transition';
+
+/**
+ * Provenance for the current game version, retained across duplicate and presence-only views.
+ * Current or newer recovery settles it; it is not a queue of one-time events.
+ */
 export type GamePresentation =
-  Readonly<{ kind: 'settled' }> | Readonly<{ kind: 'roll'; roll: ResolvedRollArtifact }>;
+  | Readonly<{ kind: 'settled' }>
+  | Readonly<{ kind: 'roll'; roll: ResolvedRollArtifact }>
+  | Readonly<{ kind: 'score'; record: ScoreRecord }>
+  | Readonly<{ kind: 'turn'; turnId: ScoreRecord['completedTurnId'] }>;
 
 export interface SessionState {
   readonly view: RoomView | null;
@@ -20,6 +31,10 @@ export function createSessionState(): SessionState {
   return { view: null, presentation: null };
 }
 
+/**
+ * kind describes RoomView acceptance, not whether the whole session state changed.
+ * An ignored full sync can still settle an ephemeral presentation; callers use the returned state.
+ */
 export type UpdateReduction =
   | { readonly kind: 'applied' | 'ignored'; readonly state: SessionState }
   | { readonly kind: 'invalid' };
@@ -48,14 +63,14 @@ export function reduceRoomView(state: SessionState, view: RoomView): UpdateReduc
   };
 }
 
-/** Full-state recovery confirms the present; it never supplies a historical roll to replay. */
+/** Full-state recovery confirms the present; it never supplies a historical event to replay. */
 export function reduceRestoredView(state: SessionState, view: RoomView): UpdateReduction {
   const reduction = reduceRoomView(state, view);
   if (reduction.kind === 'invalid') return reduction;
   if ((view.game?.stateVersion ?? 0) < (state.view?.game?.stateVersion ?? 0)) return reduction;
   const restored = reduction.state;
   const presentation = settledPresentation(restored.view);
-  if (restored.presentation?.kind === 'roll') {
+  if (restored.presentation !== null && restored.presentation.kind !== 'settled') {
     return { ...reduction, state: { ...restored, presentation } };
   }
   return reduction;
@@ -66,10 +81,37 @@ export function reduceCommittedUpdate(
   update: CommittedRoomUpdate,
 ): UpdateReduction {
   const reduction = reduceRoomView(state, update.view);
-  if (reduction.kind !== 'applied' || update.type !== ROOM_UPDATE_TYPE.ROLL_COMMITTED) {
-    return reduction;
+  if (reduction.kind !== 'applied') return reduction;
+  if (update.type === ROOM_UPDATE_TYPE.ROLL_COMMITTED)
+    return withFreshRoll(state, reduction, update.roll, update.view.game?.stateVersion ?? 0);
+  const { game } = update.view;
+  if (game?.match.status === 'playing' && state.view?.room.status === 'waiting') {
+    if (game.stateVersion === 1 && game.match.currentTurn.rollCount === 0) {
+      return {
+        ...reduction,
+        state: {
+          ...reduction.state,
+          presentation: { kind: 'turn', turnId: game.match.currentTurn.turnId },
+        },
+      };
+    }
   }
-  return withFreshRoll(state, reduction, update.roll, update.view.game?.stateVersion ?? 0);
+  const previous = state.view?.game;
+  if (!previous || !game) return reduction;
+  const record = freshScoreRecord(previous, game);
+  if (record) {
+    return { ...reduction, state: { ...reduction.state, presentation: { kind: 'score', record } } };
+  }
+  if (game.match.status === 'playing' && isFreshTimeoutTurn(previous, game)) {
+    return {
+      ...reduction,
+      state: {
+        ...reduction.state,
+        presentation: { kind: 'turn', turnId: game.match.currentTurn.turnId },
+      },
+    };
+  }
+  return reduction;
 }
 
 export function reduceCommandView(
@@ -86,8 +128,25 @@ export function reduceCommandView(
     return { kind: 'invalid' };
   }
   const reduction = reduceRoomView(state, view);
-  if (reduction.kind !== 'applied' || !('roll' in receipt)) return reduction;
-  return withFreshRoll(state, reduction, receipt.roll, receipt.stateVersion);
+  if (reduction.kind !== 'applied') return reduction;
+  if ('roll' in receipt) return withFreshRoll(state, reduction, receipt.roll, receipt.stateVersion);
+  const previous = state.view?.game;
+  if (
+    command.type !== GAME_COMMAND_TYPE.SELECT_SCORE_CATEGORY ||
+    !previous ||
+    !view.game ||
+    receipt.stateVersion !== view.game.stateVersion
+  ) {
+    return reduction;
+  }
+  const record = freshScoreRecord(previous, view.game);
+  if (
+    !record ||
+    record.completedTurnId !== command.turnId ||
+    record.categoryId !== command.categoryId
+  )
+    return reduction;
+  return { ...reduction, state: { ...reduction.state, presentation: { kind: 'score', record } } };
 }
 
 function withFreshRoll(

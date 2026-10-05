@@ -33,7 +33,7 @@ import {
   type SessionState,
 } from './update-reducer';
 
-export type { GamePresentation } from './update-reducer';
+export type { GamePresentation, ScoreRecord } from './update-reducer';
 
 export type ConnectionStatus =
   'idle' | 'connecting' | 'connected' | 'disconnected' | 'replaced' | 'disposed';
@@ -265,14 +265,14 @@ export function createGameSession(options: CreateGameSessionOptions): GameSessio
         ? reduceCommandView(state, data, command)
         : { kind: 'invalid' as const };
       if (reduction.kind !== 'invalid' && reduction.state !== state) replaceState(reduction.state);
-      return reduction.kind;
+      return reduction.kind === 'invalid' ? 'invalid' : 'accepted';
     },
     applyRecovery: (incoming) => {
       const reduction = validAuthorityView(incoming)
         ? reduceRestoredView(state, incoming)
         : { kind: 'invalid' as const };
       if (reduction.kind !== 'invalid' && reduction.state !== state) replaceState(reduction.state);
-      return reduction.kind;
+      return reduction.kind === 'invalid' ? 'invalid' : 'accepted';
     },
     signal: lifecycle.signal,
   });

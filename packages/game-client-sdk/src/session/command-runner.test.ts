@@ -124,8 +124,8 @@ describe('command runner', () => {
         }
       },
       synchronize: async () => ({ ok: true }),
-      applySuccess: () => 'applied',
-      applyRecovery: () => 'applied',
+      applySuccess: () => 'accepted',
+      applyRecovery: () => 'accepted',
     });
 
     const result = await runner.rollDice();
@@ -153,8 +153,8 @@ describe('command runner', () => {
         acknowledge({ ok: true, data: successData({ stateVersion: 3 }), meta: META });
       },
       synchronize: async () => ({ ok: true }),
-      applySuccess: () => 'applied',
-      applyRecovery: () => 'applied',
+      applySuccess: () => 'accepted',
+      applyRecovery: () => 'accepted',
     });
 
     expect(await runner.setDieHeld(2, true)).toMatchObject({ ok: true });
@@ -195,8 +195,8 @@ describe('command runner', () => {
         syncs += 1;
         return { ok: true };
       },
-      applySuccess: () => 'applied',
-      applyRecovery: () => 'applied',
+      applySuccess: () => 'accepted',
+      applyRecovery: () => 'accepted',
     });
 
     const rejected = await runner.rollDice();
@@ -232,9 +232,9 @@ describe('command runner', () => {
         },
         applySuccess: () => {
           successes += 1;
-          return 'applied';
+          return 'accepted';
         },
-        applyRecovery: () => 'applied',
+        applyRecovery: () => 'accepted',
       });
 
       expect(await runner.rollDice()).toMatchObject({
@@ -266,9 +266,9 @@ describe('command runner', () => {
       },
       applySuccess: () => {
         successes += 1;
-        return 'applied';
+        return 'accepted';
       },
-      applyRecovery: () => 'applied',
+      applyRecovery: () => 'accepted',
     });
 
     const result = await (kind === 'hold'
@@ -315,8 +315,8 @@ describe('command runner', () => {
           }
         },
         synchronize: async () => ({ ok: true }),
-        applySuccess: () => 'applied',
-        applyRecovery: () => 'applied',
+        applySuccess: () => 'accepted',
+        applyRecovery: () => 'accepted',
       });
 
       const result = await (kind === 'hold'
@@ -362,8 +362,8 @@ describe('command runner', () => {
           meta: META,
         }),
       synchronize: async () => ({ ok: false }),
-      applySuccess: () => 'applied',
-      applyRecovery: () => 'applied',
+      applySuccess: () => 'accepted',
+      applyRecovery: () => 'accepted',
     });
 
     const result = await runner.rollDice();
@@ -399,8 +399,8 @@ describe('command runner', () => {
           currentGame = synchronizedGame;
           return syncResult;
         },
-        applySuccess: () => 'applied',
-        applyRecovery: () => 'applied',
+        applySuccess: () => 'accepted',
+        applyRecovery: () => 'accepted',
       });
 
       const result = await runner.rollDice();
@@ -435,8 +435,8 @@ describe('command runner', () => {
         });
       },
       synchronize: async () => ({ ok: true }),
-      applySuccess: () => 'applied',
-      applyRecovery: () => 'applied',
+      applySuccess: () => 'accepted',
+      applyRecovery: () => 'accepted',
     });
     const result = await runner.rollDice();
     if (result.ok || !result.retry) throw new Error('expected retry capability');
@@ -458,8 +458,8 @@ describe('command runner', () => {
         currentGame = playingGame(3);
         return { ok: true };
       },
-      applySuccess: () => 'applied',
-      applyRecovery: () => 'applied',
+      applySuccess: () => 'accepted',
+      applyRecovery: () => 'accepted',
     });
 
     const result = await runner.rollDice();
@@ -487,8 +487,8 @@ describe('command runner', () => {
         });
       },
       synchronize: async () => ({ ok: true }),
-      applySuccess: () => 'applied',
-      applyRecovery: () => 'applied',
+      applySuccess: () => 'accepted',
+      applyRecovery: () => 'accepted',
       signal: lifecycle.signal,
     });
 
@@ -512,8 +512,8 @@ describe('command runner', () => {
         emits += 1;
       },
       synchronize: async () => ({ ok: true }),
-      applySuccess: () => 'applied',
-      applyRecovery: () => 'applied',
+      applySuccess: () => 'accepted',
+      applyRecovery: () => 'accepted',
       signal: lifecycle.signal,
     });
 

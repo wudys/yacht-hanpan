@@ -59,12 +59,13 @@ export interface CreateCommandRunnerOptions {
   readonly applySuccess: (
     data: SuccessfulCommandData,
     command: GameCommand,
-  ) => AuthoritativeApplication;
-  readonly applyRecovery: (view: RoomView) => AuthoritativeApplication;
+  ) => AuthoritativeAcceptance;
+  readonly applyRecovery: (view: RoomView) => AuthoritativeAcceptance;
   readonly signal?: AbortSignal;
 }
 
-export type AuthoritativeApplication = 'applied' | 'ignored' | 'invalid';
+/** Accepted views need not advance game authority or change session state or presentation. */
+type AuthoritativeAcceptance = 'accepted' | 'invalid';
 
 export function createCommandRunner(options: CreateCommandRunnerOptions): CommandRunner {
   validateRetryPolicy(options.retryPolicy);

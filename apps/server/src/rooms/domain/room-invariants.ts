@@ -6,7 +6,8 @@ import {
   WAITING_ROOM_LIFETIME_MS,
 } from '@/rooms/domain/room-constants';
 import type { PlayingSeats, Room, Seat } from '@/rooms/domain/room-model';
-import { isRoomCode, isValidTimestamp } from '@/rooms/domain/room-validation';
+import { isRoomCode } from '@/rooms/domain/room-validation';
+import { isValidTimestamp } from '@/rooms/domain/time';
 
 export function assertRoomInvariant(room: Room): void {
   invariant(room.id.length > 0, 'room id must not be empty');

@@ -7,8 +7,8 @@ import {
   WAITING_ROOM_LIFETIME_MS,
 } from '@/rooms/domain/room-constants';
 import type { RoomCreationResult, RoomId } from '@/rooms/domain/room-model';
-import { isRoomCode, isValidTimestamp } from '@/rooms/domain/room-validation';
-import { epochMilliseconds } from '@/rooms/domain/time';
+import { isRoomCode } from '@/rooms/domain/room-validation';
+import { epochMilliseconds, isValidTimestamp } from '@/rooms/domain/time';
 
 export interface CreateRoomInput {
   readonly roomId: RoomId;

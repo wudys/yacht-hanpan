@@ -4,7 +4,9 @@ import { GAME_SOCKET_PATH, SOCKET_EVENT } from '@repo/game-protocol/socket';
 import { createCompatibilityContract, GAME_PROTOCOL_VERSION } from '@repo/game-protocol/version';
 import { describe, expect, test } from 'bun:test';
 
+import { CLIENT_ERROR_CODE } from '../errors';
 import type { RawGameSocket } from '../ports';
+import { createServerClock } from '../server-clock';
 import { createGameSession } from './session';
 
 const RESPONSE = parseCreateRoomResponse({
@@ -120,6 +122,48 @@ function replace(socket: ConnectionSocket): void {
 }
 
 describe('connection publication', () => {
+  test('rejects unsafe timestamp metadata before confirming a full sync or accepting its clock', async () => {
+    const socket = new ConnectionSocket();
+    const clock = createServerClock(() => 0);
+    let serverTime = Number.MAX_SAFE_INTEGER + 1;
+    socket.emitSync = (acknowledge) => {
+      socket.syncCount += 1;
+      acknowledge({ ok: true, data: view, meta: { ...RESPONSE.meta, serverTime } });
+    };
+    const session = createGameSession({
+      socketUrl: 'https://game.example.test',
+      authority,
+      contract: createCompatibilityContract('release-1'),
+      socketFactory: { create: () => socket },
+      clock,
+    });
+    try {
+      expect(await session.connect()).toEqual({
+        ok: false,
+        error: { kind: 'protocol', code: CLIENT_ERROR_CODE.INVALID_RESPONSE },
+      });
+      expect(session.getSnapshot()).toMatchObject({
+        room: null,
+        syncStatus: 'idle',
+        syncRevision: 0,
+        error: { kind: 'protocol', code: CLIENT_ERROR_CODE.INVALID_RESPONSE },
+      });
+      expect(clock.now()).toBeNull();
+      expect(socket.syncCount).toBe(1);
+
+      serverTime = Number.MAX_SAFE_INTEGER;
+      expect(await session.synchronize()).toEqual({ ok: true });
+      expect(session.getSnapshot()).toMatchObject({
+        room: view.room,
+        syncRevision: 1,
+        error: null,
+      });
+      expect(clock.now()).toBe(Number.MAX_SAFE_INTEGER);
+    } finally {
+      session.dispose();
+    }
+  });
+
   test('fulfills connect without an event and ignores a later duplicate connected event', async () => {
     const socket = new ConnectionSocket();
     socket.connect = async () => {

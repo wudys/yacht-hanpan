@@ -40,7 +40,14 @@ describe('wire primitives', () => {
     expect(v.safeParse(roomCodeSchema, value).success).toBeFalse();
   });
 
-  test.each([-1, Number.NaN, Number.POSITIVE_INFINITY, 1.5, '1'])(
+  test.each([0, Number.MAX_SAFE_INTEGER])(
+    'accepts safe epoch millisecond boundaries: %s',
+    (value) => {
+      expect(Number(v.parse(epochMillisecondsSchema, value))).toBe(value);
+    },
+  );
+
+  test.each([-1, Number.NaN, Number.POSITIVE_INFINITY, 1.5, Number.MAX_SAFE_INTEGER + 1, '1'])(
     'rejects malformed epoch milliseconds: %s',
     (value) => {
       expect(v.safeParse(epochMillisecondsSchema, value).success).toBeFalse();

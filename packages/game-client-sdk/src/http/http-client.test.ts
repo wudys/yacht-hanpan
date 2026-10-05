@@ -26,6 +26,38 @@ function jsonResponse(body: unknown, status = 200): Response {
 }
 
 describe('room HTTP client', () => {
+  test('rejects unsafe timestamp metadata without accepting HTTP success or its clock sample', async () => {
+    const clock = createServerClock(() => 0);
+    let serverTime = Number.MAX_SAFE_INTEGER + 1;
+    let requests = 0;
+    const client = createRoomHttpClient({
+      contract: createCompatibilityContract('test-release'),
+      baseUrl: 'https://game.example.test',
+      clock,
+      fetch: async () => {
+        requests += 1;
+        return jsonResponse({
+          ok: true,
+          data: { cancelled: true },
+          meta: { ...META, serverTime },
+        });
+      },
+    });
+    const request = parseCancelRoomRequest({ roomId: ROOM_ID, seatToken: SEAT_TOKEN });
+
+    expect(await client.cancelRoom(request)).toEqual({
+      ok: false,
+      error: { kind: 'protocol', code: CLIENT_ERROR_CODE.INVALID_RESPONSE },
+    });
+    expect(clock.now()).toBeNull();
+    expect(requests).toBe(1);
+
+    serverTime = Number.MAX_SAFE_INTEGER;
+    expect(await client.cancelRoom(request)).toMatchObject({ ok: true });
+    expect(clock.now()).toBe(Number.MAX_SAFE_INTEGER);
+    expect(requests).toBe(2);
+  });
+
   test('creates a room with an exact request and returns validated authority', async () => {
     let monotonic = 0;
     const clock = createServerClock(() => monotonic);

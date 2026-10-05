@@ -8,8 +8,7 @@ import {
 import type { FinishedRoom, PlayingRoom, Room, RoomTransition } from '@/rooms/domain/room-model';
 import type { FinishedRoomState, PlayingRoomState } from '@/rooms/domain/room-state';
 import { roomRejected, roomUnchanged } from '@/rooms/domain/room-transition-result';
-import { isValidTimestamp } from '@/rooms/domain/room-validation';
-import { epochMilliseconds } from '@/rooms/domain/time';
+import { epochMilliseconds, isValidTimestamp } from '@/rooms/domain/time';
 
 export interface MarkGameFinishedInput {
   readonly finishedAt: unknown;

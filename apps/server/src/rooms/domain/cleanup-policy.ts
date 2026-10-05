@@ -4,7 +4,7 @@ import {
   ROOM_STATUS,
 } from '@/rooms/domain/room-constants';
 import { type Room } from '@/rooms/domain/room-model';
-import { isValidTimestamp } from '@/rooms/domain/room-validation';
+import { isValidTimestamp } from '@/rooms/domain/time';
 
 export interface EvaluateCleanupInput {
   readonly checkedAt: unknown;

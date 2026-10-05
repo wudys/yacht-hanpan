@@ -36,7 +36,14 @@ export const seatIndexSchema = v.picklist([0, 1]);
 export const seatTokenSchema = uuidV4Schema('SeatToken');
 export const turnIdSchema = uuidSchema('TurnId');
 
-export const epochMillisecondsSchema = counterSchema('EpochMilliseconds');
+export const epochMillisecondsSchema = v.pipe(
+  v.number(),
+  v.finite(),
+  v.integer(),
+  v.minValue(0),
+  v.maxValue(Number.MAX_SAFE_INTEGER),
+  v.brand('EpochMilliseconds'),
+);
 export const presenceVersionSchema = counterSchema('PresenceVersion');
 export const stateVersionSchema = counterSchema('StateVersion');
 

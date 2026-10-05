@@ -1,6 +1,24 @@
 import { describe, expect, test } from 'bun:test';
 
-import { epochMilliseconds } from '@/rooms/domain/time';
+import { epochMilliseconds, isValidTimestamp } from '@/rooms/domain/time';
+
+describe('isValidTimestamp', () => {
+  test.each([0, 1, 1_000, Number.MAX_SAFE_INTEGER])('accepts valid timestamp %p', (value) => {
+    expect(isValidTimestamp(value)).toBe(true);
+  });
+
+  test.each([
+    -1,
+    1.5,
+    Number.MAX_SAFE_INTEGER + 1,
+    Number.NaN,
+    Number.POSITIVE_INFINITY,
+    '0',
+    null,
+  ])('rejects invalid timestamp %p', (value) => {
+    expect(isValidTimestamp(value)).toBe(false);
+  });
+});
 
 describe('epochMilliseconds', () => {
   test.each([0, 1, 1_000, Number.MAX_SAFE_INTEGER])('accepts %p unchanged', (value) => {

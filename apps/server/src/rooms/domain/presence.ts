@@ -17,8 +17,7 @@ import type {
   WaitingRoom,
 } from '@/rooms/domain/room-model';
 import { roomChanged, roomRejected, roomUnchanged } from '@/rooms/domain/room-transition-result';
-import { isValidTimestamp } from '@/rooms/domain/room-validation';
-import { epochMilliseconds } from '@/rooms/domain/time';
+import { epochMilliseconds, isValidTimestamp } from '@/rooms/domain/time';
 
 export interface DisconnectSeatInput {
   readonly seatIndex: SeatIndex;

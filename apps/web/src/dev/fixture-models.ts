@@ -26,7 +26,7 @@ const bonusEarnedPlayers = [
 type FixtureResultMode = 'win' | 'loss' | 'draw' | 'forfeit' | 'timeout' | 'connection-ended';
 type FixtureResultOutcome = 'viewer-win' | 'opponent-win' | 'draw';
 type FixtureResultReason = 'normal' | 'forfeit' | 'timeout' | 'connection-ended';
-type FixturePlayer = Readonly<{ scorecard: Scorecard; timeoutCount: 0 | 1 | 2 | 3 }>;
+type FixturePlayer = Readonly<{ scorecard: Scorecard; timeoutCount: 0 | 1 | 2 }>;
 
 export type FixtureResult = Readonly<{
   model: GameViewModel;
@@ -147,7 +147,7 @@ function resultConfiguration(mode: FixtureResultMode): Readonly<{
       };
     case 'timeout':
       return {
-        players: [player(PARTIAL_LOW, 3), player(PARTIAL_HIGH)],
+        players: [player(PARTIAL_LOW, 2), player(PARTIAL_HIGH)],
         outcome: 'opponent-win',
         reason: 'timeout',
       };
@@ -166,6 +166,6 @@ function resultConfiguration(mode: FixtureResultMode): Readonly<{
   }
 }
 
-function player(scorecard: Scorecard, timeoutCount: 0 | 1 | 2 | 3 = 0): FixturePlayer {
+function player(scorecard: Scorecard, timeoutCount: 0 | 1 | 2 = 0): FixturePlayer {
   return { scorecard, timeoutCount };
 }

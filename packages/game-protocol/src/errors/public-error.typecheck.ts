@@ -2,6 +2,9 @@ import { createPublicError, PUBLIC_ERROR_CODE, type PublicErrorCode } from './in
 
 export const limited = createPublicError(PUBLIC_ERROR_CODE.RATE_LIMITED, { retryAfterMs: 1_000 });
 export const { retryAfterMs }: { retryAfterMs: number } = limited.params;
+export const turnNotStarted = createPublicError(PUBLIC_ERROR_CODE.TURN_NOT_STARTED, {});
+// @ts-expect-error TURN_NOT_STARTED exposes no timing fields.
+createPublicError(PUBLIC_ERROR_CODE.TURN_NOT_STARTED, { startedAt: 1_000 });
 export const empty = createPublicError(PUBLIC_ERROR_CODE.INTERNAL_ERROR, {});
 // @ts-expect-error RATE_LIMITED needs its delay even for a literal code.
 createPublicError(PUBLIC_ERROR_CODE.RATE_LIMITED, {});

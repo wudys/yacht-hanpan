@@ -60,11 +60,11 @@ export function finishScoresIfTurnsExhausted(
 }
 
 type TimedOutPlayer = Omit<MatchPlayer, 'timeoutCount'> & {
-  readonly timeoutCount: 1 | 2 | 3;
+  readonly timeoutCount: 1 | 2;
 };
 
 function incrementTimeout(player: MatchPlayer): TimedOutPlayer {
-  const timeoutCount = Math.min(TIMEOUT_FORFEIT_LIMIT, player.timeoutCount + 1) as 1 | 2 | 3;
+  const timeoutCount = Math.min(TIMEOUT_FORFEIT_LIMIT, player.timeoutCount + 1) as 1 | 2;
   return { ...player, timeoutCount };
 }
 

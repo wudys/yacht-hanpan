@@ -385,7 +385,7 @@ test('publishes game commits with their next deadline already scheduled', async 
   });
   try {
     await startGame(state);
-    expect(state.published[0]).toMatchObject({ publication: { kind: 'started' }, runAt: 62_001 });
+    expect(state.published[0]).toMatchObject({ publication: { kind: 'started' }, runAt: 92_001 });
     const current = playingRecord(state);
     state.setNow(2_500);
     const rolled = await state.service.executeGameCommand({
@@ -413,10 +413,10 @@ test('publishes game commits with their next deadline already scheduled', async 
     });
     const next = state.queue.run(ROOM_ID, () => state.scheduled.get(ROOM_ID)?.runAt);
     expect((await score).result.ok).toBeTrue();
-    expect(await next).toBe(63_001);
+    expect(await next).toBe(94_001);
     expect(state.published.at(-1)).toMatchObject({
       publication: { kind: 'game', update: { view: { game: { stateVersion: 3 } } } },
-      runAt: 63_001,
+      runAt: 94_001,
     });
   } finally {
     state.service.close();
@@ -481,7 +481,7 @@ test('disconnect and reconnect publish the earliest remaining deadline before re
   }
 });
 
-test.each([61_000, 62_000])('an early deadline wake at %d rearms without a commit', async (now) => {
+test.each([91_000, 92_000])('an early deadline wake at %d rearms without a commit', async (now) => {
   const state = await fixture();
   try {
     await startGame(state);
@@ -490,7 +490,7 @@ test.each([61_000, 62_000])('an early deadline wake at %d rearms without a commi
     await state.runDeadline();
     expect(playingRecord(state)).toBe(before);
     expect(state.published).toHaveLength(1);
-    expect(state.scheduled.get(ROOM_ID)?.runAt).toBe(62_001);
+    expect(state.scheduled.get(ROOM_ID)?.runAt).toBe(92_001);
   } finally {
     state.service.close();
   }
@@ -501,21 +501,21 @@ test('a failed deadline store rearms and a later wake publishes the next turn', 
   try {
     await startGame(state);
     const before = playingRecord(state);
-    state.setNow(62_001);
+    state.setNow(92_001);
     const replace = spyOn(state.repository, 'replace').mockReturnValueOnce(false);
     try {
       await state.runDeadline();
       expect(playingRecord(state)).toBe(before);
       expect(state.published).toHaveLength(1);
-      expect(state.scheduled.get(ROOM_ID)?.runAt).toBe(62_001);
+      expect(state.scheduled.get(ROOM_ID)?.runAt).toBe(92_001);
     } finally {
       replace.mockRestore();
     }
     await state.runDeadline();
     expect(playingRecord(state).match.players[0].timeoutCount).toBe(1);
     expect(playingRecord(state).stateVersion).toBe(2);
-    expect(state.published.at(-1)).toMatchObject({ publication: { kind: 'game' }, runAt: 122_002 });
-    expect(state.scheduled.get(ROOM_ID)?.runAt).toBe(122_002);
+    expect(state.published.at(-1)).toMatchObject({ publication: { kind: 'game' }, runAt: 182_002 });
+    expect(state.scheduled.get(ROOM_ID)?.runAt).toBe(182_002);
   } finally {
     state.service.close();
   }

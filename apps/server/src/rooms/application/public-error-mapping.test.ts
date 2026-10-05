@@ -16,6 +16,9 @@ describe('public error mapping', () => {
     expect(mapMatchRejection(MATCH_REJECTION_CODE.NOT_YOUR_TURN)).toBe(
       PUBLIC_ERROR_CODE.NOT_YOUR_TURN,
     );
+    expect(mapMatchRejection(MATCH_REJECTION_CODE.TURN_NOT_STARTED)).toBe(
+      PUBLIC_ERROR_CODE.TURN_NOT_STARTED,
+    );
     expect(mapMatchRejection(MATCH_REJECTION_CODE.MATCH_FINISHED)).toBe(
       PUBLIC_ERROR_CODE.MATCH_FINISHED,
     );

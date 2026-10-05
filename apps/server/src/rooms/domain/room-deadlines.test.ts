@@ -11,7 +11,7 @@ import { roomId } from '@/rooms/domain/room-model';
 import type { PlayingRoomState } from '@/rooms/domain/room-state';
 import { epochMilliseconds } from '@/rooms/domain/time';
 
-function playingState(deadlineAt: number, timeoutCount: 0 | 2 = 0): PlayingRoomState {
+function playingState(deadlineAt: number, timeoutCount: 0 | 1 = 0): PlayingRoomState {
   const created = createRoom({
     roomId: roomId('deadline-room'),
     code: '001204',
@@ -72,7 +72,7 @@ describe('room deadline decisions', () => {
     },
   );
 
-  test.each([0, 2] as const)(
+  test.each([0, 1] as const)(
     'applies one timeout before a due connection end at count %d',
     (count) => {
       const current = playingState(94_000, count);
@@ -91,7 +91,7 @@ describe('room deadline decisions', () => {
           match: {
             status: 'finished',
             players: [{ timeoutCount: count + 1 }, { timeoutCount: 0 }],
-            result: { reason: count === 2 ? 'timeoutLimit' : 'connectionEnded' },
+            result: { reason: count === 1 ? 'timeoutLimit' : 'connectionEnded' },
           },
         },
       });
@@ -114,7 +114,12 @@ describe('room deadline decisions', () => {
         match: {
           status: 'playing',
           players: [{ timeoutCount: 1 }, { timeoutCount: 0 }],
-          currentTurn: { id: 'supplied-turn', seatIndex: 1, startedAt: 11_000, deadlineAt: 71_000 },
+          currentTurn: {
+            id: 'supplied-turn',
+            seatIndex: 1,
+            startedAt: 11_000,
+            deadlineAt: 101_000,
+          },
         },
       },
     });

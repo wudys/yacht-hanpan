@@ -158,7 +158,7 @@ test('game commit finalizes a finished aggregate and preserves authority without
 function withTurn(
   record: PlayingRoomRecord,
   deadlineAt: number,
-  timeoutCount: 0 | 1 | 2 | 3 = 0,
+  timeoutCount: 0 | 1 | 2 = 0,
 ): PlayingRoomRecord {
   const players: PlayingMatch['players'] = [
     { ...record.match.players[0], timeoutCount },
@@ -229,7 +229,7 @@ describe('reconcileRoomDeadlines', () => {
       path: 'terminal timeout',
       deadlineAt: 10_000,
       checkedAt: 10_000,
-      timeoutCount: 2,
+      timeoutCount: 1,
       offline: false,
       ids: 1,
       ending: 'timeoutLimit',
@@ -271,7 +271,7 @@ describe('reconcileRoomDeadlines', () => {
   });
 
   test('leaves the playing state unchanged when room finalization rejects its commit time', async () => {
-    const record = withTurn(await playingFixture(), 10_000, 2);
+    const record = withTurn(await playingFixture(), 10_000, 1);
     let identities = 0;
     const result = reconcileRoomDeadlines(record, {
       time: deadlineTime(10_000),
@@ -288,12 +288,12 @@ describe('reconcileRoomDeadlines', () => {
     expect(result.changed).toBeFalse();
     expect(result.state.room).toBe(record.room);
     expect(result.state.match).toBe(record.match);
-    expect(record.match.players[0].timeoutCount).toBe(2);
+    expect(record.match.players[0].timeoutCount).toBe(1);
   });
 
-  test('finishes a third timeout while both seats are disconnected', async () => {
+  test('finishes a second timeout while both seats are disconnected', async () => {
     const record = disconnect(
-      disconnect(withTurn(await playingFixture(), 10_000, 2), 0, 3_000),
+      disconnect(withTurn(await playingFixture(), 10_000, 1), 0, 3_000),
       1,
       3_100,
     );
@@ -335,9 +335,9 @@ describe('reconcileRoomDeadlines', () => {
     });
   });
 
-  test('third timeout wins an exact tie with reconnect expiry', async () => {
+  test('second timeout wins an exact tie with reconnect expiry', async () => {
     const record = disconnect(
-      withTurn(await playingFixture(), 100_000, 2),
+      withTurn(await playingFixture(), 100_000, 1),
       CREATOR_SEAT_INDEX,
       10_000,
     );
@@ -421,7 +421,7 @@ describe('reconcileRoomDeadlines', () => {
         match: {
           status: 'playing',
           players: [{ timeoutCount: 1 }, { timeoutCount: 0 }],
-          currentTurn: { seatIndex: JOINER_SEAT_INDEX, deadlineAt: 150_100 },
+          currentTurn: { seatIndex: JOINER_SEAT_INDEX, deadlineAt: 180_100 },
         },
       },
     });
@@ -507,9 +507,9 @@ describe('reconcileRoomDeadlines', () => {
     });
 
     scheduler.reconcile(roomId(ROOM_ID));
-    expect(tasks.tasks.get(ROOM_ID)?.runAt).toBe(62_001);
+    expect(tasks.tasks.get(ROOM_ID)?.runAt).toBe(92_001);
 
-    now = 62_001;
+    now = 92_001;
     await tasks.run(ROOM_ID);
 
     expect(repository.getById(roomId(ROOM_ID))).toMatchObject({
@@ -517,11 +517,11 @@ describe('reconcileRoomDeadlines', () => {
       match: {
         status: 'playing',
         players: [{ timeoutCount: 1 }, { timeoutCount: 0 }],
-        currentTurn: { seatIndex: JOINER_SEAT_INDEX, deadlineAt: 122_001 },
+        currentTurn: { seatIndex: JOINER_SEAT_INDEX, deadlineAt: 182_001 },
       },
     });
     expect(updates).toEqual([2]);
-    expect(tasks.tasks.get(ROOM_ID)?.runAt).toBe(122_002);
+    expect(tasks.tasks.get(ROOM_ID)?.runAt).toBe(182_002);
   });
 
   test('rearms the deadline after storage failure without advancing state or publishing', async () => {
@@ -531,7 +531,7 @@ describe('reconcileRoomDeadlines', () => {
     const replace = spyOn(repository, 'replace').mockReturnValue(false);
     const tasks = new ManualTaskScheduler();
     let publications = 0;
-    const clock = { now: () => 62_001 };
+    const clock = { now: () => 92_001 };
     const scheduler = new RoomDeadlineScheduler({
       clock,
       identity: { createTurnId: () => NEXT_TURN_ID },
@@ -553,7 +553,7 @@ describe('reconcileRoomDeadlines', () => {
       expect(replace).toHaveBeenCalledTimes(1);
       expect(repository.getById(record.room.id)).toBe(record);
       expect(publications).toBe(0);
-      expect(tasks.tasks.get(ROOM_ID)?.runAt).toBe(62_001);
+      expect(tasks.tasks.get(ROOM_ID)?.runAt).toBe(92_001);
     } finally {
       replace.mockRestore();
     }
@@ -572,7 +572,7 @@ describe('reconcileRoomDeadlines', () => {
       return gate.promise;
     });
     await entered.promise;
-    let now = 62_001;
+    let now = 92_001;
     let identities = 0;
     const updates: number[] = [];
     const scheduler = new RoomDeadlineScheduler({
@@ -608,15 +608,15 @@ describe('reconcileRoomDeadlines', () => {
       match: {
         status: 'playing',
         players: [{ timeoutCount: 1 }, { timeoutCount: 0 }],
-        currentTurn: { seatIndex: JOINER_SEAT_INDEX, startedAt: 250_000, deadlineAt: 310_000 },
+        currentTurn: { seatIndex: JOINER_SEAT_INDEX, startedAt: 250_000, deadlineAt: 340_000 },
       },
     });
     expect(identities).toBe(1);
     expect(updates).toEqual([2]);
-    expect(tasks.tasks.get(ROOM_ID)?.runAt).toBe(310_001);
+    expect(tasks.tasks.get(ROOM_ID)?.runAt).toBe(340_001);
   });
 
-  test.each([61_000, 62_000])(
+  test.each([91_000, 92_000])(
     'does not adjudicate an unclosed deadline millisecond at %d',
     async (now) => {
       const record = await playingFixture();
@@ -642,7 +642,7 @@ describe('reconcileRoomDeadlines', () => {
       await tasks.run(ROOM_ID);
 
       expect(repository.getById(roomId(ROOM_ID))?.stateVersion).toBe(1);
-      expect(tasks.tasks.get(ROOM_ID)?.runAt).toBe(62_001);
+      expect(tasks.tasks.get(ROOM_ID)?.runAt).toBe(92_001);
     },
   );
 });

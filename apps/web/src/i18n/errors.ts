@@ -16,6 +16,7 @@ export const PUBLIC_ERROR_MESSAGE_KEY = {
   [PUBLIC_ERROR_CODE.NOT_YOUR_TURN]: 'error.notYourTurn',
   [PUBLIC_ERROR_CODE.STALE_TURN]: 'error.staleTurn',
   [PUBLIC_ERROR_CODE.TURN_EXPIRED]: 'error.turnExpired',
+  [PUBLIC_ERROR_CODE.TURN_NOT_STARTED]: 'error.turnNotStarted',
   [PUBLIC_ERROR_CODE.ROLL_LIMIT_REACHED]: 'error.rollLimitReached',
   [PUBLIC_ERROR_CODE.NO_DICE_TO_ROLL]: 'error.noDiceToRoll',
   [PUBLIC_ERROR_CODE.HOLD_NOT_ALLOWED]: 'error.holdNotAllowed',

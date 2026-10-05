@@ -134,6 +134,65 @@ describe('executeJoinRoom', () => {
     expect(String(stored.match.currentTurn.id)).toBe(TURN_ID);
   });
 
+  test('starts the initial turn at receipt time even when the room queue delays admission', async () => {
+    const repository = new InMemoryRoomRepository();
+    seedWaiting(repository);
+    let now = 2_000;
+    const clock = { now: () => now };
+    const queue = new InMemoryRoomTaskQueue({ clock });
+    const publicationTimes: number[] = [];
+    const dependencies: JoinRoomDependencies = {
+      clock,
+      identity: joinIdentity(),
+      queue,
+      repository,
+      commits: new RoomStateCommitter({
+        repository,
+        clock,
+        publishRoomState: () => {
+          publicationTimes.push(clock.now());
+        },
+      }),
+    };
+    const gate = Promise.withResolvers<void>();
+    const entered = Promise.withResolvers<void>();
+    const blocker = queue.run(roomId(ROOM_ID), () => {
+      entered.resolve();
+      return gate.promise;
+    });
+    await entered.promise;
+    const joining = executeJoinRoom(joinRequest(), dependencies);
+
+    try {
+      expect(queue.pendingRequestCount).toBe(1);
+      expect(repository.getById(roomId(ROOM_ID))?.room.status).toBe('waiting');
+      expect(publicationTimes).toEqual([]);
+      now = 12_000;
+      gate.resolve();
+      const result = await joining;
+      if (!result.ok) throw new Error('expected join success');
+
+      expect(publicationTimes).toEqual([12_000]);
+      expect(result.data.view.game).toMatchObject({
+        match: {
+          status: 'playing',
+          currentTurn: { startedAt: 2_000, deadlineAt: 92_000 },
+        },
+      });
+      expect(repository.getById(roomId(ROOM_ID))).toMatchObject({
+        room: { status: 'playing' },
+        match: {
+          status: 'playing',
+          currentTurn: { startedAt: 2_000, deadlineAt: 92_000 },
+        },
+      });
+    } finally {
+      gate.resolve();
+      await Promise.allSettled([blocker, joining]);
+      queue.close();
+    }
+  });
+
   test('serializes simultaneous joins so exactly one creates the match', async () => {
     const repository = new InMemoryRoomRepository();
     seedWaiting(repository);

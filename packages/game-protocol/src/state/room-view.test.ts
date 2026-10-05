@@ -361,3 +361,30 @@ describe('complete room view', () => {
     ).toThrow(GameApiParseError);
   });
 });
+
+test('accepts two cumulative timeouts in finished state and rejects three', () => {
+  const snapshot = {
+    ...finished.game,
+    match: {
+      ...finished.game.match,
+      players: [
+        { scorecard: {}, timeoutCount: 2 },
+        { scorecard: {}, timeoutCount: 0 },
+      ],
+      result: { reason: MATCH_END_REASON.TIMEOUT_LIMIT, winnerSeatIndex: 1 },
+    },
+  };
+  expect(plain(parseGameSnapshot(snapshot))).toEqual(snapshot);
+  expect(() =>
+    parseGameSnapshot({
+      ...snapshot,
+      match: {
+        ...snapshot.match,
+        players: [
+          { scorecard: {}, timeoutCount: 3 },
+          { scorecard: {}, timeoutCount: 0 },
+        ],
+      },
+    }),
+  ).toThrow(GameApiParseError);
+});

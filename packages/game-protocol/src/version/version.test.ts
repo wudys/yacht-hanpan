@@ -38,7 +38,7 @@ describe('compatibility contract', () => {
     const expected = createCompatibilityContract(RELEASE_ID);
     expect(() => assertExactCompatibility(expected, expected)).not.toThrow();
     expect(() =>
-      parseCompatibilityContract({ ...expected, gameProtocolVersion: 'game-protocol-v15' }),
+      parseCompatibilityContract({ ...expected, gameProtocolVersion: 'game-protocol-v16' }),
     ).toThrow(GameApiParseError);
     expect(() =>
       parseCompatibilityContract({ ...expected, timelineSchemaVersion: 'dice-timeline-v3' }),

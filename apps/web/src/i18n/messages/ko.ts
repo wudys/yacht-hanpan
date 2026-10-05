@@ -139,6 +139,7 @@ Google(미국)과 Sentry(미국) 서비스와 연계됩니다. 전송 시 IP 등
   'error.notYourTurn': '지금은 내 턴이 아니에요.',
   'error.staleTurn': '턴이 바뀌었어요.',
   'error.turnExpired': '턴 제한 시간이 지났어요.',
+  'error.turnNotStarted': '다음 턴이 곧 시작돼요.',
   'error.rollLimitReached': '남은 굴림 횟수가 없어요.',
   'error.noDiceToRoll': '주사위가 모두 고정되어 있어요.',
   'error.holdNotAllowed': '지금은 주사위 고정을 바꿀 수 없어요.',

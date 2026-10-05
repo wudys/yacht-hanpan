@@ -7,7 +7,7 @@ test('real deadline warns at five seconds and locks input before the next server
   page,
   browser,
 }, testInfo) => {
-  test.setTimeout(100_000);
+  test.setTimeout(130_000);
   let holdState = false;
   let commandCount = 0;
   const pendingStates: Array<() => void> = [];
@@ -47,7 +47,7 @@ test('real deadline warns at five seconds and locks input before the next server
     await expect(roll).toBeEnabled();
     holdState = true;
 
-    await expect(timer).toHaveText('5초', { timeout: 65_000 });
+    await expect(timer).toHaveText('5초', { timeout: 95_000 });
     await expect(timer).toHaveAttribute('data-timer-warning', 'true');
     expect(await timer.evaluate((node) => getComputedStyle(node).color)).not.toBe(ordinaryColor);
     await expect(choice).toBeEnabled();

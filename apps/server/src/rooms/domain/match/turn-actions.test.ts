@@ -201,22 +201,22 @@ describe('hold transition', () => {
 
 describe('score transition', () => {
   test('records a server-calculated score, discards dice, and starts the other turn', () => {
-    const transition = selectScoreCategory(rolledMatch(), {
-      seatIndex: creatorIndex,
-      turnId: turnId('turn-1'),
-      receivedAt: epochMilliseconds(2_000),
-      categoryId: CATEGORY_ID.FULL_HOUSE,
-      nextTurn: { id: turnId('turn-2'), startedAt: epochMilliseconds(2_100) },
-    });
+    const match = unwrapPlaying(
+      selectScoreCategory(rolledMatch(), {
+        seatIndex: creatorIndex,
+        turnId: turnId('turn-1'),
+        receivedAt: epochMilliseconds(2_000),
+        categoryId: CATEGORY_ID.FULL_HOUSE,
+        nextTurn: { id: turnId('turn-2'), startedAt: epochMilliseconds(2_100) },
+      }),
+    );
 
-    expect(transition.ok).toBe(true);
-    if (!transition.ok || transition.match.status !== 'playing') return;
-    expect(transition.match.players[0].scorecard[CATEGORY_ID.FULL_HOUSE]).toBe(28);
-    expect(transition.match.currentTurn).toEqual({
+    expect(match.players[0].scorecard[CATEGORY_ID.FULL_HOUSE]).toBe(28);
+    expect(match.currentTurn).toEqual({
       id: turnId('turn-2'),
       seatIndex: joinerIndex,
       startedAt: epochMilliseconds(2_100),
-      deadlineAt: epochMilliseconds(62_100),
+      deadlineAt: epochMilliseconds(92_100),
       heldSlots: [],
       diceState: { rollCount: 0, dice: null },
     });
@@ -365,4 +365,52 @@ describe('score transition', () => {
       },
     });
   });
+});
+
+describe('future turn command boundaries', () => {
+  test.each(['roll', 'hold', 'score'] as const)(
+    '%s uses receivedAt within the start-inclusive deadline-exclusive window',
+    (action) => {
+      const rolled = rolledMatch();
+      const match: PlayingMatch = {
+        ...rolled,
+        currentTurn: {
+          ...rolled.currentTurn,
+          startedAt: epochMilliseconds(5_000),
+          deadlineAt: epochMilliseconds(95_000),
+        },
+      };
+      const execute = (receivedAt: number) => {
+        const command = {
+          seatIndex: creatorIndex,
+          turnId: match.currentTurn.id,
+          receivedAt: epochMilliseconds(receivedAt),
+        };
+        switch (action) {
+          case 'roll':
+            return planRoll(match, command);
+          case 'hold':
+            return setDieHeld(match, { ...command, slot: 0, isHeld: true });
+          case 'score':
+            return selectScoreCategory(match, {
+              ...command,
+              categoryId: CATEGORY_ID.CHOICE,
+              nextTurn: { id: turnId('next'), startedAt: epochMilliseconds(96_000) },
+            });
+        }
+      };
+      expect(execute(4_999)).toMatchObject({ ok: false, code: 'TURN_NOT_STARTED' });
+      expect(execute(5_000).ok).toBeTrue();
+      expect(execute(94_999).ok).toBeTrue();
+      expect(execute(95_000)).toMatchObject({ ok: false, code: MATCH_REJECTION_CODE.TURN_EXPIRED });
+      expect(match).toEqual({
+        ...rolled,
+        currentTurn: {
+          ...rolled.currentTurn,
+          startedAt: epochMilliseconds(5_000),
+          deadlineAt: epochMilliseconds(95_000),
+        },
+      });
+    },
+  );
 });

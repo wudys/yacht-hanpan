@@ -19,7 +19,9 @@ describe('game-client-sdk with the real game server', () => {
   });
 
   test('bootstraps, commands, receives authoritative state, and reconnects by full sync', async () => {
+    let now = 1_000;
     server = await startGameServer({
+      clock: { now: () => now },
       config: {
         allowedOrigins: [],
         trustRenderProxy: false,
@@ -74,6 +76,24 @@ describe('game-client-sdk with the real game server', () => {
     await waitFor(() => active.getSnapshot().connection === 'disconnected');
     expect((await active.connect()).ok).toBeTrue();
     expect(Number(active.getSnapshot().game?.stateVersion)).toBe(rolled.data.stateVersion);
+
+    now = 2_000;
+    const scored = await active.selectScoreCategory('ones');
+    expect(scored.ok).toBeTrue();
+    if (!scored.ok) throw new Error('expected score');
+    const next = active === creator ? joiner : creator;
+    await waitFor(() => Number(next.getSnapshot().game?.stateVersion) === scored.data.stateVersion);
+    expect(next.getSnapshot().game?.match).toMatchObject({
+      currentTurn: { startedAt: 3_000, deadlineAt: 93_000 },
+    });
+    const early = await next.rollDice();
+    expect(early).toMatchObject({
+      ok: false,
+      error: { kind: 'server', error: { code: 'TURN_NOT_STARTED', params: {} } },
+    });
+    expect(Number(next.getSnapshot().game?.stateVersion)).toBe(scored.data.stateVersion);
+    now = 3_000;
+    expect((await next.rollDice()).ok).toBeTrue();
   }, 20_000);
 
   test('cancels a waiting room through the public HTTP client', async () => {

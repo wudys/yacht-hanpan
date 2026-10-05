@@ -13,7 +13,7 @@ for (const { code, expires } of [
       ? 'Game expires a roll retry when the server turn advances'
       : `Game explicitly retries the original roll after ${code}`,
     async ({ page, browser }) => {
-      test.setTimeout(90_000);
+      test.setTimeout(expires ? 120_000 : 90_000);
       let protocolVersion: string | undefined;
       const commands: unknown[] = [];
       await page.routeWebSocket(/\/game-socket\//u, (socket) => {
@@ -66,7 +66,7 @@ for (const { code, expires } of [
         expect(commands).toHaveLength(1);
         if (expires) {
           // Let the actual server deadline advance the turn while the retry notice is open.
-          await expect(notice).toHaveCount(0, { timeout: 65_000 });
+          await expect(notice).toHaveCount(0, { timeout: 95_000 });
           await expect(page.getByRole('status')).toHaveText('상대 턴');
           expect(commands).toHaveLength(1);
           return;

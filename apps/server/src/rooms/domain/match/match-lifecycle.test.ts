@@ -50,7 +50,7 @@ function createRolledMatch(): PlayingMatch {
 }
 
 describe('turn expiration', () => {
-  test.each([60_999, 61_000, 61_001])(
+  test.each([90_999, 91_000, 91_001])(
     'evaluates expiry at %d without a next turn or input mutation',
     (checkedAt) => {
       const match = initialMatch();
@@ -60,7 +60,7 @@ describe('turn expiration', () => {
         checkedAt: epochMilliseconds(checkedAt),
       });
       expect(decision).toEqual(
-        checkedAt < 61_000
+        checkedAt < 91_000
           ? { kind: 'rejected', code: MATCH_REJECTION_CODE.TURN_NOT_EXPIRED }
           : {
               kind: 'advance',
@@ -78,8 +78,8 @@ describe('turn expiration', () => {
   test('consumes a turn without recording a category and starts a full next turn', () => {
     const transition = expireTurn(initialMatch(), {
       expectedTurnId: turnId('turn-1'),
-      checkedAt: epochMilliseconds(61_000),
-      nextTurn: { id: turnId('turn-2'), startedAt: epochMilliseconds(62_000) },
+      checkedAt: epochMilliseconds(91_000),
+      nextTurn: { id: turnId('turn-2'), startedAt: epochMilliseconds(92_000) },
     });
 
     expect(transition).toMatchObject({
@@ -94,10 +94,71 @@ describe('turn expiration', () => {
         currentTurn: {
           id: turnId('turn-2'),
           seatIndex: joinerIndex,
-          startedAt: epochMilliseconds(62_000),
-          deadlineAt: epochMilliseconds(122_000),
+          startedAt: epochMilliseconds(92_000),
+          deadlineAt: epochMilliseconds(182_000),
           diceState: { rollCount: 0, dice: null },
         },
+      },
+    });
+  });
+
+  test('keeps the first timeout cumulative through intervening normal scores', () => {
+    const first = expireTurn(initialMatch(), {
+      expectedTurnId: turnId('turn-1'),
+      checkedAt: epochMilliseconds(91_000),
+      nextTurn: { id: turnId('turn-2'), startedAt: epochMilliseconds(91_000) },
+    });
+    if (!first.ok || first.match.status !== 'playing') throw new Error('first timeout failed');
+    let { match } = first;
+    for (const [seatIndex, categoryId] of [
+      [joinerIndex, CATEGORY_ID.ONES],
+      [creatorIndex, CATEGORY_ID.ONES],
+      [joinerIndex, CATEGORY_ID.TWOS],
+    ] as const) {
+      const plan = planRoll(match, {
+        seatIndex,
+        turnId: match.currentTurn.id,
+        receivedAt: match.currentTurn.startedAt,
+      });
+      if (!plan.ok) throw new Error(plan.code);
+      const rolled = applyRollResult(match, {
+        plan: plan.value,
+        facesBySlot: [
+          { slot: 0, value: 1 },
+          { slot: 1, value: 2 },
+          { slot: 2, value: 3 },
+          { slot: 3, value: 4 },
+          { slot: 4, value: 5 },
+        ],
+      });
+      if (!rolled.ok) throw new Error('roll failed');
+      const scored = selectScoreCategory(rolled.match, {
+        seatIndex,
+        turnId: match.currentTurn.id,
+        receivedAt: match.currentTurn.startedAt,
+        categoryId,
+        nextTurn: {
+          id: turnId(
+            `after-${seatIndex}-${Object.keys(match.players[joinerIndex].scorecard).length}`,
+          ),
+          startedAt: epochMilliseconds(match.currentTurn.startedAt + 1_000),
+        },
+      });
+      if (!scored.ok || scored.match.status !== 'playing') throw new Error('score failed');
+      match = scored.match;
+    }
+    expect(match.players[creatorIndex]).toMatchObject({ timeoutCount: 1, scorecard: { ones: 1 } });
+    const second = expireTurn(match, {
+      expectedTurnId: match.currentTurn.id,
+      checkedAt: match.currentTurn.deadlineAt,
+      nextTurn: { id: turnId('unused'), startedAt: match.currentTurn.deadlineAt },
+    });
+    expect(second).toMatchObject({
+      ok: true,
+      match: {
+        status: 'finished',
+        players: [{ timeoutCount: 2, scorecard: { ones: 1 } }, { timeoutCount: 0 }],
+        result: { reason: 'timeoutLimit', winnerSeatIndex: joinerIndex },
       },
     });
   });
@@ -106,15 +167,15 @@ describe('turn expiration', () => {
     expect(
       expireTurn(initialMatch(), {
         expectedTurnId: turnId('stale'),
-        checkedAt: epochMilliseconds(61_000),
-        nextTurn: { id: turnId('turn-2'), startedAt: epochMilliseconds(62_000) },
+        checkedAt: epochMilliseconds(91_000),
+        nextTurn: { id: turnId('turn-2'), startedAt: epochMilliseconds(92_000) },
       }),
     ).toMatchObject({ ok: false, code: MATCH_REJECTION_CODE.STALE_TURN });
     expect(
       expireTurn(initialMatch(), {
         expectedTurnId: turnId('turn-1'),
-        checkedAt: epochMilliseconds(60_999),
-        nextTurn: { id: turnId('turn-2'), startedAt: epochMilliseconds(62_000) },
+        checkedAt: epochMilliseconds(90_999),
+        nextTurn: { id: turnId('turn-2'), startedAt: epochMilliseconds(92_000) },
       }),
     ).toMatchObject({
       ok: false,
@@ -122,8 +183,8 @@ describe('turn expiration', () => {
     });
   });
 
-  test.each([0, 9])(
-    'finishes with timeoutLimit on the third timeout after %d scores',
+  test.each([0, 10])(
+    'finishes with timeoutLimit on the second timeout after %d scores',
     (scoreCount) => {
       const match = initialMatch();
       const scorecard = Object.fromEntries(
@@ -133,18 +194,18 @@ describe('turn expiration', () => {
         scoreCount === 0
           ? match.players[1].scorecard
           : (Object.fromEntries(CATEGORY_IDS.map((categoryId) => [categoryId, 0])) as Scorecard);
-      const beforeThird: PlayingMatch = {
+      const beforeSecond: PlayingMatch = {
         ...match,
         players: [
-          { ...match.players[0], scorecard, timeoutCount: 2 },
+          { ...match.players[0], scorecard, timeoutCount: 1 },
           { ...match.players[1], scorecard: otherScorecard },
         ],
       };
 
-      const transition = expireTurn(beforeThird, {
+      const transition = expireTurn(beforeSecond, {
         expectedTurnId: turnId('turn-1'),
-        checkedAt: epochMilliseconds(61_000),
-        nextTurn: { id: turnId('unused'), startedAt: epochMilliseconds(62_000) },
+        checkedAt: epochMilliseconds(91_000),
+        nextTurn: { id: turnId('unused'), startedAt: epochMilliseconds(92_000) },
       });
 
       expect(transition).toMatchObject({
@@ -160,7 +221,7 @@ describe('turn expiration', () => {
     },
   );
 
-  test('finishes by scoresCompleted when a non-third timeout uses both final turns', () => {
+  test('finishes by scoresCompleted when the first timeout uses both final turns', () => {
     const elevenCategories = Object.fromEntries(
       CATEGORY_IDS.filter((categoryId) => categoryId !== CATEGORY_ID.YACHT).map((categoryId) => [
         categoryId,
@@ -183,8 +244,8 @@ describe('turn expiration', () => {
     expect(
       expireTurn(finalTurn, {
         expectedTurnId: turnId('turn-1'),
-        checkedAt: epochMilliseconds(61_000),
-        nextTurn: { id: turnId('unused'), startedAt: epochMilliseconds(62_000) },
+        checkedAt: epochMilliseconds(91_000),
+        nextTurn: { id: turnId('unused'), startedAt: epochMilliseconds(92_000) },
       }),
     ).toMatchObject({
       ok: true,
@@ -251,8 +312,8 @@ describe('player-loss transitions', () => {
     expect(
       expireTurn(finished.match, {
         expectedTurnId: turnId('turn-1'),
-        checkedAt: epochMilliseconds(61_000),
-        nextTurn: { id: turnId('unused'), startedAt: epochMilliseconds(62_000) },
+        checkedAt: epochMilliseconds(91_000),
+        nextTurn: { id: turnId('unused'), startedAt: epochMilliseconds(92_000) },
       }),
     ).toMatchObject({ ok: false, code: MATCH_REJECTION_CODE.MATCH_FINISHED });
   });
@@ -264,9 +325,9 @@ describe('deadline boundary', () => {
     const beforeDeadline = selectScoreCategory(rolled, {
       seatIndex: creatorIndex,
       turnId: turnId('turn-1'),
-      receivedAt: epochMilliseconds(60_999),
+      receivedAt: epochMilliseconds(90_999),
       categoryId: CATEGORY_ID.CHOICE,
-      nextTurn: { id: turnId('turn-2'), startedAt: epochMilliseconds(61_100) },
+      nextTurn: { id: turnId('turn-2'), startedAt: epochMilliseconds(91_100) },
     });
     expect(beforeDeadline.ok).toBe(true);
 
@@ -274,16 +335,16 @@ describe('deadline boundary', () => {
       selectScoreCategory(rolled, {
         seatIndex: creatorIndex,
         turnId: turnId('turn-1'),
-        receivedAt: epochMilliseconds(61_000),
+        receivedAt: epochMilliseconds(91_000),
         categoryId: CATEGORY_ID.CHOICE,
-        nextTurn: { id: turnId('turn-2'), startedAt: epochMilliseconds(61_100) },
+        nextTurn: { id: turnId('turn-2'), startedAt: epochMilliseconds(91_100) },
       }),
     ).toMatchObject({ ok: false, code: MATCH_REJECTION_CODE.TURN_EXPIRED });
     expect(
       expireTurn(rolled, {
         expectedTurnId: turnId('turn-1'),
-        checkedAt: epochMilliseconds(61_000),
-        nextTurn: { id: turnId('turn-2'), startedAt: epochMilliseconds(61_100) },
+        checkedAt: epochMilliseconds(91_000),
+        nextTurn: { id: turnId('turn-2'), startedAt: epochMilliseconds(91_100) },
       }),
     ).toMatchObject({ ok: true });
   });

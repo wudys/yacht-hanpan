@@ -110,3 +110,27 @@ test('updates deadline eligibility only at valid, expired or unknown clock bound
   unmount();
   expect(vi.getTimerCount()).toBe(0);
 });
+
+test('keeps the next turn at ninety seconds and opens exactly at its future start', async () => {
+  vi.useFakeTimers();
+  const clock = { now: () => Date.now() };
+  vi.setSystemTime(0);
+  const { result, unmount } = renderHook(() => ({
+    seconds: useDeadlineSeconds(clock, 91_125, 1_125),
+    timing: useDeadlineReadiness(clock, 91_125, 1_125),
+  }));
+  expect(result.current.seconds).toBe(90);
+  expect(result.current.timing.ready).toBe(true);
+  expect(result.current.timing.turnReady).toBe(false);
+  await act(() => vi.advanceTimersByTime(1_124));
+  expect(result.current.seconds).toBe(90);
+  expect(result.current.timing.turnReady).toBe(false);
+  await act(() => vi.advanceTimersByTime(1));
+  expect(result.current.timing.turnReady).toBe(true);
+  expect(result.current.seconds).toBe(90);
+  await act(() => vi.advanceTimersByTime(90_000));
+  expect(result.current.timing.ready).toBe(false);
+  expect(result.current.timing.turnReady).toBe(false);
+  unmount();
+  expect(vi.getTimerCount()).toBe(0);
+});

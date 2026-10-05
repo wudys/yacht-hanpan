@@ -8,15 +8,17 @@ import { type Locale, translate } from '@/i18n';
 export function GameDeadlineDisplay({
   clock,
   deadlineAt,
+  startedAt,
   locale,
   onReadinessSample,
 }: Readonly<{
   clock: Pick<ServerClock, 'now'>;
   deadlineAt: number | null;
+  startedAt: number | null;
   locale: Locale;
   onReadinessSample: () => void;
 }>) {
-  const seconds = useDeadlineSeconds(clock, deadlineAt);
+  const seconds = useDeadlineSeconds(clock, deadlineAt, startedAt);
   const ready = seconds !== null && seconds > 0;
   // A remounted display can poll before the input gate; align boundary changes before paint.
   useLayoutEffect(onReadinessSample, [onReadinessSample, ready]);

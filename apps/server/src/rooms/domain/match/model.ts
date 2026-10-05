@@ -32,7 +32,7 @@ export interface MatchTurn {
 
 export interface MatchPlayer {
   readonly scorecard: Scorecard;
-  readonly timeoutCount: 0 | 1 | 2 | 3;
+  readonly timeoutCount: 0 | 1 | 2;
 }
 
 export type MatchResult =

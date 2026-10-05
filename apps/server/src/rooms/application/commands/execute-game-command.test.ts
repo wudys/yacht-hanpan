@@ -1,22 +1,11 @@
 import { randomUUID } from 'node:crypto';
 
-import { POUR_STYLE } from '@repo/dice-simulation/contract';
 import { PUBLIC_ERROR_CODE } from '@repo/game-protocol/errors';
-import { parseCreateRoomRequest, parseJoinRoomRequest } from '@repo/game-protocol/http';
-import {
-  GAME_COMMAND_TYPE,
-  parseCommandAck,
-  parseGameCommand,
-  parseResolvedRollArtifact,
-} from '@repo/game-protocol/socket';
-import { createCompatibilityContract, GAME_PROTOCOL_VERSION } from '@repo/game-protocol/version';
+import { GAME_COMMAND_TYPE, parseCommandAck, parseGameCommand } from '@repo/game-protocol/socket';
+import { GAME_PROTOCOL_VERSION } from '@repo/game-protocol/version';
 import type { SeatIndex } from '@repo/yacht-rules';
 import { describe, expect, spyOn, test } from 'bun:test';
 
-import type { RollCommandExecutor } from '@/roll/roll-command-executor';
-import { executeCreateRoom } from '@/rooms/application/admission/create-room';
-import { CreateRoomRateLimiter } from '@/rooms/application/admission/create-room-rate-limiter';
-import { executeJoinRoom } from '@/rooms/application/admission/join-room';
 import {
   fingerprintGameCommand,
   MAX_ACTION_LEDGER_ENTRIES,
@@ -24,108 +13,29 @@ import {
 import {
   executeGameCommand,
   type ExecuteGameCommandDependencies,
-  type ExecuteGameCommandResult,
 } from '@/rooms/application/commands/execute-game-command';
-import { PendingActionRegistry } from '@/rooms/application/commands/pending-action-registry';
-import { InMemoryRoomRepository } from '@/rooms/application/room-repository';
 import {
-  RoomStateCommitter,
-  type RoomStatePublication,
-} from '@/rooms/application/room-state-committer';
+  ACTION_ID,
+  CREATOR_SEAT_INDEX,
+  fixture,
+  installRolledRecord,
+  JOINER_SEAT_INDEX,
+  NEXT_TURN_ID,
+  playingRecord,
+  resolvedRollArtifact,
+  ROOM_ID,
+  TURN_ID,
+  unavailableRollCommandExecutor,
+} from '@/rooms/application/commands/execute-game-command.test-fixture';
+import { InMemoryRoomRepository } from '@/rooms/application/room-repository';
+import { RoomStateCommitter } from '@/rooms/application/room-state-committer';
 import { RoomDeadlineScheduler } from '@/rooms/application/scheduling/deadline-scheduler';
 import { InMemoryRoomTaskQueue } from '@/rooms/application/scheduling/room-task-queue';
 import { executeSyncRoom } from '@/rooms/application/sync-room';
 import type { PlayingMatch } from '@/rooms/domain/match';
 import { disconnectSeat, resumeSeat } from '@/rooms/domain/presence';
 import { roomId } from '@/rooms/domain/room-model';
-import { isPlayingRoomState } from '@/rooms/domain/room-state';
 import { epochMilliseconds } from '@/rooms/domain/time';
-
-const ROOM_ID = '018f47f2-c2d8-7f4a-8bf4-3f559c39843e';
-const CREATOR_SEAT_INDEX = 0 as const;
-const JOINER_SEAT_INDEX = 1 as const;
-const TURN_ID = '018f47f2-c2d8-7f4a-8bf4-3f559c398441';
-const NEXT_TURN_ID = '018f47f2-c2d8-7f4a-8bf4-3f559c398442';
-const ACTION_ID = 'a635fe2c-c4c8-4382-80d7-c35c5d5d455d';
-const ROLL_ID = '8184fc0a-4e59-455d-a7c1-579a9ee96403';
-
-const unavailableRollCommandExecutor: RollCommandExecutor = {
-  execute: () => Promise.resolve({ ok: false, reason: 'unavailable' }),
-};
-
-async function fixture(queue: InMemoryRoomTaskQueue = new InMemoryRoomTaskQueue()) {
-  const repository = new InMemoryRoomRepository();
-  const baseIdentity = {
-    createRequestId: () => '018f47f2-c2d8-7f4a-8bf4-3f559c398444',
-    createRoomCodeCandidate: () => '001204',
-    createRoomId: () => ROOM_ID,
-    createSeatToken: () => 'd9428888-122b-4d34-8f6f-1f0f4f7f6b91',
-    createTurnId: () => TURN_ID,
-  };
-  const created = executeCreateRoom(
-    {
-      request: parseCreateRoomRequest({
-        clientId: '018f47f2-c2d8-7f4a-8bf4-3f559c39843d',
-        operationId: '4ba1e7d4-c077-4b80-b198-9b1f04c182c8',
-        profile: { characterId: 'navy-bob', variant: false },
-      }),
-      ipAddress: '192.0.2.1',
-    },
-    {
-      clock: { now: () => 1_000 },
-      identity: baseIdentity,
-      rateLimiter: new CreateRoomRateLimiter(),
-      commits: new RoomStateCommitter({
-        repository: repository,
-        clock: { now: () => 1_000 },
-        publishRoomState: () => undefined,
-      }),
-    },
-  );
-  if (!created.ok) throw new Error('create fixture failed');
-  const joined = await executeJoinRoom(
-    parseJoinRoomRequest({
-      clientId: '018f47f2-c2d8-7f4a-8bf4-3f559c398445',
-      operationId: '888d7ad9-0311-42e8-a245-8e57c3046606',
-      roomCode: '001204',
-      profile: { characterId: 'blonde-buns', variant: false },
-    }),
-    {
-      clock: { now: () => 2_000 },
-      identity: {
-        ...baseIdentity,
-        createSeatToken: () => '9207e571-a39a-49d5-a75f-a08d5e52cce8',
-      },
-      queue,
-      repository,
-      commits: new RoomStateCommitter({
-        repository: repository,
-        clock: { now: () => 2_000 },
-        publishRoomState: () => undefined,
-      }),
-    },
-  );
-  if (!joined.ok) throw new Error('join fixture failed');
-
-  let now = 3_000;
-  const published: Extract<RoomStatePublication, { kind: 'game' }>[] = [];
-  const dependencies: ExecuteGameCommandDependencies = {
-    clock: { now: () => now },
-    identity: { createTurnId: () => NEXT_TURN_ID },
-    pending: new PendingActionRegistry<ExecuteGameCommandResult>(),
-    queue,
-    repository,
-    rolls: unavailableRollCommandExecutor,
-    commits: new RoomStateCommitter({
-      repository: repository,
-      clock: { now: () => now },
-      publishRoomState: (publication) => {
-        if (publication.kind === 'game') published.push(publication);
-      },
-    }),
-  };
-  return { dependencies, published, repository, setNow: (value: number) => (now = value) };
-}
 
 async function capturedFixture() {
   let now = 3_000;
@@ -711,7 +621,7 @@ describe('executeGameCommand', () => {
           ...current,
           match: {
             ...current.match,
-            players: [{ ...current.match.players[0], timeoutCount: 2 }, current.match.players[1]],
+            players: [{ ...current.match.players[0], timeoutCount: 1 }, current.match.players[1]],
             currentTurn: { ...current.match.currentTurn, deadlineAt: epochMilliseconds(3_000) },
           },
         });
@@ -977,7 +887,7 @@ describe('executeGameCommand', () => {
     'reserves %s (%s) with overdue turn %p without consuming a roll',
     async (reason, code, overdue) => {
       const state = await fixture();
-      if (overdue) state.setNow(63_000);
+      if (overdue) state.setNow(93_000);
       let executorCalls = 0;
       const dependencies: ExecuteGameCommandDependencies = {
         ...state.dependencies,
@@ -997,7 +907,7 @@ describe('executeGameCommand', () => {
           actionId: ACTION_ID,
           turnId: overdue ? NEXT_TURN_ID : TURN_ID,
         }),
-        receivedAt: overdue ? 62_000 : 3_000,
+        receivedAt: overdue ? 93_000 : 3_000,
       };
       const first = await executeGameCommand(input, dependencies);
       const second = await executeGameCommand(input, dependencies);
@@ -1102,9 +1012,9 @@ describe('executeGameCommand', () => {
     [GAME_COMMAND_TYPE.SET_DIE_HELD, 3_000],
     [GAME_COMMAND_TYPE.FORFEIT_MATCH, 3_000],
     [GAME_COMMAND_TYPE.ROLL_DICE, 3_000],
-    [GAME_COMMAND_TYPE.SET_DIE_HELD, 62_000],
-    [GAME_COMMAND_TYPE.FORFEIT_MATCH, 62_000],
-    [GAME_COMMAND_TYPE.ROLL_DICE, 62_000],
+    [GAME_COMMAND_TYPE.SET_DIE_HELD, 92_000],
+    [GAME_COMMAND_TYPE.FORFEIT_MATCH, 92_000],
+    [GAME_COMMAND_TYPE.ROLL_DICE, 92_000],
   ] as const)(
     'commits only due deadlines when a full ledger refuses %s received at %d',
     async (type, receivedAt) => {
@@ -1112,7 +1022,7 @@ describe('executeGameCommand', () => {
       installFullActionLedger(state.repository);
       const before = playingRecord(state.repository);
       await state.advance(receivedAt + 1);
-      const overdue = receivedAt === 62_000;
+      const overdue = receivedAt === 92_000;
       const command = parseGameCommand({
         type,
         actionId: ACTION_ID,
@@ -1186,7 +1096,7 @@ describe('executeGameCommand', () => {
         {
           roomId: roomId(ROOM_ID),
           seatIndex: type === GAME_COMMAND_TYPE.ROLL_DICE ? JOINER_SEAT_INDEX : CREATOR_SEAT_INDEX,
-          receivedAt: 62_000,
+          receivedAt: 92_000,
           command: parseGameCommand({
             type,
             actionId: ACTION_ID,
@@ -1237,7 +1147,7 @@ describe('executeGameCommand', () => {
     const replace = spyOn(state.repository, 'replace').mockReturnValue(false);
     let rollCalls = 0;
     const result = await executeGameCommand(
-      { roomId: roomId(ROOM_ID), seatIndex: JOINER_SEAT_INDEX, receivedAt: 62_000, command },
+      { roomId: roomId(ROOM_ID), seatIndex: JOINER_SEAT_INDEX, receivedAt: 92_000, command },
       {
         ...state.dependencies,
         rolls: {
@@ -1274,7 +1184,7 @@ describe('executeGameCommand', () => {
         {
           roomId: roomId(ROOM_ID),
           seatIndex: CREATOR_SEAT_INDEX,
-          receivedAt: 62_000,
+          receivedAt: 92_000,
           command: parseGameCommand({
             type: GAME_COMMAND_TYPE.SET_DIE_HELD,
             actionId: ACTION_ID,
@@ -1652,11 +1562,11 @@ describe('executeGameCommand', () => {
     });
   });
 
-  test('lets a third timeout win against an explicit forfeit at the exact deadline', async () => {
+  test('lets a second timeout win against an explicit forfeit at the exact deadline', async () => {
     const state = await fixture();
     const current = playingRecord(state.repository);
     const players: PlayingMatch['players'] = [
-      { ...current.match.players[0], timeoutCount: 2 },
+      { ...current.match.players[0], timeoutCount: 1 },
       current.match.players[1],
     ];
     state.repository.replace(roomId(ROOM_ID), {
@@ -1776,6 +1686,10 @@ describe('executeGameCommand', () => {
     );
 
     expect(result.result).toMatchObject({ ok: true, data: { receipt: { stateVersion: 2 } } });
+    expect(state.repository.getById(roomId(ROOM_ID))?.room).toMatchObject({
+      status: 'finished',
+      finishedAt: 200_000,
+    });
     expect(state.repository.getById(roomId(ROOM_ID))?.match).toMatchObject({
       status: 'finished',
       result: { reason: 'scoresCompleted' },
@@ -1849,14 +1763,6 @@ describe('executeGameCommand', () => {
   });
 });
 
-function playingRecord(repository: InMemoryRoomRepository) {
-  const record = repository.getById(roomId(ROOM_ID));
-  if (record === undefined || !isPlayingRoomState(record)) {
-    throw new Error('playing record missing');
-  }
-  return record;
-}
-
 function installFullActionLedger(repository: InMemoryRoomRepository): void {
   const current = playingRecord(repository);
   repository.replace(roomId(ROOM_ID), {
@@ -1894,46 +1800,6 @@ function installDisconnectedRecord(
     throw new Error('disconnect failed');
   }
   repository.replace(roomId(ROOM_ID), { ...current, room: disconnected.room });
-}
-
-function installRolledRecord(repository: InMemoryRoomRepository): void {
-  const current = playingRecord(repository);
-  repository.replace(roomId(ROOM_ID), {
-    ...current,
-    match: {
-      ...current.match,
-      currentTurn: {
-        ...current.match.currentTurn,
-        diceState: {
-          rollCount: 1,
-          dice: [{ value: 1 }, { value: 2 }, { value: 3 }, { value: 4 }, { value: 5 }],
-        },
-      },
-    },
-  });
-}
-
-function resolvedRollArtifact() {
-  return parseResolvedRollArtifact({
-    type: 'roll:resolved',
-    replay: {
-      mode: 'seeded-physics',
-      rollId: ROLL_ID,
-      seed: 'ab'.repeat(32),
-      pourStyle: POUR_STYLE.CLASSIC,
-      rolledSlots: [0, 1, 2, 3, 4],
-      contract: createCompatibilityContract('test-release'),
-    },
-    outcome: {
-      authoritativeValuesBySlot: [
-        { slot: 0, value: 1 },
-        { slot: 1, value: 2 },
-        { slot: 2, value: 3 },
-        { slot: 3, value: 4 },
-        { slot: 4, value: 5 },
-      ],
-    },
-  });
 }
 
 function installFinalScoreRecord(repository: InMemoryRoomRepository): void {

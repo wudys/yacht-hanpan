@@ -141,6 +141,7 @@ We use Google and Sentry services, both based in the United States. Network info
   'error.notYourTurn': 'It’s not your turn.',
   'error.staleTurn': 'The turn has changed.',
   'error.turnExpired': 'Time is up for this turn.',
+  'error.turnNotStarted': 'The next turn will start shortly.',
   'error.rollLimitReached': 'You’ve used all your rolls this turn.',
   'error.noDiceToRoll': 'All dice are held.',
   'error.holdNotAllowed': 'You can’t hold or release dice right now.',

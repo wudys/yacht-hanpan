@@ -24,6 +24,9 @@ export function validateActiveTurn(
   if (match.currentTurn.id !== command.turnId) {
     return { ok: false, code: MATCH_REJECTION_CODE.STALE_TURN };
   }
+  if (command.receivedAt < match.currentTurn.startedAt) {
+    return { ok: false, code: MATCH_REJECTION_CODE.TURN_NOT_STARTED };
+  }
   if (command.receivedAt >= match.currentTurn.deadlineAt) {
     return { ok: false, code: MATCH_REJECTION_CODE.TURN_EXPIRED };
   }

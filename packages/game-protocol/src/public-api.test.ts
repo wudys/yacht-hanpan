@@ -9,7 +9,7 @@ describe('package entry points', () => {
   test('resolve every approved subpath through package exports', () => {
     expect(PUBLIC_ERROR_CODE.INVALID_REQUEST).toBe('INVALID_REQUEST');
     expect(GAME_COMMAND_TYPE.ROLL_DICE).toBe('rollDice');
-    expect(GAME_PROTOCOL_VERSION).toBe('game-protocol-v16');
+    expect(GAME_PROTOCOL_VERSION).toBe('game-protocol-v17');
     expect(ROOT_GAME_PROTOCOL_VERSION).toBe(GAME_PROTOCOL_VERSION);
     expect(
       parseCreateRoomRequest({

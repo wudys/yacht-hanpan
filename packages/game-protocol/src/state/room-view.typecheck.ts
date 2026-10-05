@@ -16,6 +16,9 @@ export function buildPublicState(
 ): void {
   room.seats[0].profile.variant = true;
   game.stateVersion += 1;
+  game.match.players[0].timeoutCount = 2;
+  // @ts-expect-error Public timeout counts stop at the second cumulative timeout.
+  game.match.players[0].timeoutCount = 3;
   game.match.players[0].scorecard.ones = 5;
   presence.presenceVersion += 1;
   if (game.match.status === 'playing' && game.match.currentTurn.rollCount !== 0) {

@@ -62,7 +62,10 @@ function bothDisconnected(): PlayingRoomRecord {
   const afterTimeout = reconcileRoomDeadlines(
     {
       room: second.room,
-      match: initial,
+      match: {
+        ...initial,
+        currentTurn: { ...initial.currentTurn, deadlineAt: epochMilliseconds(62_000) },
+      },
     },
     { time: deadlineTime(62_000), committedAt: 62_000, identity },
   );
@@ -195,7 +198,7 @@ describe('shared reconnect lifecycle', () => {
   });
 
   for (const seatIndex of [0, 1] as const) {
-    for (const timeoutCount of [0, 2] as const) {
+    for (const timeoutCount of [0, 1] as const) {
       test.each([89_999, 90_000, 90_001])(
         `delayed scheduler admission agrees for seat ${seatIndex}, timeout count ${timeoutCount}, at %d`,
         async (now) => {
@@ -210,7 +213,7 @@ describe('shared reconnect lifecycle', () => {
           };
           const state = dependencies(record, now);
           const request = parseResumeRoomRequest({ roomId: ROOM_ID, seatToken: TOKENS[seatIndex] });
-          const allowed = timeoutCount < 2 || now < 90_000;
+          const allowed = timeoutCount < 1 || now < 90_000;
           expect((await executeResumeRoom(request, state)).ok).toBe(allowed);
           expect(state.repository.getById(ROOM_ID)).toBe(record);
           expect(
@@ -247,7 +250,7 @@ describe('shared reconnect lifecycle', () => {
       ...baseline,
       match: {
         ...baseline.match,
-        players: [baseline.match.players[0], { ...baseline.match.players[1], timeoutCount: 2 }],
+        players: [baseline.match.players[0], { ...baseline.match.players[1], timeoutCount: 1 }],
         currentTurn: { ...baseline.match.currentTurn, deadlineAt: epochMilliseconds(90_000) },
       },
     };

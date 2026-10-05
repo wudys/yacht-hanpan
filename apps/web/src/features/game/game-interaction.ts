@@ -8,6 +8,7 @@ export function deriveGameInputScopes({
   hasPendingCommand,
   connected,
   deadlineReady,
+  turnReady,
   layer,
   recoveryActive,
   hasCommandNotice,
@@ -17,6 +18,7 @@ export function deriveGameInputScopes({
   hasPendingCommand: boolean;
   connected: boolean;
   deadlineReady: boolean;
+  turnReady: boolean;
   layer: GameLayer;
   recoveryActive: boolean;
   hasCommandNotice: boolean;
@@ -29,7 +31,7 @@ export function deriveGameInputScopes({
     phase === 'revealing' ||
     phase === 'achievement';
   const commandBlocked = recoveryBlocked || hasPendingCommand || !connected || !deadlineReady;
-  const gameplayCommandBlocked = commandBlocked || presentationBlocked;
+  const gameplayCommandBlocked = commandBlocked || presentationBlocked || !turnReady;
   return {
     commandBlocked,
     gameplayBlocked: gameplayCommandBlocked || layer !== 'board' || recordedCategoryNoticeOpen,

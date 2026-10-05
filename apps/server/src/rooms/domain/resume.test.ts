@@ -80,14 +80,14 @@ describe('evaluateSeatResume', () => {
 
   test('allows a nonterminal overdue turn without applying its timeout or advancing it', () => {
     const current = playingState();
-    const resumed = evaluateSeatResume(current, { seatIndex: 0, resumedAt: 62_000 });
+    const resumed = evaluateSeatResume(current, { seatIndex: 0, resumedAt: 92_000 });
     if (!resumed.ok || !isPlayingRoomState(resumed.state)) throw new Error('overdue resume failed');
     expect(resumed.state.match).toBe(current.match);
     expect(resumed.state.match.players[0].timeoutCount).toBe(0);
     expect(resumed.state.match.currentTurn.id).toBe(current.match.currentTurn.id);
   });
 
-  test.each([61_999, 62_000, 62_001])(
+  test.each([91_999, 92_000, 92_001])(
     'checks terminal expiry for an already-connected seat at %d',
     (resumedAt) => {
       const initial = playingState();
@@ -97,17 +97,17 @@ describe('evaluateSeatResume', () => {
         room: connected.room,
         match: {
           ...initial.match,
-          players: [{ ...initial.match.players[0], timeoutCount: 2 }, initial.match.players[1]],
+          players: [{ ...initial.match.players[0], timeoutCount: 1 }, initial.match.players[1]],
         },
       };
       const resumed = evaluateSeatResume(current, { seatIndex: 0, resumedAt });
 
-      if (resumedAt < 62_000) {
+      if (resumedAt < 92_000) {
         expect(resumed).toMatchObject({ ok: true, presenceChanged: false });
       } else {
         expect(resumed).toEqual({ ok: false, reason: 'terminalExpiry' });
       }
-      expect(current.match.players[0].timeoutCount).toBe(2);
+      expect(current.match.players[0].timeoutCount).toBe(1);
       expect(current.match.status).toBe('playing');
     },
   );
@@ -122,7 +122,7 @@ describe('evaluateSeatResume', () => {
       room: disconnected.room,
       match: {
         ...initial.match,
-        players: [{ ...initial.match.players[0], timeoutCount: 2 }, initial.match.players[1]],
+        players: [{ ...initial.match.players[0], timeoutCount: 1 }, initial.match.players[1]],
       },
     };
 
@@ -131,7 +131,7 @@ describe('evaluateSeatResume', () => {
       reason: 'roomRejected',
       code: ROOM_REJECTION_CODE.RECONNECT_NOT_AVAILABLE,
     });
-    expect(current.match.players[0].timeoutCount).toBe(2);
+    expect(current.match.players[0].timeoutCount).toBe(1);
   });
 
   test.each([

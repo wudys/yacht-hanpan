@@ -616,42 +616,57 @@ describe('authoritative Socket server', () => {
     expect(parseSyncAck(await emitAckWithin(active, SOCKET_EVENT.GAME_SYNC)).ok).toBeTrue();
   });
 
-  test('returns a strict public connection failure for an incompatible release', async () => {
-    const server = await startGameServer({
-      config: {
-        allowedOrigins: [],
-        trustRenderProxy: false,
-        host: '127.0.0.1',
-        port: 0,
-        releaseId: RELEASE_ID,
-      },
-    });
-    servers.push(server);
+  test.each([
+    ['releaseId', 'stale-release'],
+    ['gameProtocolVersion', 'game-protocol-v16'],
+  ] as const)(
+    'returns a strict public connection failure for incompatible %s without changing a waiting room',
+    async (field, incompatible) => {
+      const repository = new InMemoryRoomRepository();
+      const server = await startGameServer({
+        repository,
+        config: {
+          allowedOrigins: [],
+          trustRenderProxy: false,
+          host: '127.0.0.1',
+          port: 0,
+          releaseId: RELEASE_ID,
+        },
+      });
+      servers.push(server);
+      const authority = await createTestRoom(server.url, crypto.randomUUID());
+      const before = repository.getById(roomId(authority.roomId));
+      expect(before).toMatchObject({ room: { status: 'waiting' }, match: null, stateVersion: 0 });
 
-    const client = createClient(server.url, {
-      autoConnect: false,
-      path: GAME_SOCKET_PATH,
-      transports: ['websocket'],
-      auth: {
-        executionId: crypto.randomUUID(),
-        connectionIntent: 'enter',
-        roomId: '018f47f2-c2d8-7f4a-8bf4-3f559c39843e',
-        seatToken: 'd9428888-122b-4d34-8f6f-1f0f4f7f6b91',
-        contract: createCompatibilityContract('stale-release'),
-      },
-    });
-    clients.push(client);
-    const error = await new Promise<Error & { data?: unknown }>((resolve) => {
-      client.once('connect_error', resolve);
-      client.connect();
-    });
-    expect(error.message).toBe('SOCKET_CONNECTION_REJECTED');
-    expect(error.data).toMatchObject({
-      ok: false,
-      error: { code: PUBLIC_ERROR_CODE.PROTOCOL_MISMATCH, params: {} },
-    });
-    expect(JSON.stringify(error.data)).not.toMatch(/token|stack|locale|message/iu);
-  });
+      const client = createClient(server.url, {
+        autoConnect: false,
+        path: GAME_SOCKET_PATH,
+        transports: ['websocket'],
+        auth: {
+          executionId: crypto.randomUUID(),
+          connectionIntent: 'enter',
+          ...authority,
+          contract: { ...createCompatibilityContract(RELEASE_ID), [field]: incompatible },
+        },
+      });
+      clients.push(client);
+      const error = await within(
+        new Promise<Error & { data?: unknown }>((resolve) => {
+          client.once('connect_error', resolve);
+          client.connect();
+        }),
+        'incompatible Socket handshake rejected',
+      );
+      expect(error.message).toBe('SOCKET_CONNECTION_REJECTED');
+      expect(error.data).toMatchObject({
+        ok: false,
+        error: { code: PUBLIC_ERROR_CODE.PROTOCOL_MISMATCH, params: {} },
+      });
+      expect(JSON.stringify(error.data)).not.toMatch(/token|stack|locale|message/iu);
+      expect(repository.getById(roomId(authority.roomId))).toBe(before);
+      expect(client.connected).toBeFalse();
+    },
+  );
 
   test('rejects a browser WebSocket handshake from an unconfigured origin', async () => {
     const server = await startGameServer({

@@ -7,6 +7,7 @@ describe('public error mapping', () => {
   test('maps rate limiting, room conflicts, and internal failures to their HTTP statuses', () => {
     expect(httpStatusForPublicError(PUBLIC_ERROR_CODE.RATE_LIMITED)).toBe(429);
     expect(httpStatusForPublicError(PUBLIC_ERROR_CODE.ROOM_ALREADY_MATCHED)).toBe(409);
+    expect(httpStatusForPublicError(PUBLIC_ERROR_CODE.TURN_NOT_STARTED)).toBe(409);
     expect(httpStatusForPublicError(PUBLIC_ERROR_CODE.INTERNAL_ERROR)).toBe(500);
   });
 });

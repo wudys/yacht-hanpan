@@ -105,7 +105,7 @@ const scorecardSchema = v.strictObject({
 
 const matchPlayerSchema = v.strictObject({
   scorecard: scorecardSchema,
-  timeoutCount: v.picklist([0, 1, 2, 3]),
+  timeoutCount: v.picklist([0, 1, 2]),
 });
 
 const dieSchema = v.strictObject({

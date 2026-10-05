@@ -53,7 +53,7 @@ describe('room match lifecycle', () => {
       id: 'initial-turn',
       seatIndex: 0,
       startedAt: 2_100,
-      deadlineAt: 62_100,
+      deadlineAt: 92_100,
     });
     expect(state.match.players.map((player) => player.scorecard)).toEqual([{}, {}]);
   });

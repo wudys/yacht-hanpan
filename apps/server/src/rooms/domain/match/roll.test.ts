@@ -76,7 +76,7 @@ function withHeldSlots(match: PlayingMatch, heldSlots: readonly DieSlot[]): Play
 }
 
 describe('Yacht match construction and roll lifecycle', () => {
-  test('creates a creator-first match with one full 60-second turn', () => {
+  test('creates a creator-first match with one full 90-second turn', () => {
     const match = initialMatch();
 
     expect(match).toEqual({
@@ -89,7 +89,7 @@ describe('Yacht match construction and roll lifecycle', () => {
         id: firstTurnId,
         seatIndex: creatorIndex,
         startedAt,
-        deadlineAt: epochMilliseconds(61_000),
+        deadlineAt: epochMilliseconds(91_000),
         heldSlots: [],
         diceState: { rollCount: 0, dice: null },
       },
@@ -180,7 +180,7 @@ describe('Yacht match construction and roll lifecycle', () => {
       planRoll(match, {
         seatIndex: creatorIndex,
         turnId: firstTurnId,
-        receivedAt: epochMilliseconds(61_000),
+        receivedAt: epochMilliseconds(91_000),
       }),
     ).toMatchObject({ ok: false, code: MATCH_REJECTION_CODE.TURN_EXPIRED });
   });

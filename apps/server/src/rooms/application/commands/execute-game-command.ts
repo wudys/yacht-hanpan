@@ -41,6 +41,7 @@ import {
   setDieHeld,
   turnId,
 } from '@/rooms/domain/match';
+import { SCORE_HANDOFF_DURATION_MS } from '@/rooms/domain/match/constants';
 import { finishRoomMatch } from '@/rooms/domain/room-match-lifecycle';
 import type { RoomId } from '@/rooms/domain/room-model';
 import {
@@ -324,7 +325,7 @@ function transitionForCommand(
         categoryId: command.categoryId,
         nextTurn: {
           id: turnId(identity.createTurnId()),
-          startedAt: epochMilliseconds(commitAt),
+          startedAt: epochMilliseconds(commitAt + SCORE_HANDOFF_DURATION_MS),
         },
       });
     case GAME_COMMAND_TYPE.FORFEIT_MATCH:

@@ -25,7 +25,7 @@ import {
   createResultPresentation,
 } from '@/features/game/game-presentation';
 import { GameRecoveryFrame } from '@/features/game/GameRecoveryFrame';
-import { useDeadlineReadiness } from '@/features/game/hud/game-deadline-hooks';
+import { isTurnReady, useDeadlineReadiness } from '@/features/game/hud/game-deadline-hooks';
 import { GameDeadlineDisplay } from '@/features/game/hud/GameDeadlineDisplay';
 import { GamePresenceNotice, GamePresenceProvider } from '@/features/game/hud/GamePresenceNotice';
 import { SettledDiceControls } from '@/features/game/SettledDiceControls';
@@ -155,10 +155,12 @@ export default function GameScreen({
   const finished = game?.match.status === 'finished';
   useScreenTelemetry(game ? (finished ? 'result' : 'game') : null);
   const deadlineAt = game?.match.status === 'playing' ? game.match.currentTurn.deadlineAt : null;
-  const { ready: deadlineReady, recheck: recheckDeadline } = useDeadlineReadiness(
-    clock,
-    deadlineAt,
-  );
+  const startedAt = game?.match.status === 'playing' ? game.match.currentTurn.startedAt : null;
+  const {
+    ready: deadlineReady,
+    turnReady,
+    recheck: recheckDeadline,
+  } = useDeadlineReadiness(clock, deadlineAt, startedAt);
   const rollPending = pendingCommandKind === 'roll';
   const rollSpinnerVisible = useDelayedRollSpinner(rollPending, holderSnapshot.session);
   const rollProgress = rollSpinnerVisible ? <GameRollSpinner /> : undefined;
@@ -203,6 +205,7 @@ export default function GameScreen({
         hasPendingCommand,
         connected,
         deadlineReady,
+        turnReady,
         layer,
         recoveryActive,
         hasCommandNotice,
@@ -213,6 +216,7 @@ export default function GameScreen({
       hasPendingCommand,
       connected,
       deadlineReady,
+      turnReady,
       layer,
       recoveryActive,
       hasCommandNotice,
@@ -234,15 +238,16 @@ export default function GameScreen({
   const canExplainRecordedCategory = interaction?.canExplainRecordedCategory ?? false;
   const setDieHeld = useCallback(
     (slot: DieSlot, isHeld: boolean) => {
-      if (canHold && turn?.dice[slot]?.held !== isHeld) submitDieHeld(slot, isHeld);
+      if (canHold && isTurnReady(clock, deadlineAt, startedAt) && turn?.dice[slot]?.held !== isHeld)
+        submitDieHeld(slot, isHeld);
     },
-    [canHold, turn?.dice, submitDieHeld],
+    [canHold, clock, deadlineAt, startedAt, turn?.dice, submitDieHeld],
   );
   const onSelectScore = useCallback(
     (categoryId: CategoryId) => {
-      if (canScore) selectScore(categoryId);
+      if (canScore && isTurnReady(clock, deadlineAt, startedAt)) selectScore(categoryId);
     },
-    [canScore, selectScore],
+    [canScore, clock, deadlineAt, startedAt, selectScore],
   );
   const onBlockedScore = useCallback(() => {
     if (canExplainRecordedCategory && viewerTurnIdentity !== null) {
@@ -437,6 +442,7 @@ export default function GameScreen({
             <GameDeadlineDisplay
               clock={clock}
               deadlineAt={deadlineAt}
+              startedAt={startedAt}
               locale={locale}
               onReadinessSample={recheckDeadline}
             />
@@ -465,7 +471,7 @@ export default function GameScreen({
           rollPending={rollPending}
           rollProgress={rollProgress}
           onRoll={() => {
-            if (interaction.canRoll) roll();
+            if (interaction.canRoll && isTurnReady(clock, deadlineAt, startedAt)) roll();
           }}
           onSetDieHeld={setDieHeld}
           onSelectScore={onSelectScore}

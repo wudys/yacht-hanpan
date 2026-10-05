@@ -704,12 +704,12 @@ describe('game server lifecycle integration', () => {
         match: {
           ...current.match,
           players: [
-            { scorecard: { ones: 1, twos: 0 }, timeoutCount: 2 },
-            { scorecard: { ones: 0, twos: 0 }, timeoutCount: 2 },
+            { scorecard: { ones: 1, twos: 0 }, timeoutCount: 1 },
+            { scorecard: { ones: 0, twos: 0 }, timeoutCount: 1 },
           ],
           currentTurn: {
             ...current.match.currentTurn,
-            startedAt: epochMilliseconds(243_004),
+            startedAt: epochMilliseconds(213_004),
             deadlineAt: epochMilliseconds(303_004),
           },
         },

@@ -17,6 +17,7 @@ const VALID_PARAMS = {
   [PUBLIC_ERROR_CODE.NOT_YOUR_TURN]: {},
   [PUBLIC_ERROR_CODE.STALE_TURN]: {},
   [PUBLIC_ERROR_CODE.TURN_EXPIRED]: {},
+  [PUBLIC_ERROR_CODE.TURN_NOT_STARTED]: {},
   [PUBLIC_ERROR_CODE.ROLL_LIMIT_REACHED]: {},
   [PUBLIC_ERROR_CODE.NO_DICE_TO_ROLL]: {},
   [PUBLIC_ERROR_CODE.HOLD_NOT_ALLOWED]: {},
@@ -67,4 +68,14 @@ describe('public errors', () => {
     const json = JSON.stringify(error);
     expect(json).not.toMatch(/message|messageKey|i18n|stack|token|path|validation/iu);
   });
+});
+
+test('turn start rejection has strictly empty public params', () => {
+  expect(parseWith(publicErrorSchema, { code: 'TURN_NOT_STARTED', params: {} })).toEqual({
+    code: 'TURN_NOT_STARTED',
+    params: {},
+  });
+  expect(() =>
+    parseWith(publicErrorSchema, { code: 'TURN_NOT_STARTED', params: { startedAt: 4_000 } }),
+  ).toThrow(GameApiParseError);
 });

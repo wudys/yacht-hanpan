@@ -7,6 +7,7 @@ const ready = {
   hasPendingCommand: false,
   connected: true,
   deadlineReady: true,
+  turnReady: true,
   layer: 'board',
   recoveryActive: false,
   hasCommandNotice: false,
@@ -14,6 +15,15 @@ const ready = {
 } as const;
 
 describe('Game input scopes', () => {
+  test('turn handoff blocks gameplay while allowing forfeit and exploration', () => {
+    expect(deriveGameInputScopes({ ...ready, turnReady: false })).toMatchObject({
+      commandBlocked: false,
+      gameplayBlocked: true,
+      boardInteractionLocked: true,
+      canNavigateBoardLayers: true,
+      canToggleBonus: true,
+    });
+  });
   test('allows settled gameplay and layer navigation', () => {
     expect(deriveGameInputScopes(ready)).toMatchObject({
       commandBlocked: false,

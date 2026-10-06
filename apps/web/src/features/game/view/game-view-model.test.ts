@@ -91,9 +91,69 @@ describe('deriveGameViewModel', () => {
       upper: 0,
       lower: 30,
     });
+    expect(deriveGameViewModel(recordedHighScores, opponentSeatIndex).scoreGroupPreviews).toEqual({
+      upper: 0,
+      lower: 30,
+    });
   });
 
-  test('hides score group previews before the first roll and during the opponent turn', () => {
+  test('hides a completed active group and keeps a recorded zero out of previews', () => {
+    const snapshot = {
+      ...playing,
+      match: {
+        ...playing.match,
+        players: [
+          playing.match.players[0],
+          {
+            scorecard: { ones: 0, twos: 0, threes: 0, fours: 0, fives: 0, sixes: 0, yacht: 0 },
+            timeoutCount: 0,
+          },
+        ],
+        currentTurn: { ...playing.match.currentTurn, seatIndex: opponentSeatIndex },
+      },
+    } satisfies GameViewInput;
+    const model = deriveGameViewModel(snapshot, viewerSeatIndex);
+    expect(model.scoreGroupPreviews).toEqual({ upper: null, lower: 30 });
+    expect(model.scoreRows.find((row) => row.categoryId === 'yacht')).toMatchObject({
+      opponentScore: 0,
+      previewScore: null,
+      selectable: false,
+    });
+  });
+
+  test.each([
+    [0, null, 50, 50],
+    [1, 0, null, 30],
+  ] as const)(
+    'both viewers preview the current player scorecard on seat %s',
+    (seatIndex, ones, yacht, lower) => {
+      const snapshot = {
+        ...playing,
+        match: {
+          ...playing.match,
+          currentTurn: { ...playing.match.currentTurn, seatIndex },
+        },
+      } satisfies GameViewInput;
+      const current = deriveGameViewModel(snapshot, seatIndex);
+      const observer = deriveGameViewModel(snapshot, seatIndex === 0 ? 1 : 0);
+
+      expect(observer.scoreRows.map((row) => row.previewScore)).toEqual(
+        current.scoreRows.map((row) => row.previewScore),
+      );
+      expect(observer.scoreRows.find((row) => row.categoryId === 'ones')?.previewScore).toBe(ones);
+      expect(observer.scoreRows.find((row) => row.categoryId === 'sixes')?.previewScore).toBe(30);
+      expect(observer.scoreRows.find((row) => row.categoryId === 'yacht')?.previewScore).toBe(
+        yacht,
+      );
+      expect(observer.scoreGroupPreviews).toEqual({ upper: 30, lower });
+      expect(current.scoreGroupPreviews).toEqual(observer.scoreGroupPreviews);
+      expect(observer.scoreRows.some((row) => row.selectable)).toBe(false);
+      expect(observer.actions).toEqual({ canRoll: false, canHold: false, canScore: false });
+      expect(current.actions).toEqual({ canRoll: true, canHold: true, canScore: true });
+    },
+  );
+
+  test('hides score group previews before the first roll', () => {
     const beforeFirstRoll = {
       ...playing,
       match: {
@@ -106,19 +166,7 @@ describe('deriveGameViewModel', () => {
         },
       },
     } satisfies GameViewInput;
-    const opponentTurn = {
-      ...playing,
-      match: {
-        ...playing.match,
-        currentTurn: { ...playing.match.currentTurn, seatIndex: opponentSeatIndex },
-      },
-    } satisfies GameViewInput;
-
     expect(deriveGameViewModel(beforeFirstRoll, viewerSeatIndex).scoreGroupPreviews).toEqual({
-      upper: null,
-      lower: null,
-    });
-    expect(deriveGameViewModel(opponentTurn, viewerSeatIndex).scoreGroupPreviews).toEqual({
       upper: null,
       lower: null,
     });
@@ -171,6 +219,8 @@ describe('deriveGameViewModel', () => {
     } satisfies GameViewInput;
     const model = deriveGameViewModel(finished, viewerSeatIndex);
     expect(model.turn).toBeNull();
+    expect(model.scoreRows.every((row) => row.previewScore === null)).toBe(true);
+    expect(model.scoreGroupPreviews).toEqual({ upper: null, lower: null });
     expect(model.actions).toEqual({
       canRoll: false,
       canHold: false,

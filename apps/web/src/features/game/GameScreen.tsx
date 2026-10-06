@@ -35,6 +35,7 @@ import { GamePresenceNotice, GamePresenceProvider } from '@/features/game/hud/Ga
 import { SettledDiceControls } from '@/features/game/SettledDiceControls';
 import { useGameCommands } from '@/features/game/use-game-commands';
 import { useGameResultLifecycle } from '@/features/game/use-game-result-lifecycle';
+import { useScoreGroupSelection } from '@/features/game/use-score-group-selection';
 import { useTurnFeedback } from '@/features/game/use-turn-feedback';
 import {
   BonusInfoPopover,
@@ -118,7 +119,6 @@ export default function GameScreen({
     forfeit,
     retryCommand,
   } = useGameCommands(sessions, recovery, audio, feedback);
-  const [activeGroup, setActiveGroup] = useState<'lower' | 'upper'>('upper');
   const [layer, setLayer] = useState<GameLayer>('board');
   const [skippedAchievementRollId, setSkippedAchievementRollId] = useState<string | null>(null);
   useEffect(() => {
@@ -210,8 +210,8 @@ export default function GameScreen({
     },
     clock,
     onRecordStart,
-    setActiveGroup,
   );
+  const { activeGroup, selectGroup, selectYachtGroup } = useScoreGroupSelection(turnFeedback);
   const { record } = turnFeedback;
   const recordFeedbackActive = record !== null;
   const resultVisible = finished && !record?.final;
@@ -300,8 +300,8 @@ export default function GameScreen({
     )
       return;
     consumedYacht.current = { session: holderSnapshot.session, rollId: yachtRollId };
-    if (!recoveryActive && document.visibilityState !== 'hidden') setActiveGroup('lower');
-  }, [holderSnapshot.session, recoveryActive, yachtRollId]);
+    if (!recoveryActive && document.visibilityState !== 'hidden') selectYachtGroup();
+  }, [holderSnapshot.session, recoveryActive, selectYachtGroup, yachtRollId]);
   const canHold = interaction?.canHold ?? false;
   const canScore = interaction?.canScore ?? false;
   const canExplainRecordedCategory = interaction?.canExplainRecordedCategory ?? false;
@@ -325,12 +325,12 @@ export default function GameScreen({
   }, [canExplainRecordedCategory, viewerTurnIdentity]);
   const onScoreGroupChange = useCallback(
     (group: 'upper' | 'lower') => {
-      if (inputScopes.canNavigateBoardLayers && group !== activeGroup) {
-        setActiveGroup(group);
-        audio.playCue(PRODUCT_CUE.SELECT);
+      if (inputScopes.canNavigateBoardLayers) {
+        selectGroup(group);
+        if (group !== activeGroup) audio.playCue(PRODUCT_CUE.SELECT);
       }
     },
-    [activeGroup, audio, inputScopes.canNavigateBoardLayers],
+    [activeGroup, audio, inputScopes.canNavigateBoardLayers, selectGroup],
   );
   const onOpenScoreboard = useCallback(() => {
     if (inputScopes.canNavigateBoardLayers) {
@@ -527,8 +527,8 @@ export default function GameScreen({
             owner: summaryIsViewer ? 'viewer' : 'opponent',
             rows: boardModel.scoreRows,
             previewVisible:
-              !recordFeedbackActive &&
-              Boolean(boardModel.turn?.isViewerTurn && boardModel.turn.dice.length > 0),
+              inputScopes.previewVisible &&
+              Boolean(boardModel.turn && boardModel.turn.dice.length > 0),
             showFirstRollGuide:
               !recordFeedbackActive && (boardModel.turn?.showFirstRollGuide ?? false),
           }}

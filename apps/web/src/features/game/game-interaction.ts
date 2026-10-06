@@ -40,7 +40,7 @@ export function deriveGameInputScopes({
     gameplayBlocked: gameplayCommandBlocked || layer !== 'board' || recordedCategoryNoticeOpen,
     boardInert: layer === 'settings' || recordedCategoryNoticeOpen,
     recoveryBlocked,
-    previewVisible: phase === 'settled',
+    previewVisible: phase === 'settled' && !recordFeedbackActive,
     boardInteractionLocked: gameplayCommandBlocked || layer === 'bonus',
     canNavigateBoardLayers: !recoveryBlocked && !recordedCategoryNoticeOpen && layer === 'board',
     canToggleBonus:

@@ -185,6 +185,15 @@ async function createHarness(
 function summary() {
   return screen.getByRole('group', { name: /^Total /u });
 }
+function expectScorePreviewsHidden() {
+  expect(
+    screen
+      .getAllByRole('button')
+      .some((button) => button.getAttribute('data-value-state') === 'preview'),
+  ).toBe(false);
+  expect(screen.queryAllByText(/^Max \d+$/u)).toHaveLength(0);
+}
+
 test.each([0, 1] as const)(
   'a zero-point Yacht uses ordinary record feedback for viewer %s',
   async (viewerSeat) => {
@@ -232,8 +241,10 @@ test.each([0, 1] as const)(
       'recorded',
     );
     expect(harness.audio.playCue).toHaveBeenCalledExactlyOnceWith(PRODUCT_CUE.SCORE);
+    expectScorePreviewsHidden();
     advance(899);
     expect(summary().getAttribute('data-player-summary')).toBe(owner);
+    expectScorePreviewsHidden();
     advance(1);
     expect(summary().getAttribute('data-player-summary')).toBe(
       viewerSeat === 0 ? 'opponent' : 'viewer',
@@ -242,11 +253,56 @@ test.each([0, 1] as const)(
     expect(screen.getByRole('button', { name: /Twos/u }).getAttribute('data-value-state')).toBe(
       'empty',
     );
+    expectScorePreviewsHidden();
     advance(100);
+    expectScorePreviewsHidden();
     harness.publish(scoreTransition());
     expect(harness.audio.playCue).toHaveBeenCalledTimes(1);
   },
 );
+
+test('synchronizing newer settled dice cancels confirmation and restores the current player previews', async () => {
+  const harness = await createHarness(0);
+  render(<GameScreen {...harness} locale={LOCALE.EN} />);
+  harness.publish(scoreTransition());
+  advance(300);
+  expectScorePreviewsHidden();
+  vi.spyOn(harness.clock, 'now').mockReturnValue(12_000);
+  await harness.synchronize(
+    roomView({
+      stateVersion: 9,
+      match: {
+        ...initialPlayingMatch,
+        players: [
+          { scorecard: { ones: 2, twos: 0 }, timeoutCount: 0 },
+          initialPlayingMatch.players[1],
+        ],
+        currentTurn: {
+          ...initialPlayingMatch.currentTurn,
+          turnId: '11111111-1111-4111-8111-000000000002',
+          seatIndex: 1,
+          startedAt: 11_000,
+          deadlineAt: 101_000,
+          rollCount: 1,
+          heldSlots: [],
+          dice: [{ value: 6 }, { value: 6 }, { value: 6 }, { value: 6 }, { value: 6 }],
+        },
+      },
+    }),
+  );
+
+  expect(summary().getAttribute('data-player-summary')).toBe('opponent');
+  const twos = screen.getByRole('button', { name: 'Twos · 0' });
+  expect(twos.getAttribute('data-value-state')).toBe('preview');
+  expect(twos.hasAttribute('disabled')).toBe(true);
+  expect(tab('upper').textContent).toBe('UpperMax 30');
+  expect(tab('lower').textContent).toBe('LowerMax 50');
+  advance(1000);
+  expect(screen.getByRole('button', { name: 'Twos · 0' }).getAttribute('data-value-state')).toBe(
+    'preview',
+  );
+  expect(harness.audio.playCue).toHaveBeenCalledExactlyOnceWith(PRODUCT_CUE.SCORE);
+});
 
 test('input waits for 1000ms while YOUR TURN starts at readiness and clears on the first roll request', async () => {
   const harness = await createHarness(1);
@@ -307,10 +363,54 @@ test('a score moves both seats once to its group and preserves later manual sele
     parseRoomView({ ...recorded, presence: { ...recorded.presence!, presenceVersion: 2 } }),
   );
   view.rerender(<GameScreen {...harness} locale={LOCALE.KO} />);
+  advance(700);
   expect(tab('upper').getAttribute('aria-selected')).toBe('true');
   expect(
     harness.audio.playCue.mock.calls.filter(([cue]) => cue === PRODUCT_CUE.SCORE),
   ).toHaveLength(1);
+});
+
+test.each([
+  [0, 'upper', 'lower', CATEGORY_ID.CHOICE],
+  [1, 'upper', 'lower', CATEGORY_ID.CHOICE],
+  [0, 'lower', 'upper', CATEGORY_ID.TWOS],
+  [1, 'lower', 'upper', CATEGORY_ID.TWOS],
+] as const)(
+  'viewer %s returns from the temporary %s-to-%s score tab with the incoming owner',
+  async (viewerSeat, previousGroup, recordedGroup, category) => {
+    const harness = await createHarness(viewerSeat);
+    render(<GameScreen {...harness} locale={LOCALE.EN} />);
+    fireEvent.click(tab(previousGroup));
+    harness.audio.playCue.mockClear();
+    harness.publish(scoreTransition(category, 0));
+    expect(tab(recordedGroup).getAttribute('aria-selected')).toBe('true');
+    advance(899);
+    expect(tab(recordedGroup).getAttribute('aria-selected')).toBe('true');
+    expect(summary().getAttribute('data-player-summary')).toBe(
+      viewerSeat === 0 ? 'viewer' : 'opponent',
+    );
+    advance(1);
+    expect(tab(previousGroup).getAttribute('aria-selected')).toBe('true');
+    expect(summary().getAttribute('data-player-summary')).toBe(
+      viewerSeat === 0 ? 'opponent' : 'viewer',
+    );
+    advance(100);
+    expect(tab(previousGroup).getAttribute('aria-selected')).toBe('true');
+    expect(harness.audio.playCue).toHaveBeenCalledExactlyOnceWith(PRODUCT_CUE.SCORE);
+  },
+);
+
+test('reselecting the automatically displayed tab keeps that choice without another select sound', async () => {
+  const harness = await createHarness(1);
+  const view = render(<GameScreen {...harness} locale={LOCALE.EN} />);
+  const recorded = scoreTransition(CATEGORY_ID.CHOICE, 20);
+  harness.publish(recorded);
+  fireEvent.click(tab('lower'));
+  advance(1000);
+  harness.publish(recorded);
+  view.rerender(<GameScreen {...harness} locale={LOCALE.KO} />);
+  expect(tab('lower').getAttribute('aria-selected')).toBe('true');
+  expect(harness.audio.playCue).toHaveBeenCalledExactlyOnceWith(PRODUCT_CUE.SCORE);
 });
 
 function finalViews() {
@@ -392,6 +492,65 @@ test('a final score known only through synchronization displays Result immediate
   expect(harness.session.getSnapshot().connection).toBe('disposed');
 });
 
+test('the final automatic record tab stays visible past 900ms until Result replaces the board', async () => {
+  const { playing, finished } = finalViews();
+  const harness = await createHarness(1, playing);
+  render(<GameScreen {...harness} locale={LOCALE.EN} />);
+  expect(tab('upper').getAttribute('aria-selected')).toBe('true');
+  harness.publish(finished);
+  expect(tab('lower').getAttribute('aria-selected')).toBe('true');
+  advance(900);
+  expect(tab('lower').getAttribute('aria-selected')).toBe('true');
+  expect(screen.queryByRole('heading', { name: 'Game result' })).toBeNull();
+  advance(100);
+  expect(screen.getByRole('heading', { name: 'Game result' })).not.toBeNull();
+});
+
+test.each(['hidden', 'recovery', 'restore'] as const)(
+  'cancelling a visible confirmation through %s restores the previous tab without replay',
+  async (cancellation) => {
+    const harness = await createHarness(1);
+    render(<GameScreen {...harness} locale={LOCALE.EN} />);
+    const visibility = vi.spyOn(document, 'visibilityState', 'get');
+    const recorded = scoreTransition(CATEGORY_ID.CHOICE, 20);
+    harness.publish(recorded);
+    expect(tab('lower').getAttribute('aria-selected')).toBe('true');
+    advance(300);
+    if (cancellation === 'restore') await harness.synchronize(recorded);
+    else {
+      act(() => {
+        if (cancellation === 'hidden') {
+          visibility.mockReturnValue('hidden');
+          document.dispatchEvent(new Event('visibilitychange'));
+        } else harness.recovery.publish({ status: 'synchronizing' });
+      });
+      act(() => {
+        visibility.mockReturnValue('visible');
+        document.dispatchEvent(new Event('visibilitychange'));
+        harness.recovery.publish({ status: 'idle' });
+      });
+    }
+    expect(tab('upper').getAttribute('aria-selected')).toBe('true');
+    harness.publish(recorded);
+    advance(1000);
+    expect(tab('upper').getAttribute('aria-selected')).toBe('true');
+    expect(harness.audio.playCue).toHaveBeenCalledExactlyOnceWith(PRODUCT_CUE.SCORE);
+  },
+);
+
+test('a late record without a visible confirmation keeps its ordinary group selection', async () => {
+  const harness = await createHarness(1);
+  render(<GameScreen {...harness} locale={LOCALE.EN} />);
+  advance(1100);
+  const recorded = scoreTransition(CATEGORY_ID.CHOICE, 20);
+  harness.publish(recorded);
+  expect(tab('lower').getAttribute('aria-selected')).toBe('true');
+  expect(harness.audio.playCue).not.toHaveBeenCalled();
+  advance(1000);
+  harness.publish(recorded);
+  expect(tab('lower').getAttribute('aria-selected')).toBe('true');
+});
+
 test.each(['hidden', 'recovery'] as const)(
   'a record accepted during %s does not replay after returning',
   async (suspension) => {
@@ -450,16 +609,43 @@ test.each(['settings', 'scoreboard'] as const)(
   },
 );
 
+test.each(['settings', 'scoreboard'] as const)(
+  'opening %s during a visible confirmation discards its temporary tab without reinterpreting it',
+  async (layer) => {
+    const harness = await createHarness(1);
+    render(<GameScreen {...harness} locale={LOCALE.EN} />);
+    const recorded = scoreTransition(CATEGORY_ID.CHOICE, 20);
+    harness.publish(recorded);
+    expect(tab('lower').getAttribute('aria-selected')).toBe('true');
+    advance(300);
+    fireEvent.click(
+      screen.getByRole('button', { name: layer === 'settings' ? 'Settings' : 'Scoreboard' }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(tab('upper').getAttribute('aria-selected')).toBe('true');
+    harness.publish(recorded);
+    advance(1000);
+    expect(tab('upper').getAttribute('aria-selected')).toBe('true');
+    expect(
+      harness.audio.playCue.mock.calls.filter(([cue]) => cue === PRODUCT_CUE.SCORE),
+    ).toHaveLength(1);
+  },
+);
+
 test('the open bonus popover follows the same summary owner at the 900ms handoff', async () => {
   const harness = await createHarness();
   render(<GameScreen {...harness} locale={LOCALE.EN} />);
+  fireEvent.click(tab('lower'));
   fireEvent.click(screen.getByRole('button', { name: 'Bonus rule' }));
   const popover = screen.getByRole('dialog', { name: 'Bonus rule' });
   harness.audio.playCue.mockClear();
   harness.publish(scoreTransition(CATEGORY_ID.TWOS, 6));
+  expect(tab('upper').getAttribute('aria-selected')).toBe('true');
   expect(screen.getByRole('dialog', { name: 'Bonus rule' })).toBe(popover);
   expect(within(popover).getByText('8/63')).not.toBeNull();
+  fireEvent.click(tab('upper'));
   advance(900);
+  expect(tab('lower').getAttribute('aria-selected')).toBe('true');
   expect(screen.getByRole('dialog', { name: 'Bonus rule' })).toBe(popover);
   expect(within(popover).getByText('1/63')).not.toBeNull();
   expect(harness.audio.playCue).toHaveBeenCalledExactlyOnceWith(PRODUCT_CUE.SCORE);

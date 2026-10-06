@@ -1,5 +1,5 @@
 import type { ServerClock } from '@repo/game-client-sdk';
-import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
 import {
   advanceTurnFeedback,
@@ -20,7 +20,6 @@ export function useTurnFeedback(
   options: Omit<TurnFeedbackInput, 'now' | 'serverNow'>,
   clock: Pick<ServerClock, 'now'>,
   onRecordStart: () => void,
-  onGroupChange: (group: 'upper' | 'lower') => void,
 ) {
   const hidden = useSyncExternalStore(subscribeVisibility, isHidden);
   const [state, setState] = useState(createTurnFeedbackState);
@@ -76,19 +75,6 @@ export function useTurnFeedback(
     consumedSound.current = { session: next.session, version: record.record.stateVersion };
     if (record.visible && !isHidden()) onRecordStart();
   }, [next.session, onRecordStart, record]);
-
-  const consumedTab = useRef<Readonly<{ session: object | null; version: number }> | null>(null);
-  useLayoutEffect(() => {
-    const request = next.tabRequest;
-    if (request === null) return;
-    if (
-      consumedTab.current?.session === next.session &&
-      consumedTab.current.version === request.version
-    )
-      return;
-    consumedTab.current = { session: next.session, version: request.version };
-    onGroupChange(request.group);
-  }, [next.session, next.tabRequest, onGroupChange]);
 
   return next;
 }

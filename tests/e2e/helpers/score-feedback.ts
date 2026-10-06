@@ -5,10 +5,13 @@ export interface ScoreFeedbackObservation {
   readonly at: number;
   readonly phase: string | null;
   readonly owner: string | null;
+  readonly group: string | null;
   readonly category: string | null;
   readonly score: string | null;
   readonly total: string | null;
   readonly turnCue: boolean;
+  readonly previewCount: number;
+  readonly hasGroupPreview: boolean;
 }
 
 interface ScoreFeedbackAudit {
@@ -37,10 +40,17 @@ export async function observeScoreFeedback(page: Page): Promise<JSHandle<ScoreFe
             ?.querySelector('[data-score-transition]')
             ?.getAttribute('data-score-transition') ?? null,
         owner: currentSummary?.getAttribute('data-player-summary') ?? null,
+        group:
+          document
+            .querySelector('[data-score-tab][aria-selected="true"]')
+            ?.getAttribute('data-score-tab') ?? null,
         category: confirmed?.getAttribute('data-score-category') ?? null,
         score: confirmed?.querySelector('[data-score-value-kind]')?.textContent ?? null,
         total: currentSummary?.querySelector('.player-summary__score')?.textContent ?? null,
         turnCue: document.querySelector('[data-turn-cue]') !== null,
+        previewCount: document.querySelectorAll('[data-score-cell][data-value-state="preview"]')
+          .length,
+        hasGroupPreview: document.querySelector('[data-score-tab] span') !== null,
       };
       const identity = JSON.stringify({ ...observation, at: 0 });
       if (identity !== previous) observations.push(observation);

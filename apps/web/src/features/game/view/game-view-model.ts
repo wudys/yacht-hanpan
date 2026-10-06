@@ -73,6 +73,7 @@ export type ScoreRowViewModel = Readonly<{
   categoryId: CategoryId;
   viewerScore: number | null;
   opponentScore: number | null;
+  /** Unrecorded category preview for the current turn player, independent of viewer authority. */
   previewScore: number | null;
   selectable: boolean;
 }>;
@@ -143,7 +144,9 @@ export function deriveGameViewModel(
         turn.dice[4].value,
       ]
     : null;
-  const previews = previewScores(viewer.scorecard, isViewerTurn ? diceValues : null);
+  const previewScorecard =
+    turn === null ? viewer.scorecard : snapshot.match.players[turn.seatIndex].scorecard;
+  const previews = previewScores(previewScorecard, diceValues);
   const scoreRows = CATEGORY_IDS.map((categoryId) => ({
     categoryId,
     viewerScore: scoreOf(viewer.scorecard, categoryId),

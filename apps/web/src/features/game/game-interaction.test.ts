@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'vitest';
 
-import { deriveGameInputScopes } from '@/features/game/game-interaction';
+import { deriveGameInputScopes, deriveGameInteraction } from '@/features/game/game-interaction';
+import { deriveGameViewModel } from '@/features/game/view/game-view-model';
+import { playingGame } from '@/testing/game-fixtures';
 
 const ready = {
   phase: 'settled',
@@ -16,6 +18,44 @@ const ready = {
 } as const;
 
 describe('Game input scopes', () => {
+  test.each([
+    { phase: 'hidden', recordFeedbackActive: false },
+    { phase: 'resolving', recordFeedbackActive: false },
+    { phase: 'rolling', recordFeedbackActive: false },
+    { phase: 'revealing', recordFeedbackActive: false },
+    { phase: 'achievement', recordFeedbackActive: false },
+    { phase: 'settled', recordFeedbackActive: true },
+  ] as const)(
+    'withholds cell and group previews together during $phase with record=$recordFeedbackActive',
+    (presentation) => {
+      const model = deriveGameViewModel(playingGame, 0);
+      const scopes = deriveGameInputScopes({ ...ready, ...presentation });
+      const { boardModel } = deriveGameInteraction(model, scopes);
+
+      expect(model.scoreRows.find((row) => row.categoryId === 'twos')?.previewScore).toBe(2);
+      expect(boardModel.scoreRows.every((row) => row.previewScore === null)).toBe(true);
+      expect(boardModel.scoreGroupPreviews).toEqual({ upper: null, lower: null });
+      expect(boardModel.scoreRows.find((row) => row.categoryId === 'ones')?.viewerScore).toBe(2);
+    },
+  );
+
+  test.each([{ hasPendingCommand: true }, { recoveryActive: true }, { layer: 'bonus' }] as const)(
+    'retains settled preview data while a command or layer is locked: %j',
+    (lock) => {
+      const model = deriveGameViewModel(playingGame, 0);
+      const scopes = deriveGameInputScopes({ ...ready, ...lock });
+      const interaction = deriveGameInteraction(model, scopes);
+
+      expect(
+        interaction.boardModel.scoreRows.find((row) => row.categoryId === 'twos')?.previewScore,
+      ).toBe(2);
+      expect(interaction.boardModel.scoreGroupPreviews).toEqual({ upper: 6, lower: 30 });
+      expect(interaction.canScore).toBe(false);
+      expect(interaction.canRoll).toBe(false);
+      expect(interaction.canHold).toBe(false);
+    },
+  );
+
   test.each([
     { turnReady: false, recordFeedbackActive: false },
     { turnReady: true, recordFeedbackActive: true },

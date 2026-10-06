@@ -148,6 +148,47 @@ function getLowerScoreTab(): HTMLElement {
   return tab;
 }
 
+test('shows opponent previews and maxima from their scorecard without accepting gameplay input', () => {
+  const harness = createHarness({
+    ...playingGame,
+    match: {
+      ...initialPlayingMatch,
+      players: [
+        { scorecard: { ones: 3, sixes: 18 }, timeoutCount: 0 },
+        { scorecard: { yacht: 0 }, timeoutCount: 0 },
+      ],
+      currentTurn: {
+        ...initialPlayingMatch.currentTurn,
+        seatIndex: 1,
+        rollCount: 1,
+        heldSlots: [],
+        dice: [{ value: 6 }, { value: 6 }, { value: 6 }, { value: 6 }, { value: 6 }],
+      },
+    },
+  });
+  render(<GameScreen {...harness} locale={LOCALE.EN} />);
+
+  const zero = screen.getByRole('button', { name: 'Ones · 0' });
+  const sixes = screen.getByRole('button', { name: 'Sixes · 30' });
+  expect(zero.getAttribute('data-value-state')).toBe('preview');
+  expect(zero.hasAttribute('disabled')).toBe(true);
+  expect(sixes.getAttribute('data-input-available')).toBe('false');
+  expect(screen.getByRole('tab', { name: 'UpperMax 30' })).not.toBeNull();
+  expect(getLowerScoreTab().textContent).toBe('LowerMax 30');
+  fireEvent.click(zero);
+  fireEvent.click(sixes);
+  fireEvent.click(screen.getByRole('button', { name: 'Dice area 1: 6' }));
+  fireEvent.click(getLowerScoreTab());
+  const yacht = screen.getByRole('button', { name: 'Yacht · 0' });
+  expect(yacht.getAttribute('data-value-state')).toBe('recorded');
+  fireEvent.click(yacht);
+  expect(screen.queryByRole('dialog')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Roll again' })).toBeNull();
+  expect(harness.session.selectScoreCategory).not.toHaveBeenCalled();
+  expect(harness.session.setDieHeld).not.toHaveBeenCalled();
+  expect(harness.session.rollDice).not.toHaveBeenCalled();
+});
+
 test('starts on upper scores and preserves the selected tab across game updates', () => {
   const harness = createHarness();
   render(<GameScreen {...harness} locale={LOCALE.EN} />);

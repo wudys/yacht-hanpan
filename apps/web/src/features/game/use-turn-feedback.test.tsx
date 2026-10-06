@@ -61,15 +61,14 @@ test.each(['normal', 'fractional', 'early'])(
     }
     const options = finalOptions();
     const onRecordStart = vi.fn();
-    const onGroupChange = vi.fn();
     const clock = { now: () => 10_000 + performance.now() };
     const { result, rerender, unmount } = renderHook(
-      () => useTurnFeedback(options, clock, onRecordStart, onGroupChange),
+      () => useTurnFeedback(options, clock, onRecordStart),
       { wrapper: StrictMode },
     );
     expect(result.current.record?.final).toBe(true);
     expect(onRecordStart).toHaveBeenCalledTimes(1);
-    expect(onGroupChange).toHaveBeenCalledExactlyOnceWith('upper');
+    expect(result.current.tabRequest).toEqual({ version: 8, group: 'upper' });
     rerender();
     await act(() => vi.advanceTimersByTime(900));
     expect(result.current.record?.phase).toBe('confirming');
@@ -96,7 +95,7 @@ test.each(['unmount', 'suspend'])(
     const onRecordStart = vi.fn();
     const clock = { now: () => 10_000 + performance.now() };
     const { result, rerender, unmount } = renderHook(
-      (input) => useTurnFeedback(input, clock, onRecordStart, vi.fn()),
+      (input) => useTurnFeedback(input, clock, onRecordStart),
       { initialProps: options },
     );
     await act(() => vi.advanceTimersByTime(999));

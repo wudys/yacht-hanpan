@@ -1,6 +1,10 @@
 import { describe, expect, test } from 'vitest';
 
-import { deriveGameInputScopes, deriveGameInteraction } from '@/features/game/game-interaction';
+import {
+  deriveGameInputReadiness,
+  deriveGameInputScopes,
+  deriveGameInteraction,
+} from '@/features/game/game-interaction';
 import { deriveGameViewModel } from '@/features/game/view/game-view-model';
 import { playingGame } from '@/testing/game-fixtures';
 
@@ -17,6 +21,13 @@ const ready = {
   recordedCategoryNoticeOpen: false,
 } as const;
 
+function inputScopes(
+  input: Parameters<typeof deriveGameInputReadiness>[0] &
+    Omit<Parameters<typeof deriveGameInputScopes>[0], 'readiness'>,
+) {
+  return deriveGameInputScopes({ ...input, readiness: deriveGameInputReadiness(input) });
+}
+
 describe('Game input scopes', () => {
   test.each([
     { phase: 'hidden', recordFeedbackActive: false },
@@ -29,7 +40,7 @@ describe('Game input scopes', () => {
     'withholds cell and group previews together during $phase with record=$recordFeedbackActive',
     (presentation) => {
       const model = deriveGameViewModel(playingGame, 0);
-      const scopes = deriveGameInputScopes({ ...ready, ...presentation });
+      const scopes = inputScopes({ ...ready, ...presentation });
       const { boardModel } = deriveGameInteraction(model, scopes);
 
       expect(model.scoreRows.find((row) => row.categoryId === 'twos')?.previewScore).toBe(2);
@@ -43,7 +54,7 @@ describe('Game input scopes', () => {
     'retains settled preview data while a command or layer is locked: %j',
     (lock) => {
       const model = deriveGameViewModel(playingGame, 0);
-      const scopes = deriveGameInputScopes({ ...ready, ...lock });
+      const scopes = inputScopes({ ...ready, ...lock });
       const interaction = deriveGameInteraction(model, scopes);
 
       expect(
@@ -60,7 +71,7 @@ describe('Game input scopes', () => {
     { turnReady: false, recordFeedbackActive: false },
     { turnReady: true, recordFeedbackActive: true },
   ])('turn handoff blocks gameplay while allowing forfeit and exploration', (handoff) => {
-    expect(deriveGameInputScopes({ ...ready, ...handoff })).toMatchObject({
+    expect(inputScopes({ ...ready, ...handoff })).toMatchObject({
       commandBlocked: false,
       gameplayBlocked: true,
       boardInteractionLocked: true,
@@ -69,7 +80,7 @@ describe('Game input scopes', () => {
     });
   });
   test('allows settled gameplay and layer navigation', () => {
-    expect(deriveGameInputScopes(ready)).toMatchObject({
+    expect(inputScopes(ready)).toMatchObject({
       commandBlocked: false,
       gameplayBlocked: false,
       recoveryBlocked: false,
@@ -79,7 +90,7 @@ describe('Game input scopes', () => {
   });
 
   test('pending blocks commands while preserving settled previews and bonus navigation', () => {
-    expect(deriveGameInputScopes({ ...ready, hasPendingCommand: true })).toMatchObject({
+    expect(inputScopes({ ...ready, hasPendingCommand: true })).toMatchObject({
       commandBlocked: true,
       gameplayBlocked: true,
       recoveryBlocked: false,
@@ -91,7 +102,7 @@ describe('Game input scopes', () => {
   test.each(['resolving', 'rolling', 'revealing'] as const)(
     '%s locks gameplay without blocking layer browsing or forfeit',
     (phase) => {
-      expect(deriveGameInputScopes({ ...ready, phase })).toMatchObject({
+      expect(inputScopes({ ...ready, phase })).toMatchObject({
         commandBlocked: false,
         gameplayBlocked: true,
         boardInteractionLocked: true,
@@ -103,17 +114,15 @@ describe('Game input scopes', () => {
   );
 
   test('achievement blocks gameplay while preserving existing layer browsing', () => {
-    expect(deriveGameInputScopes({ ...ready, phase: 'achievement', layer: 'bonus' })).toMatchObject(
-      {
-        commandBlocked: false,
-        gameplayBlocked: true,
-        boardInteractionLocked: true,
-        boardInert: false,
-        recoveryBlocked: false,
-        previewVisible: false,
-        canToggleBonus: true,
-      },
-    );
+    expect(inputScopes({ ...ready, phase: 'achievement', layer: 'bonus' })).toMatchObject({
+      commandBlocked: false,
+      gameplayBlocked: true,
+      boardInteractionLocked: true,
+      boardInert: false,
+      recoveryBlocked: false,
+      previewVisible: false,
+      canToggleBonus: true,
+    });
   });
 
   test.each([
@@ -121,7 +130,7 @@ describe('Game input scopes', () => {
     { recoveryActive: false, hasCommandNotice: true },
     { recoveryActive: true, hasCommandNotice: true },
   ])('recovery and command notices block the underlying layers', (overlay) => {
-    expect(deriveGameInputScopes({ ...ready, ...overlay, layer: 'settings' })).toMatchObject({
+    expect(inputScopes({ ...ready, ...overlay, layer: 'settings' })).toMatchObject({
       gameplayBlocked: true,
       commandBlocked: true,
       recoveryBlocked: true,
@@ -132,7 +141,7 @@ describe('Game input scopes', () => {
   test.each(['settings', 'scoreboard', 'bonus'] as const)(
     '%s blocks gameplay without disabling the layer itself',
     (layer) => {
-      expect(deriveGameInputScopes({ ...ready, layer })).toMatchObject({
+      expect(inputScopes({ ...ready, layer })).toMatchObject({
         gameplayBlocked: true,
         commandBlocked: false,
         recoveryBlocked: false,
@@ -142,7 +151,7 @@ describe('Game input scopes', () => {
   );
 
   test('a recorded-category notice blocks board navigation but leaves its confirmation usable', () => {
-    expect(deriveGameInputScopes({ ...ready, recordedCategoryNoticeOpen: true })).toMatchObject({
+    expect(inputScopes({ ...ready, recordedCategoryNoticeOpen: true })).toMatchObject({
       gameplayBlocked: true,
       boardInert: true,
       recoveryBlocked: false,
@@ -155,7 +164,7 @@ describe('Game input scopes', () => {
     { connected: false, deadlineReady: true },
     { connected: true, deadlineReady: false },
   ])('unavailable gameplay timing or connection does not imply a layer lock', (state) => {
-    expect(deriveGameInputScopes({ ...ready, ...state })).toMatchObject({
+    expect(inputScopes({ ...ready, ...state })).toMatchObject({
       commandBlocked: true,
       gameplayBlocked: true,
       recoveryBlocked: false,

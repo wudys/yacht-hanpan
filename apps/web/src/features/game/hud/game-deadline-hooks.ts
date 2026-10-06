@@ -40,18 +40,21 @@ function deadlineSeconds(
     : Math.max(0, Math.ceil((deadlineAt - Math.max(now, startedAt ?? now)) / 1_000));
 }
 
+function turnDeadlineStatus(
+  now: number | null,
+  deadlineAt: number | null,
+  startedAt: number | null,
+): 'unavailable' | 'waiting' | 'active' {
+  if (now === null || deadlineAt === null || now >= deadlineAt) return 'unavailable';
+  return startedAt !== null && now < startedAt ? 'waiting' : 'active';
+}
+
 export function isTurnReady(
   clock: Pick<ServerClock, 'now'>,
   deadlineAt: number | null,
   startedAt: number | null,
 ): boolean {
-  const now = clock.now();
-  return (
-    now !== null &&
-    deadlineAt !== null &&
-    now < deadlineAt &&
-    (startedAt === null || now >= startedAt)
-  );
+  return turnDeadlineStatus(clock.now(), deadlineAt, startedAt) === 'active';
 }
 
 export function useDeadlineSeconds(
@@ -86,11 +89,10 @@ export function useDeadlineReadiness(
     [subscribeToClock],
   );
   const recheck = useCallback(() => observerRef.current?.(), []);
-  const getSnapshot = useCallback(() => {
-    const now = clock.now();
-    if (now === null || deadlineAt === null || now >= deadlineAt) return 'unavailable';
-    return startedAt !== null && now < startedAt ? 'waiting' : 'active';
-  }, [clock, deadlineAt, startedAt]);
+  const getSnapshot = useCallback(
+    () => turnDeadlineStatus(clock.now(), deadlineAt, startedAt),
+    [clock, deadlineAt, startedAt],
+  );
   const status = useSyncExternalStore(subscribe, getSnapshot);
   return { ready: status !== 'unavailable', turnReady: status === 'active', recheck };
 }

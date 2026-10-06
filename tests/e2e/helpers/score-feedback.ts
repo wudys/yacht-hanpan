@@ -16,20 +16,24 @@ export interface ScoreFeedbackObservation {
 
 interface ScoreFeedbackAudit {
   readonly observations: ScoreFeedbackObservation[];
+  readonly sweep: { playState: string | null; advanced: boolean };
   readonly grid: Element | null;
   readonly summary: Element | null;
   readonly canvas: Element | null;
-  readonly observer: MutationObserver;
+  readonly dispose: () => void;
 }
 
 /** Records the real rendered handoff, including short phases that polling can miss. */
 export async function observeScoreFeedback(page: Page): Promise<JSHandle<ScoreFeedbackAudit>> {
   return page.evaluateHandle(() => {
     const observations: ScoreFeedbackObservation[] = [];
+    const sweep: ScoreFeedbackAudit['sweep'] = { playState: null, advanced: false };
     const grid = document.querySelector('[data-score-grid]');
     const summary = document.querySelector('[data-player-summary]');
     const canvas = document.querySelector('.web-dice-canvas-host canvas');
     let previous = '';
+    let frame = 0;
+    let disposed = false;
     const record = () => {
       const currentSummary = document.querySelector('[data-player-summary]');
       const confirmed = document.querySelector('[data-score-confirmed="true"]');
@@ -55,6 +59,29 @@ export async function observeScoreFeedback(page: Page): Promise<JSHandle<ScoreFe
       const identity = JSON.stringify({ ...observation, at: 0 });
       if (identity !== previous) observations.push(observation);
       previous = identity;
+      const sweepElement = confirmed?.querySelector('.score-feedback__sweep');
+      const animation = sweepElement?.getAnimations()[0];
+      if (sweep.playState === null && sweepElement && animation) {
+        sweep.playState = getComputedStyle(sweepElement).animationPlayState;
+        void animation.ready.then(
+          () => {
+            if (disposed) return;
+            frame = requestAnimationFrame(() => {
+              const initialTime = animation.currentTime;
+              frame = requestAnimationFrame(() => {
+                sweep.advanced =
+                  typeof initialTime === 'number' &&
+                  typeof animation.currentTime === 'number' &&
+                  animation.currentTime > initialTime;
+                frame = 0;
+              });
+            });
+          },
+          () => {
+            // A cancelled animation cannot establish running progress.
+          },
+        );
+      }
     };
     record();
     const observer = new MutationObserver(record);
@@ -64,7 +91,18 @@ export async function observeScoreFeedback(page: Page): Promise<JSHandle<ScoreFe
       childList: true,
       characterData: true,
     });
-    return { observations, grid, summary, canvas, observer };
+    return {
+      observations,
+      sweep,
+      grid,
+      summary,
+      canvas,
+      dispose() {
+        disposed = true;
+        observer.disconnect();
+        cancelAnimationFrame(frame);
+      },
+    };
   });
 }
 
@@ -73,7 +111,7 @@ export async function readScoreFeedback(audit: JSHandle<ScoreFeedbackAudit>) {
 }
 
 export async function disposeScoreFeedback(audit: JSHandle<ScoreFeedbackAudit>): Promise<void> {
-  await audit.evaluate(({ observer }) => observer.disconnect());
+  await audit.evaluate(({ dispose }) => dispose());
   await audit.dispose();
 }
 

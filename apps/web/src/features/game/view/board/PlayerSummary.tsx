@@ -74,7 +74,7 @@ export function PlayerSummary({
     observer.observe(action);
     observer.observe(popover);
     return () => observer.disconnect();
-  }, [isBonusOpen, labels.bonus, labels.total, player.label, recordFeedback?.phase]);
+  }, [isBonusOpen, labels.bonus, labels.total, player.label, transitionKey]);
 
   return (
     <section

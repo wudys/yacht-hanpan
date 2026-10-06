@@ -1,5 +1,5 @@
 import { requireGameAsset, resolveCharacterImageAssetId } from '@repo/game-assets';
-import { MAX_ROLLS_PER_TURN, UPPER_CATEGORY_IDS } from '@repo/yacht-rules';
+import { UPPER_CATEGORY_IDS } from '@repo/yacht-rules';
 import { type CSSProperties, type ReactNode, useState } from 'react';
 
 import {
@@ -8,15 +8,19 @@ import {
   createFixtureResult,
   type FixtureFeedbackOptions,
 } from '@/dev/fixture-models';
-import { createGameBoardPresentation } from '@/features/game/game-presentation';
+import { applyScorePreviewVisibility } from '@/features/game/game-interaction';
 import {
-  type CategoryLabels,
+  createGameBoardPresentation,
+  createGameScorePresentation,
+} from '@/features/game/game-presentation';
+import {
   GameBoard,
   GameResultView,
   type ScoreRecordFeedback,
   ScoreTable,
 } from '@/features/game/view';
 import { AchievementSequence } from '@/features/game/view/AchievementSequence';
+import { RECORD_FADE_OUT_MS, RECORD_SWAP_MS } from '@/features/game/view/feedback-timing';
 import { LobbyView } from '@/features/lobby/view/LobbyView';
 import { type Locale, type MessageKey, type MessageKeyWithoutParams, translate } from '@/i18n';
 import { Button } from '@/ui/button';
@@ -45,45 +49,38 @@ export function VisualFixture({ anchor, mode, locale, replay, feedback }: Visual
   const feedbackGame = feedback ? createFixtureFeedbackGame(feedback) : undefined;
   const model =
     feedbackGame?.model ?? (anchor === 'result' ? result.model : createFixtureGame(mode));
-  const [feedbackStartedAt] = useState(() => performance.now() - (feedback?.elapsed ?? 0));
+  const feedbackIdentity = feedback
+    ? `fixture-${feedback.scenario}-${feedback.recorder}`
+    : 'fixture-idle';
   const recordFeedback: ScoreRecordFeedback | null =
     feedbackGame?.record && feedback
       ? {
-          identity: `fixture-${feedback.scenario}`,
+          identity: feedbackIdentity,
           categoryId: feedbackGame.record.categoryId,
           score: feedbackGame.record.score,
-          startedAt: feedbackStartedAt,
+          timing: { mode: 'paused', elapsedMs: feedback.elapsed },
           bonusEarned: feedback.scenario === 'bonus',
           phase:
-            feedback.elapsed >= 900
+            feedback.elapsed >= RECORD_SWAP_MS
               ? 'incoming'
-              : feedback.elapsed >= 800
+              : feedback.elapsed >= RECORD_FADE_OUT_MS
                 ? 'outgoing'
                 : 'confirming',
         }
       : null;
-  const categories = Object.fromEntries(
-    model.scoreRows.map(({ categoryId }) => [categoryId, t(`category.${categoryId}`)]),
-  ) as CategoryLabels;
+  const scorePresentation = createGameScorePresentation(null, model, locale);
+  const { categories, scoreLabels } = scorePresentation;
   const viewerImage = requireGameAsset(resolveCharacterImageAssetId('navy-bob', false)).url;
   const opponentImage = requireGameAsset(
     resolveCharacterImageAssetId(feedback?.sameAvatar ? 'navy-bob' : 'blonde-buns', false),
   ).url;
   const viewer = {
-    label: t('game.you'),
+    ...scorePresentation.viewer,
     imageUrl: viewerImage,
-    imageAlt: t('game.you'),
-    total: model.viewer.total,
-    upperSubtotal: model.viewer.upperSubtotal,
-    upperBonus: model.viewer.upperBonus,
   };
   const opponent = {
-    label: t('game.opponent'),
+    ...scorePresentation.opponent,
     imageUrl: opponentImage,
-    imageAlt: t('game.opponent'),
-    total: model.opponent.total,
-    upperSubtotal: model.opponent.upperSubtotal,
-    upperBonus: model.opponent.upperBonus,
   };
 
   const [group, setGroup] = useState<'upper' | 'lower'>(() =>
@@ -102,7 +99,11 @@ export function VisualFixture({ anchor, mode, locale, replay, feedback }: Visual
         ? 'viewer'
         : 'opponent';
   const summaryPlayer = displayOwner === 'viewer' ? viewer : opponent;
-  const boardPresentation = createGameBoardPresentation(model, locale);
+  const boardModel = applyScorePreviewVisibility(
+    model,
+    recordFeedback === null && replay === undefined && anchor !== 'achievement',
+  );
+  const boardPresentation = createGameBoardPresentation(boardModel, locale);
   const stageFaces: readonly (keyof typeof categories)[] = feedback
     ? (turn?.dice ?? []).filter((die) => !die.held).map((die) => UPPER_CATEGORY_IDS[die.value - 1]!)
     : mode === 'before-roll'
@@ -114,21 +115,19 @@ export function VisualFixture({ anchor, mode, locale, replay, feedback }: Visual
     <GameBoard
       rolling={replay !== undefined}
       rollRailHidden={replay !== undefined}
-      model={model}
+      model={boardModel}
       scoreDisplay={{
         owner: displayOwner,
-        rows: model.scoreRows,
-        previewVisible: Boolean(turn?.isViewerTurn && turn.dice.length > 0),
         showFirstRollGuide: recordFeedback ? false : (turn?.showFirstRollGuide ?? false),
       }}
       recordFeedback={recordFeedback}
       yachtAvailable={feedback?.scenario === 'yacht-available'}
       turnCue={
         feedback?.scenario === 'turn'
-          ? { identity: 'fixture-turn', startedAt: feedbackStartedAt }
+          ? { identity: feedbackIdentity, timing: { mode: 'paused', elapsedMs: feedback.elapsed } }
           : null
       }
-      turnCueLabel={t('game.myTurn')}
+      turnCueLabel={t('game.turnStartCue')}
       rollAction={boardPresentation.rollAction}
       summaryPlayer={{
         imageUrl: summaryPlayer.imageUrl,
@@ -139,26 +138,11 @@ export function VisualFixture({ anchor, mode, locale, replay, feedback }: Visual
       categories={categories}
       activeGroup={group}
       labels={{
-        turn: `${t('game.turn')} ${turn?.ordinal}/12`,
-        timer: `${feedback ? 90 : 60}${t('game.seconds')}`,
-        settings: t('game.settings'),
-        diceStage: t('game.diceStage'),
-        heldDice: t('game.diceControls'),
-        rollsRemaining: translate(locale, 'game.rollsRemaining', {
-          count: MAX_ROLLS_PER_TURN - (turn?.rollCount ?? 0),
-        }),
-        turnState: t(turn?.isViewerTurn ? 'game.myTurn' : 'game.opponentTurn'),
+        ...boardPresentation.labels,
+        timer: `90${t('game.seconds')}`,
         total: `${t('game.total')} ${summaryPlayer.total}`,
         bonus: t('game.bonus'),
         bonusStatus: t(summaryPlayer.upperBonus > 0 ? 'game.bonusEarned' : 'game.bonusNotEarned'),
-        bonusInfo: t('game.bonusInfo'),
-        scoreboard: t('game.view.scoreboard'),
-        upper: t('game.upper'),
-        lower: t('game.lower'),
-        highestUpper: boardPresentation.labels.highestUpper,
-        highestLower: boardPresentation.labels.highestLower,
-        firstRollGuide: t('game.firstRollGuide'),
-        emptyScore: t('game.emptyScore'),
       }}
       diceStage={
         replay !== undefined ? null : (
@@ -217,11 +201,7 @@ export function VisualFixture({ anchor, mode, locale, replay, feedback }: Visual
             categories={categories}
             viewer={viewer}
             opponent={opponent}
-            labels={{
-              categoryHeader: t('game.category'),
-              upperSubtotal: t('game.upper'),
-              bonus: t('game.bonus'),
-            }}
+            labels={scoreLabels}
           />
         </ScrollablePanel>
       </div>
@@ -240,10 +220,8 @@ export function VisualFixture({ anchor, mode, locale, replay, feedback }: Visual
             : { kind: result.reason, text: t(RESULT_REASON_MESSAGE[result.reason]) }
         }
         labels={{
+          ...scoreLabels,
           title: t('game.view.result'),
-          categoryHeader: t('game.category'),
-          upperSubtotal: t('game.upper'),
-          bonus: t('game.bonus'),
           win: t('game.win'),
           loss: t('game.loss'),
           draw: t('game.draw'),

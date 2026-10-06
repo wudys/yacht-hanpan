@@ -1,7 +1,8 @@
 import { requireGameAsset, resolveCharacterImageAssetId } from '@repo/game-assets';
 import type { GameSnapshot, PublicRoom } from '@repo/game-protocol/socket';
-import { MAX_ROLLS_PER_TURN, type SeatIndex } from '@repo/yacht-rules';
+import { CATEGORY_IDS, MAX_ROLLS_PER_TURN, type SeatIndex } from '@repo/yacht-rules';
 
+import type { TurnFeedbackSnapshot } from '@/features/game/use-turn-feedback';
 import type {
   CategoryLabels,
   GameBoardProps,
@@ -11,9 +12,46 @@ import type {
 } from '@/features/game/view';
 import { type Locale, translate } from '@/i18n';
 
+export function createGameFeedbackPresentation({
+  turn,
+  viewerSeatIndex,
+  record,
+}: Readonly<{
+  turn: GameViewModel['turn'];
+  viewerSeatIndex: SeatIndex | null;
+  record: TurnFeedbackSnapshot['record'];
+}>): Pick<GameBoardProps, 'scoreDisplay' | 'recordFeedback'> {
+  const summaryIsViewer =
+    record !== null && (record.final || record.phase !== 'incoming')
+      ? record.record.seatIndex === viewerSeatIndex
+      : (turn?.isViewerTurn ?? true);
+  return {
+    scoreDisplay: {
+      owner: summaryIsViewer ? 'viewer' : 'opponent',
+      showFirstRollGuide: record === null && (turn?.showFirstRollGuide ?? false),
+    },
+    recordFeedback: record?.visible
+      ? {
+          identity: String(record.record.stateVersion),
+          categoryId: record.record.categoryId,
+          score: record.record.score,
+          phase: record.phase,
+          timing: { mode: 'running', startedAt: record.startedAt },
+          bonusEarned: record.bonusEarned,
+        }
+      : null,
+  };
+}
+
+export function createCategoryLabels(locale: Locale): CategoryLabels {
+  return Object.fromEntries(
+    CATEGORY_IDS.map((categoryId) => [categoryId, translate(locale, `category.${categoryId}`)]),
+  ) as CategoryLabels;
+}
+
 export function createGameScorePresentation(
   room: PublicRoom | null,
-  model: Pick<GameViewModel, 'viewer' | 'opponent' | 'scoreRows'>,
+  model: Pick<GameViewModel, 'viewer' | 'opponent'>,
   locale: Locale,
 ) {
   const player = (score: GameViewModel['viewer'], label: string): PlayerScoreSummaryView => {
@@ -33,12 +71,7 @@ export function createGameScorePresentation(
   return {
     viewer: player(model.viewer, translate(locale, 'game.you')),
     opponent: player(model.opponent, translate(locale, 'game.opponent')),
-    categories: Object.fromEntries(
-      model.scoreRows.map(({ categoryId }) => [
-        categoryId,
-        translate(locale, `category.${categoryId}`),
-      ]),
-    ) as CategoryLabels,
+    categories: createCategoryLabels(locale),
     scoreLabels: {
       categoryHeader: translate(locale, 'game.category'),
       upperSubtotal: translate(locale, 'game.upper'),
@@ -72,7 +105,6 @@ export function createGameBoardPresentation(
       rollsRemaining: translate(locale, 'game.rollsRemaining', {
         count: MAX_ROLLS_PER_TURN - (turn?.rollCount ?? 0),
       }),
-      turnState: translate(locale, turn?.isViewerTurn ? 'game.myTurn' : 'game.opponentTurn'),
       bonusInfo: translate(locale, 'game.bonusInfo'),
       scoreboard: translate(locale, 'game.view.scoreboard'),
       upper: translate(locale, 'game.upper'),

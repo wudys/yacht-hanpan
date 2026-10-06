@@ -1,9 +1,15 @@
+// @vitest-environment jsdom
+/* eslint-disable testing-library/no-manual-cleanup -- Vitest globals are disabled; register cleanup explicitly. */
+
 import { CATEGORY_IDS } from '@repo/yacht-rules';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { expect, test } from 'vitest';
+import { afterEach, expect, test } from 'vitest';
 
 import { GameBoard, type GameBoardProps } from '@/features/game/view/board/GameBoard';
 import type { CategoryLabels } from '@/features/game/view/score';
+
+afterEach(() => cleanup());
 
 const categories = Object.fromEntries(
   CATEGORY_IDS.map((categoryId) => [categoryId, categoryId]),
@@ -40,7 +46,6 @@ const labels = {
   diceStage: 'Dice stage',
   heldDice: 'Held dice',
   rollsRemaining: '2 rolls left',
-  turnState: 'Your turn',
   total: '18',
   bonus: 'Bonus',
   bonusStatus: 'Bonus not earned',
@@ -59,8 +64,6 @@ test('composes the fixed game bands around an injected physics stage', () => {
     <GameBoard
       scoreDisplay={{
         owner: 'viewer',
-        rows: model.scoreRows,
-        previewVisible: true,
         showFirstRollGuide: false,
       }}
       bonusEarned={false}
@@ -98,8 +101,6 @@ test('renders the authoritative held order without changing die slot identity', 
     <GameBoard
       scoreDisplay={{
         owner: 'viewer',
-        rows: model.scoreRows,
-        previewVisible: true,
         showFirstRollGuide: false,
       }}
       bonusEarned={false}
@@ -135,8 +136,6 @@ test('packs held dice to the left while retaining their authoritative slot ident
     <GameBoard
       scoreDisplay={{
         owner: 'viewer',
-        rows: model.scoreRows,
-        previewVisible: true,
         showFirstRollGuide: false,
       }}
       bonusEarned={false}
@@ -172,8 +171,6 @@ test('keeps the authoritative board presentation while input is locked', () => {
     <GameBoard
       scoreDisplay={{
         owner: 'viewer',
-        rows: model.scoreRows,
-        previewVisible: true,
         showFirstRollGuide: false,
       }}
       bonusEarned={false}
@@ -207,8 +204,6 @@ test.each([undefined, 'Applying result'])(
       <GameBoard
         scoreDisplay={{
           owner: 'viewer',
-          rows: model.scoreRows,
-          previewVisible: true,
           showFirstRollGuide: false,
         }}
         bonusEarned={false}
@@ -240,12 +235,6 @@ test('shows the opponent scorecard immediately on an opponent pre-roll turn', ()
     <GameBoard
       scoreDisplay={{
         owner: 'opponent',
-        rows: model.scoreRows.map((row) =>
-          row.categoryId === 'choice'
-            ? { ...row, viewerScore: 19, opponentScore: 7, previewScore: null, selectable: false }
-            : row,
-        ),
-        previewVisible: false,
         showFirstRollGuide: false,
       }}
       bonusEarned={false}
@@ -289,8 +278,6 @@ test('uses injected HUD content and distinguishes an empty presence slot from th
     rollAction: { label: 'Roll again', readOnly: false },
     scoreDisplay: {
       owner: 'viewer' as const,
-      rows: model.scoreRows,
-      previewVisible: true,
       showFirstRollGuide: false,
     },
     summaryPlayer: { imageAlt: 'You', label: 'You' },
@@ -308,43 +295,52 @@ test('uses injected HUD content and distinguishes an empty presence slot from th
   expect(utils).toContain('Injected timer');
 });
 
-test.each(['viewer', 'opponent'] as const)(
-  'keeps gameplay authority while displaying the %s score panel',
-  (owner) => {
-    const view = renderToStaticMarkup(
-      <GameBoard
-        model={model}
-        scoreDisplay={{
-          owner,
-          rows: model.scoreRows.map((row) => ({ ...row, viewerScore: 0, opponentScore: 20 })),
-          previewVisible: false,
-          showFirstRollGuide: false,
-        }}
-        summaryPlayer={{
-          imageUrl: '/same-avatar.webp',
-          imageAlt: owner,
-          label: owner === 'viewer' ? 'You' : 'Opponent',
-        }}
-        bonusEarned={false}
-        categories={categories}
-        activeGroup='lower'
-        labels={labels}
-        rollAction={{ label: 'Roll again', readOnly: false }}
-      />,
-    );
-    const choiceCell = view.match(
-      /<button class="score-category-cell"[^>]*data-score-category="choice"[\s\S]*?<\/button>/u,
-    )?.[0];
-    expect(view).toContain('data-viewer-turn="true"');
-    expect(view).toContain(`data-player-summary="${owner}"`);
-    expect(choiceCell).toContain('data-input-available="true"');
-    expect(choiceCell).toContain(`choice · ${owner === 'viewer' ? 0 : 20}`);
-    expect(view).toContain('Roll again');
-    expect(view.match(/<button class="held-dice-rack__slot"[^>]*>/u)?.[0]).not.toContain(
-      'disabled',
-    );
-  },
-);
+test('preserves actual roll and hold authority through a score display owner change', () => {
+  const intents: string[] = [];
+  const props: GameBoardProps = {
+    model: {
+      ...model,
+      scoreRows: model.scoreRows.map((row) =>
+        row.categoryId === 'choice'
+          ? { ...row, viewerScore: null, opponentScore: 20, previewScore: 24, selectable: true }
+          : row.categoryId === 'yacht'
+            ? { ...row, viewerScore: 0, opponentScore: 50, previewScore: null, selectable: false }
+            : row,
+      ),
+    },
+    scoreDisplay: { owner: 'viewer', showFirstRollGuide: false },
+    summaryPlayer: { imageUrl: '/same-avatar.webp', imageAlt: 'You', label: 'You' },
+    bonusEarned: false,
+    categories,
+    activeGroup: 'lower',
+    labels,
+    rollAction: { label: 'Roll again', readOnly: false },
+    onRoll: () => intents.push('roll'),
+    onSetDieHeld: (slot, held) => intents.push(`hold:${slot}:${held}`),
+    onSelectScore: (categoryId) => intents.push(`score:${categoryId}`),
+  };
+  const { rerender } = render(<GameBoard {...props} />);
+  const cell = screen.getByRole('button', { name: 'choice · 24' });
+  const roll = screen.getByRole('button', { name: 'Roll again' });
+  const held = screen.getByRole('button', { name: 'Held dice 1: 1' });
+  fireEvent.click(roll);
+  fireEvent.click(held);
+  rerender(
+    <GameBoard
+      {...props}
+      scoreDisplay={{ owner: 'opponent', showFirstRollGuide: false }}
+      summaryPlayer={{ imageUrl: '/same-avatar.webp', imageAlt: 'Opponent', label: 'Opponent' }}
+    />,
+  );
+  expect(screen.getByRole('button', { name: 'choice · 20' })).toBe(cell);
+  expect(screen.getByRole('button', { name: 'Roll again' })).toBe(roll);
+  expect(screen.getByRole('button', { name: 'Held dice 1: 1' })).toBe(held);
+  expect(cell.getAttribute('data-input-available')).toBe('true');
+  fireEvent.click(roll);
+  fireEvent.click(held);
+  fireEvent.click(cell);
+  expect(intents).toEqual(['roll', 'hold:0:false', 'roll', 'hold:0:false', 'score:choice']);
+});
 
 test('can retain a recorder score panel without restoring the previous first-roll guide', () => {
   const view = renderToStaticMarkup(
@@ -352,8 +348,6 @@ test('can retain a recorder score panel without restoring the previous first-rol
       model={{ ...model, turn: { ...model.turn!, showFirstRollGuide: true } }}
       scoreDisplay={{
         owner: 'opponent',
-        rows: model.scoreRows,
-        previewVisible: false,
         showFirstRollGuide: false,
       }}
       summaryPlayer={{ imageAlt: 'Opponent', label: '상대' }}

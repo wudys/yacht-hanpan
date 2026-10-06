@@ -1,0 +1,35 @@
+export const RECORD_CONFIRMATION_MS = 1_000;
+export const RECORD_FADE_OUT_MS = 800;
+export const RECORD_SWAP_MS = 900;
+export const TURN_CUE_MS = 650;
+
+export const RECORD_SWEEP_DURATION_MS = 600;
+export const RECORD_PARTICLE_DURATION_MS = 600;
+export const RECORD_PARTICLE_DELAY_MS = 70;
+export const RECORD_YACHT_RING_DURATION_MS = 650;
+export const RECORD_SCORE_EFFECT_END_MS = Math.max(
+  RECORD_SWEEP_DURATION_MS,
+  RECORD_PARTICLE_DELAY_MS + RECORD_PARTICLE_DURATION_MS,
+  RECORD_YACHT_RING_DURATION_MS,
+);
+
+export const RECORD_BONUS_GLOW_DURATION_MS = 655;
+export const RECORD_BONUS_STAR_DURATION_MS = 480;
+export const RECORD_BONUS_FIRST_STAR_DELAY_MS = 120;
+export const RECORD_BONUS_SECOND_STAR_DELAY_MS = 175;
+export const RECORD_BONUS_GAIN_DURATION_MS = 720;
+export const RECORD_BONUS_GAIN_DELAY_MS = 80;
+export const RECORD_BONUS_EFFECT_END_MS = Math.max(
+  RECORD_BONUS_GLOW_DURATION_MS,
+  RECORD_BONUS_FIRST_STAR_DELAY_MS + RECORD_BONUS_STAR_DURATION_MS,
+  RECORD_BONUS_SECOND_STAR_DELAY_MS + RECORD_BONUS_STAR_DURATION_MS,
+  RECORD_BONUS_GAIN_DELAY_MS + RECORD_BONUS_GAIN_DURATION_MS,
+);
+
+export type FeedbackTiming =
+  | Readonly<{ mode: 'running'; startedAt: number }>
+  | Readonly<{ mode: 'paused'; elapsedMs: number }>;
+
+export function feedbackElapsed(timing: FeedbackTiming, now: number): number {
+  return timing.mode === 'paused' ? timing.elapsedMs : Math.max(0, now - timing.startedAt);
+}

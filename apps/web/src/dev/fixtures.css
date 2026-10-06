@@ -34,11 +34,10 @@
   z-index: 2;
 }
 
-/* Freeze the product keyframes at their injected epoch for repeatable captures. */
-.web-app-shell[data-feedback-fixture] .game-board * {
-  animation-play-state: paused !important;
-}
-
-.web-app-shell[data-feedback-fixture] .score-feedback__ring[data-yacht-ring='available'] rect {
+/* The available Yacht loop has no feedback timing; only this DEV variation needs a pause. */
+.web-app-shell[data-feedback-fixture='yacht-available']
+  .score-feedback__ring[data-yacht-ring='available']
+  rect {
   animation-delay: var(--fixture-feedback-delay);
+  animation-play-state: paused;
 }

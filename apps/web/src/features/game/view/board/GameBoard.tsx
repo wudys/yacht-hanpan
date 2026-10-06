@@ -6,11 +6,7 @@ import { GamePresence } from '@/features/game/view/board/GamePresence';
 import { GameTimer } from '@/features/game/view/board/GameTimer';
 import { PlayerSummary, type PlayerSummaryProps } from '@/features/game/view/board/PlayerSummary';
 import { type TurnCueFeedback, TurnStartCue } from '@/features/game/view/board/TurnStartCue';
-import type {
-  DiceSlotViewModel,
-  GameViewModel,
-  ScoreRowViewModel,
-} from '@/features/game/view/game-view-model';
+import type { DiceSlotViewModel, GameViewModel } from '@/features/game/view/game-view-model';
 import {
   type CategoryLabels,
   type ScoreDisplayOwner,
@@ -28,8 +24,6 @@ export type GameBoardProps = Readonly<{
   rollAction: Readonly<{ label: string; readOnly: boolean }>;
   scoreDisplay: Readonly<{
     owner: ScoreDisplayOwner;
-    rows: readonly ScoreRowViewModel[];
-    previewVisible: boolean;
     showFirstRollGuide: boolean;
   }>;
   recordFeedback?: ScoreRecordFeedback | null;
@@ -47,7 +41,6 @@ export type GameBoardProps = Readonly<{
     diceStage: string;
     heldDice: string;
     rollsRemaining: string;
-    turnState: string;
     total: string;
     bonus: string;
     bonusStatus: string;
@@ -282,10 +275,8 @@ export function GameBoard({
           <MemoScoreGrid
             recordFeedback={recordFeedback}
             yachtAvailable={yachtAvailable}
-            rows={scoreDisplay.rows}
-            inputRows={model.scoreRows}
+            rows={model.scoreRows}
             displayOwner={scoreDisplay.owner}
-            previewVisible={scoreDisplay.previewVisible}
             categories={categories}
             activeGroup={activeGroup}
             mode={scoreMode}

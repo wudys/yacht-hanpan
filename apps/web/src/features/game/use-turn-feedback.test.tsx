@@ -39,7 +39,7 @@ function finalOptions() {
     suspended: false,
     scoreVisible: true,
     boardVisible: true,
-    canStartTurn: false,
+    commandPresentationReady: false,
     rollPending: false,
   };
 }

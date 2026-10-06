@@ -15,9 +15,7 @@ export type ScoreGridProps = Readonly<{
   recordFeedback?: ScoreRecordFeedback | null;
   yachtAvailable?: boolean;
   rows: readonly ScoreRowViewModel[];
-  inputRows: readonly ScoreRowViewModel[];
   displayOwner: ScoreDisplayOwner;
-  previewVisible: boolean;
   categories: CategoryLabels;
   activeGroup: 'upper' | 'lower';
   mode: ScoreGridMode;
@@ -38,9 +36,7 @@ export function ScoreGrid({
   rows,
   recordFeedback,
   yachtAvailable = false,
-  inputRows,
   displayOwner,
-  previewVisible,
   categories,
   activeGroup,
   mode,
@@ -51,7 +47,6 @@ export function ScoreGrid({
   onBlockedSelect,
 }: ScoreGridProps) {
   const categoryIds = activeGroup === 'upper' ? UPPER_CATEGORY_IDS : LOWER_CATEGORY_IDS;
-  const inputRowsByCategory = new Map(inputRows.map((row) => [row.categoryId, row]));
   const rowsByCategory = new Map(rows.map((row) => [row.categoryId, row]));
 
   return (
@@ -83,20 +78,19 @@ export function ScoreGrid({
       <div className='score-grid__cells' role='tabpanel'>
         {categoryIds.map((categoryId) => {
           const row = rowsByCategory.get(categoryId);
-          const inputRow = inputRowsByCategory.get(categoryId);
           const recordedScore = displayOwner === 'viewer' ? row?.viewerScore : row?.opponentScore;
           const display: ScoreCellDisplay =
             recordedScore !== null && recordedScore !== undefined
               ? { state: 'recorded', value: recordedScore }
-              : previewVisible && row?.previewScore !== null && row?.previewScore !== undefined
+              : row?.previewScore !== null && row?.previewScore !== undefined
                 ? { state: 'preview', value: row.previewScore }
                 : { state: 'empty', value: null };
           const input: ScoreCellInput =
-            mode !== 'viewer-turn' || inputRow === undefined
+            mode !== 'viewer-turn' || row === undefined
               ? 'disabled'
-              : inputRow.viewerScore !== null
+              : row.viewerScore !== null
                 ? 'recorded'
-                : inputRow.selectable
+                : row.selectable
                   ? 'selectable'
                   : 'disabled';
           return row ? (
@@ -108,7 +102,6 @@ export function ScoreGrid({
               display={display}
               input={input}
               label={categories[categoryId]}
-              mode={mode}
               emptyValueLabel={labels.emptyValue}
               interactionLocked={interactionLocked}
               onSelect={onSelect}

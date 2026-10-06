@@ -10,8 +10,9 @@ import {
   type RoomView,
 } from '@repo/game-protocol/socket';
 import { createCompatibilityContract, GAME_PROTOCOL_VERSION } from '@repo/game-protocol/version';
-import type { CategoryId } from '@repo/yacht-rules';
+import { type CategoryId, type Dice, scoreCategory } from '@repo/yacht-rules';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { Profiler } from 'react';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 
 import GameScreen from '@/features/game/GameScreen';
@@ -71,25 +72,85 @@ function roomView(game: GameSnapshotInput): RoomView {
   });
 }
 
-function scoreTransition(categoryId: CategoryId = CATEGORY_ID.TWOS, score: number = 0): RoomView {
-  return roomView({
-    ...playingGameInput,
-    stateVersion: 8,
-    match: {
-      ...initialPlayingMatch,
-      players: [
-        { ...initialPlayingMatch.players[0], scorecard: { ones: 2, [categoryId]: score } },
-        initialPlayingMatch.players[1],
-      ],
-      currentTurn: {
-        ...initialPlayingMatch.currentTurn,
-        turnId: '11111111-1111-4111-8111-000000000002',
-        seatIndex: 1,
-        startedAt: 11_000,
-        deadlineAt: 101_000,
-        rollCount: 0,
-        heldSlots: [],
-        dice: null,
+const beforeScore = roomView({
+  ...playingGameInput,
+  match: {
+    ...initialPlayingMatch,
+    currentTurn: {
+      ...initialPlayingMatch.currentTurn,
+      dice: [{ value: 3 }, { value: 3 }, { value: 4 }, { value: 4 }, { value: 6 }],
+    },
+  },
+});
+
+function assertRecordableFixture(before: RoomView, categoryId: CategoryId, expectedScore: number) {
+  const match = before.game?.match;
+  if (match?.status !== 'playing') throw new Error('A score fixture needs a playing view');
+  const { currentTurn } = match;
+  // Both fixture helpers record seat 0; viewerSeat only changes the observer.
+  if (currentTurn.seatIndex !== 0) throw new Error('A score fixture needs seat 0 to record');
+  if (currentTurn.rollCount === 0 || currentTurn.dice === null) {
+    throw new Error('A score fixture needs revealed dice after a roll');
+  }
+  if (match.players[0].scorecard[categoryId] !== undefined) {
+    throw new Error(`Score fixture ${categoryId} is already recorded`);
+  }
+  const dice: Dice = [
+    currentTurn.dice[0].value,
+    currentTurn.dice[1].value,
+    currentTurn.dice[2].value,
+    currentTurn.dice[3].value,
+    currentTurn.dice[4].value,
+  ];
+  const actualScore = scoreCategory(categoryId, dice);
+  if (actualScore !== expectedScore) {
+    throw new Error(
+      `Score fixture ${categoryId}: expected ${expectedScore}, actual ${actualScore}`,
+    );
+  }
+  return match;
+}
+
+test('a mismatched score fixture fails before publication', () => {
+  const publish = vi.fn();
+  expect(() => publish(scoreTransition(CATEGORY_ID.TWOS, 1))).toThrow(
+    'Score fixture twos: expected 1, actual 0',
+  );
+  expect(publish).not.toHaveBeenCalled();
+});
+
+// This fixture hands seat 0's record to seat 1 at the fixed next-turn times below.
+function scoreTransition(
+  categoryId: CategoryId = CATEGORY_ID.TWOS,
+  expectedScore: number = 0,
+  before: RoomView = beforeScore,
+): RoomView {
+  const match = assertRecordableFixture(before, categoryId, expectedScore);
+  const game = before.game!;
+  return parseRoomView({
+    ...before,
+    game: {
+      ...game,
+      stateVersion: game.stateVersion + 1,
+      match: {
+        ...match,
+        players: [
+          {
+            ...match.players[0],
+            scorecard: { ...match.players[0].scorecard, [categoryId]: expectedScore },
+          },
+          match.players[1],
+        ],
+        currentTurn: {
+          ...match.currentTurn,
+          turnId: '11111111-1111-4111-8111-000000000002',
+          seatIndex: 1,
+          startedAt: 11_000,
+          deadlineAt: 101_000,
+          rollCount: 0,
+          heldSlots: [],
+          dice: null,
+        },
       },
     },
   });
@@ -97,7 +158,7 @@ function scoreTransition(categoryId: CategoryId = CATEGORY_ID.TWOS, score: numbe
 
 async function createHarness(
   viewerSeat: 0 | 1 = 0,
-  initial: RoomView = roomView(playingGameInput),
+  initial: RoomView = beforeScore,
   acknowledgementTimeoutMs: number = 100,
 ) {
   type Socket = ReturnType<NonNullable<CreateGameSessionOptions['socketFactory']>['create']>;
@@ -382,7 +443,7 @@ test.each([
     render(<GameScreen {...harness} locale={LOCALE.EN} />);
     fireEvent.click(tab(previousGroup));
     harness.audio.playCue.mockClear();
-    harness.publish(scoreTransition(category, 0));
+    harness.publish(scoreTransition(category, category === CATEGORY_ID.CHOICE ? 20 : 0));
     expect(tab(recordedGroup).getAttribute('aria-selected')).toBe('true');
     advance(899);
     expect(tab(recordedGroup).getAttribute('aria-selected')).toBe('true');
@@ -414,7 +475,10 @@ test('reselecting the automatically displayed tab keeps that choice without anot
 });
 
 function finalViews() {
-  const scores = Object.fromEntries(Object.values(CATEGORY_ID).map((category) => [category, 0]));
+  const scores: Record<string, number> = {
+    ...Object.fromEntries(Object.values(CATEGORY_ID).map((category) => [category, 0])),
+    choice: 5,
+  };
   const beforeScores = { ...scores };
   delete beforeScores.yacht;
   const playing = roomView({
@@ -432,6 +496,7 @@ function finalViews() {
       },
     },
   });
+  assertRecordableFixture(playing, CATEGORY_ID.YACHT, 50);
   const finished = roomView({
     stateVersion: 8,
     match: {
@@ -451,7 +516,17 @@ test.each(['ack-first', 'live-first'] as const)(
   async (order) => {
     const { playing, finished } = finalViews();
     const harness = await createHarness(0, playing);
-    render(<GameScreen {...harness} locale={LOCALE.EN} />);
+    const resultCommits = vi.fn();
+    render(
+      <Profiler
+        id='game'
+        onRender={() => {
+          if (screen.queryByRole('heading', { name: 'Game result' }) !== null) resultCommits();
+        }}
+      >
+        <GameScreen {...harness} locale={LOCALE.EN} />
+      </Profiler>,
+    );
     fireEvent.click(tab('lower'));
     harness.audio.playCue.mockClear();
     fireEvent.click(screen.getByRole('button', { name: /Yacht/u }));
@@ -462,10 +537,11 @@ test.each(['ack-first', 'live-first'] as const)(
       harness.publish(finished);
     }
     expect(screen.queryByRole('heading', { name: 'Game result' })).toBeNull();
-    expect(summary().getAttribute('aria-label')).toBe('Total 50 · Bonus not earned');
+    expect(summary().getAttribute('aria-label')).toBe('Total 55 · Bonus not earned');
     expect(harness.sessionCredentialStore.removeRoom).toHaveBeenCalledOnce();
     expect(harness.audio.playCue).toHaveBeenCalledExactlyOnceWith(PRODUCT_CUE.SCORE);
     expect(harness.audio.setScene).toHaveBeenLastCalledWith('game');
+    expect(resultCommits).not.toHaveBeenCalled();
     if (order !== 'ack-first') {
       expect(harness.session.getSnapshot().connection).toBe('connected');
       await harness.acknowledge(finished);
@@ -474,10 +550,81 @@ test.each(['ack-first', 'live-first'] as const)(
     expect(screen.queryByRole('heading', { name: 'Game result' })).toBeNull();
     advance(999);
     expect(screen.queryByRole('heading', { name: 'Game result' })).toBeNull();
+    expect(resultCommits).not.toHaveBeenCalled();
+    expect(harness.audio.setScene).not.toHaveBeenCalledWith('result');
     advance(1);
     expect(screen.getByRole('heading', { name: 'Game result' })).not.toBeNull();
+    expect(resultCommits).toHaveBeenCalled();
     expect(harness.audio.setScene).toHaveBeenLastCalledWith('result');
     expect(harness.audio.playCue).toHaveBeenCalledTimes(1);
+    expect(harness.sessionCredentialStore.removeRoom).toHaveBeenCalledOnce();
+  },
+);
+
+test('a live final score shows Result at 1000ms while its original command remains pending until the 1500ms ACK', async () => {
+  const { playing, finished } = finalViews();
+  const harness = await createHarness(0, playing, 5000);
+  const selectScore = vi.spyOn(harness.session, 'selectScoreCategory');
+  render(<GameScreen {...harness} locale={LOCALE.EN} />);
+  fireEvent.click(tab('lower'));
+  harness.audio.playCue.mockClear();
+  fireEvent.click(screen.getByRole('button', { name: /Yacht/u }));
+  const commandFinished = vi.fn();
+  void selectScore.mock.results[0]!.value.then(commandFinished);
+  harness.publish(finished);
+  expect(summary().getAttribute('aria-label')).toBe('Total 55 · Bonus not earned');
+  expect(harness.sessionCredentialStore.removeRoom).toHaveBeenCalledOnce();
+  advance(999);
+  expect(screen.queryByRole('heading', { name: 'Game result' })).toBeNull();
+  advance(1);
+  const result = screen.getByRole('heading', { name: 'Game result' });
+  expect(harness.session.getSnapshot().connection).toBe('connected');
+  expect(commandFinished).not.toHaveBeenCalled();
+  expect(harness.audio.setScene).toHaveBeenLastCalledWith('result');
+  advance(500);
+  expect(harness.session.getSnapshot().connection).toBe('connected');
+  expect(commandFinished).not.toHaveBeenCalled();
+  await harness.acknowledge(finished);
+  await expect(selectScore.mock.results[0]?.value).resolves.toMatchObject({
+    ok: true,
+    data: { stateVersion: 8 },
+  });
+  expect(harness.session.getSnapshot().connection).toBe('disposed');
+  expect(commandFinished).toHaveBeenCalledOnce();
+  expect(screen.getByRole('heading', { name: 'Game result' })).toBe(result);
+  advance(1000);
+  expect(screen.getByRole('heading', { name: 'Game result' })).toBe(result);
+  expect(harness.audio.playCue).toHaveBeenCalledExactlyOnceWith(PRODUCT_CUE.SCORE);
+  expect(harness.sessionCredentialStore.removeRoom).toHaveBeenCalledOnce();
+});
+
+test.each(['explicitForfeit', 'connectionEnded'] as const)(
+  '%s at 300ms cancels record confirmation immediately without later feedback or a turn cue',
+  async (reason) => {
+    const harness = await createHarness(1);
+    render(<GameScreen {...harness} locale={LOCALE.EN} />);
+    const recorded = scoreTransition();
+    harness.publish(recorded);
+    advance(300);
+    expect(screen.queryByRole('heading', { name: 'Game result' })).toBeNull();
+    harness.publish(
+      roomView({
+        stateVersion: 9,
+        match: {
+          status: 'finished',
+          players: [...recorded.game!.match.players],
+          result: { reason, winnerSeatIndex: 1 },
+        },
+      }),
+    );
+    const result = screen.getByRole('heading', { name: 'Game result' });
+    expect(harness.session.getSnapshot().connection).toBe('disposed');
+    expect(harness.sessionCredentialStore.removeRoom).toHaveBeenCalledOnce();
+    expect(screen.queryByText('YOUR TURN')).toBeNull();
+    advance(2000);
+    expect(screen.getByRole('heading', { name: 'Game result' })).toBe(result);
+    expect(screen.queryByText('YOUR TURN')).toBeNull();
+    expect(harness.audio.playCue).toHaveBeenCalledExactlyOnceWith(PRODUCT_CUE.SCORE);
     expect(harness.sessionCredentialStore.removeRoom).toHaveBeenCalledOnce();
   },
 );
@@ -537,19 +684,6 @@ test.each(['hidden', 'recovery', 'restore'] as const)(
     expect(harness.audio.playCue).toHaveBeenCalledExactlyOnceWith(PRODUCT_CUE.SCORE);
   },
 );
-
-test('a late record without a visible confirmation keeps its ordinary group selection', async () => {
-  const harness = await createHarness(1);
-  render(<GameScreen {...harness} locale={LOCALE.EN} />);
-  advance(1100);
-  const recorded = scoreTransition(CATEGORY_ID.CHOICE, 20);
-  harness.publish(recorded);
-  expect(tab('lower').getAttribute('aria-selected')).toBe('true');
-  expect(harness.audio.playCue).not.toHaveBeenCalled();
-  advance(1000);
-  harness.publish(recorded);
-  expect(tab('lower').getAttribute('aria-selected')).toBe('true');
-});
 
 test.each(['hidden', 'recovery'] as const)(
   'a record accepted during %s does not replay after returning',
@@ -633,13 +767,23 @@ test.each(['settings', 'scoreboard'] as const)(
 );
 
 test('the open bonus popover follows the same summary owner at the 900ms handoff', async () => {
-  const harness = await createHarness();
+  const before = roomView({
+    ...playingGameInput,
+    match: {
+      ...initialPlayingMatch,
+      currentTurn: {
+        ...initialPlayingMatch.currentTurn,
+        dice: [{ value: 2 }, { value: 2 }, { value: 2 }, { value: 6 }, { value: 6 }],
+      },
+    },
+  });
+  const harness = await createHarness(0, before);
   render(<GameScreen {...harness} locale={LOCALE.EN} />);
   fireEvent.click(tab('lower'));
   fireEvent.click(screen.getByRole('button', { name: 'Bonus rule' }));
   const popover = screen.getByRole('dialog', { name: 'Bonus rule' });
   harness.audio.playCue.mockClear();
-  harness.publish(scoreTransition(CATEGORY_ID.TWOS, 6));
+  harness.publish(scoreTransition(CATEGORY_ID.TWOS, 6, before));
   expect(tab('upper').getAttribute('aria-selected')).toBe('true');
   expect(screen.getByRole('dialog', { name: 'Bonus rule' })).toBe(popover);
   expect(within(popover).getByText('8/63')).not.toBeNull();
@@ -676,20 +820,33 @@ test('a live final score sounds once, then ACK timeout recovery cancels confirma
   expect(harness.audio.playCue).toHaveBeenCalledTimes(1);
 });
 
-test('a delayed record arriving after server turn start projects current state without a new confirmation', async () => {
-  const harness = await createHarness(1);
-  render(<GameScreen {...harness} locale={LOCALE.EN} />);
-  advance(1000);
-  harness.publish(scoreTransition(CATEGORY_ID.CHOICE, 20));
-  expect(summary().getAttribute('data-player-summary')).toBe('viewer');
-  expect(tab('lower').getAttribute('aria-selected')).toBe('true');
-  expect(harness.audio.playCue).not.toHaveBeenCalled();
-  expect(screen.getByRole('button', { name: 'Roll' }).getAttribute('aria-disabled')).toBe('false');
-  expect(screen.queryByText('YOUR TURN')).toBeNull();
-  fireEvent.click(tab('upper'));
-  harness.publish(scoreTransition(CATEGORY_ID.CHOICE, 20));
-  expect(tab('upper').getAttribute('aria-selected')).toBe('true');
-});
+test.each([1000, 1100])(
+  'a record arriving at %ims projects current state without a new confirmation or temporary tab',
+  async (arrivalAt) => {
+    const harness = await createHarness(1);
+    render(<GameScreen {...harness} locale={LOCALE.EN} />);
+    advance(arrivalAt);
+    const recorded = scoreTransition(CATEGORY_ID.CHOICE, 20);
+    harness.publish(recorded);
+    expect(summary().getAttribute('data-player-summary')).toBe('viewer');
+    expect(tab('lower').getAttribute('aria-selected')).toBe('true');
+    expect(harness.audio.playCue).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Roll' }).getAttribute('aria-disabled')).toBe(
+      'false',
+    );
+    expect(screen.queryByText('YOUR TURN')).toBeNull();
+    advance(1000);
+    harness.publish(recorded);
+    expect(tab('lower').getAttribute('aria-selected')).toBe('true');
+    expect(screen.queryByText('YOUR TURN')).toBeNull();
+    fireEvent.click(tab('upper'));
+    harness.publish(recorded);
+    expect(tab('upper').getAttribute('aria-selected')).toBe('true');
+    expect(
+      harness.audio.playCue.mock.calls.filter(([cue]) => cue === PRODUCT_CUE.SCORE),
+    ).toHaveLength(0);
+  },
+);
 
 test('SFX off consumes a fresh record so turning sound on does not replay it', async () => {
   const harness = await createHarness();
@@ -784,21 +941,16 @@ test.each([0, 1] as const)(
     fireEvent.click(screen.getByRole('button', { name: /Yacht/u }));
     expect(harness.socket.emitCommand).not.toHaveBeenCalled();
     fireEvent.click(tab('upper'));
-    harness.publish(
-      parseRoomView({ ...rolled, presence: { ...rolled.presence, presenceVersion: 2 } }),
-    );
+    const beforeRecord = parseRoomView({
+      ...rolled,
+      presence: { ...rolled.presence, presenceVersion: 2 },
+    });
+    harness.publish(beforeRecord);
     act(() => harness.presentation.publish({ phase: 'settled', resources: null, dice: [] }));
     expect(tab('upper').getAttribute('aria-selected')).toBe('true');
     fireEvent.click(tab('lower'));
     expect(yachtRing()).not.toBeNull();
-    const next = scoreTransition(CATEGORY_ID.CHOICE, 30);
-    harness.publish(
-      parseRoomView({
-        ...next,
-        game: { ...next.game!, stateVersion: 9 },
-        presence: { ...next.presence, presenceVersion: 2 },
-      }),
-    );
+    harness.publish(scoreTransition(CATEGORY_ID.CHOICE, 30, beforeRecord));
     expect(yachtRing()).toBeNull();
   },
 );
@@ -829,33 +981,16 @@ test.each([0, 1] as const)(
           { scorecard: { twos: 6, threes: 12, fours: 16, fives: 10, sixes: 18 }, timeoutCount: 0 },
           initialPlayingMatch.players[1],
         ],
+        currentTurn: {
+          ...initialPlayingMatch.currentTurn,
+          dice: [{ value: 1 }, { value: 3 }, { value: 4 }, { value: 5 }, { value: 6 }],
+        },
       },
     } satisfies GameSnapshotInput;
-    const harness = await createHarness(viewerSeat, roomView(before));
+    const beforeView = roomView(before);
+    const harness = await createHarness(viewerSeat, beforeView);
     render(<GameScreen {...harness} locale={LOCALE.EN} />);
-    harness.publish(
-      roomView({
-        ...before,
-        stateVersion: 8,
-        match: {
-          ...before.match,
-          players: [
-            { scorecard: { ...before.match.players[0].scorecard, ones: 1 }, timeoutCount: 0 },
-            before.match.players[1],
-          ],
-          currentTurn: {
-            ...initialPlayingMatch.currentTurn,
-            turnId: '11111111-1111-4111-8111-000000000002',
-            seatIndex: 1,
-            startedAt: 11_000,
-            deadlineAt: 101_000,
-            rollCount: 0,
-            heldSlots: [],
-            dice: null,
-          },
-        },
-      }),
-    );
+    harness.publish(scoreTransition(CATEGORY_ID.ONES, 1, beforeView));
     expect(summary().getAttribute('aria-label')).toBe('Total 98 · Bonus earned');
     expect(screen.getByText('+35')).not.toBeNull();
     expect(
@@ -944,115 +1079,132 @@ test('a live initial turn starts YOUR TURN once while a synchronized initial gam
   expect(screen.queryByText('YOUR TURN')).toBeNull();
 });
 
-test('a late original score ACK starts YOUR TURN when its pending command finally releases the next own turn', async () => {
-  const originalTurn = {
-    ...playingGameInput,
-    match: {
-      ...initialPlayingMatch,
-      currentTurn: {
-        ...initialPlayingMatch.currentTurn,
-        dice: [{ value: 1 }, { value: 3 }, { value: 4 }, { value: 5 }, { value: 6 }],
+test.each(['ready', 'expired'] as const)(
+  'a late original score ACK releases its command while the next own turn is %s',
+  async (readiness) => {
+    const originalTurn = {
+      ...playingGameInput,
+      match: {
+        ...initialPlayingMatch,
+        currentTurn: {
+          ...initialPlayingMatch.currentTurn,
+          dice: [{ value: 1 }, { value: 3 }, { value: 4 }, { value: 5 }, { value: 6 }],
+        },
       },
-    },
-  } satisfies GameSnapshotInput;
-  const harness = await createHarness(0, roomView(originalTurn), 5000);
-  const selectScore = vi.spyOn(harness.session, 'selectScoreCategory');
-  render(<GameScreen {...harness} locale={LOCALE.EN} />);
-  fireEvent.click(screen.getByRole('button', { name: /Twos/u }));
-  expect(harness.socket.emitCommand).toHaveBeenCalledOnce();
-  const ownRecord = scoreTransition();
-  harness.publish(ownRecord);
-  expect(harness.session.getSnapshot().presentation?.kind).toBe('score');
-  advance(1010);
+    } satisfies GameSnapshotInput;
+    const originalView = roomView(originalTurn);
+    const harness = await createHarness(0, originalView, 120_000);
+    const selectScore = vi.spyOn(harness.session, 'selectScoreCategory');
+    render(<GameScreen {...harness} locale={LOCALE.EN} />);
+    fireEvent.click(screen.getByRole('button', { name: /Twos/u }));
+    expect(harness.socket.emitCommand).toHaveBeenCalledOnce();
+    const ownRecord = scoreTransition(CATEGORY_ID.TWOS, 0, originalView);
+    harness.publish(ownRecord);
+    expect(harness.session.getSnapshot().presentation?.kind).toBe('score');
+    advance(1010);
 
-  const opponentRoll = roomView({
-    stateVersion: 9,
-    match: {
-      ...initialPlayingMatch,
-      players: [
-        { scorecard: { ones: 2, twos: 0 }, timeoutCount: 0 },
-        initialPlayingMatch.players[1],
-      ],
-      currentTurn: {
-        ...initialPlayingMatch.currentTurn,
-        turnId: '11111111-1111-4111-8111-000000000002',
-        seatIndex: 1,
-        startedAt: 11_000,
-        deadlineAt: 101_000,
-        rollCount: 1,
-        heldSlots: [],
-        dice: [{ value: 1 }, { value: 1 }, { value: 1 }, { value: 1 }, { value: 1 }],
+    const opponentRoll = roomView({
+      stateVersion: 9,
+      match: {
+        ...initialPlayingMatch,
+        players: [
+          { scorecard: { ones: 2, twos: 0 }, timeoutCount: 0 },
+          initialPlayingMatch.players[1],
+        ],
+        currentTurn: {
+          ...initialPlayingMatch.currentTurn,
+          turnId: '11111111-1111-4111-8111-000000000002',
+          seatIndex: 1,
+          startedAt: 11_000,
+          deadlineAt: 101_000,
+          rollCount: 1,
+          heldSlots: [],
+          dice: [{ value: 1 }, { value: 1 }, { value: 1 }, { value: 1 }, { value: 1 }],
+        },
       },
-    },
-  });
-  const roll = parseResolvedRollArtifact({
-    type: 'roll:resolved',
-    replay: {
-      mode: 'seeded-physics',
-      rollId: '8184fc0a-4e59-455d-a7c1-579a9ee96404',
-      seed: 'pending-score-next-turn',
-      pourStyle: 'classic',
-      rolledSlots: [0, 1, 2, 3, 4],
-      contract: createCompatibilityContract('test-release'),
-    },
-    outcome: {
-      authoritativeValuesBySlot: [0, 1, 2, 3, 4].map((slot) => ({ slot, value: 1 })),
-    },
-  });
-  act(() =>
-    harness.socket.onRoomUpdate.mock.lastCall?.[0]({
-      type: 'roll:committed',
-      view: opponentRoll,
-      roll,
-    }),
-  );
-  expect(harness.session.getSnapshot().presentation?.kind).toBe('roll');
-  advance(10);
-  const nextOwnTurn = roomView({
-    stateVersion: 10,
-    match: {
-      ...initialPlayingMatch,
-      players: [
-        { scorecard: { ones: 2, twos: 0 }, timeoutCount: 0 },
-        { scorecard: { ones: 1, twos: 0 }, timeoutCount: 0 },
-      ],
-      currentTurn: {
-        ...initialPlayingMatch.currentTurn,
-        turnId: '11111111-1111-4111-8111-000000000003',
-        seatIndex: 0,
-        startedAt: 12_020,
-        deadlineAt: 102_020,
-        rollCount: 0,
-        heldSlots: [],
-        dice: null,
+    });
+    const roll = parseResolvedRollArtifact({
+      type: 'roll:resolved',
+      replay: {
+        mode: 'seeded-physics',
+        rollId: '8184fc0a-4e59-455d-a7c1-579a9ee96404',
+        seed: 'pending-score-next-turn',
+        pourStyle: 'classic',
+        rolledSlots: [0, 1, 2, 3, 4],
+        contract: createCompatibilityContract('test-release'),
       },
-    },
-  });
-  harness.publish(nextOwnTurn);
-  expect(harness.session.getSnapshot().presentation).toMatchObject({
-    kind: 'score',
-    record: { stateVersion: 10, seatIndex: 1, categoryId: CATEGORY_ID.TWOS, score: 0 },
-  });
-  advance(1000);
-  expect(screen.getByRole('button', { name: 'Roll' }).getAttribute('aria-disabled')).toBe('true');
-  expect(screen.queryByText('YOUR TURN')).toBeNull();
-  advance(100);
-  await harness.acknowledge(nextOwnTurn, 8);
-  await expect(selectScore.mock.results[0]?.value).resolves.toMatchObject({
-    ok: true,
-    data: { stateVersion: 8 },
-  });
-  expect(harness.session.getSnapshot().game?.stateVersion).toBe(10);
-  expect(screen.getByRole('button', { name: 'Roll' }).getAttribute('aria-disabled')).toBe('false');
-  expect(screen.getByText('YOUR TURN')).not.toBeNull();
-  advance(649);
-  expect(screen.getByText('YOUR TURN')).not.toBeNull();
-  advance(1);
-  expect(screen.queryByText('YOUR TURN')).toBeNull();
-  expect(
-    harness.audio.playCue.mock.calls.filter(([cue]) => cue === PRODUCT_CUE.SCORE),
-  ).toHaveLength(2);
-});
+      outcome: {
+        authoritativeValuesBySlot: [0, 1, 2, 3, 4].map((slot) => ({ slot, value: 1 })),
+      },
+    });
+    act(() =>
+      harness.socket.onRoomUpdate.mock.lastCall?.[0]({
+        type: 'roll:committed',
+        view: opponentRoll,
+        roll,
+      }),
+    );
+    expect(harness.session.getSnapshot().presentation?.kind).toBe('roll');
+    advance(10);
+    const nextOwnTurn = roomView({
+      stateVersion: 10,
+      match: {
+        ...initialPlayingMatch,
+        players: [
+          { scorecard: { ones: 2, twos: 0 }, timeoutCount: 0 },
+          { scorecard: { ones: 1, twos: 0 }, timeoutCount: 0 },
+        ],
+        currentTurn: {
+          ...initialPlayingMatch.currentTurn,
+          turnId: '11111111-1111-4111-8111-000000000003',
+          seatIndex: 0,
+          startedAt: 12_020,
+          deadlineAt: 102_020,
+          rollCount: 0,
+          heldSlots: [],
+          dice: null,
+        },
+      },
+    });
+    harness.publish(nextOwnTurn);
+    expect(harness.session.getSnapshot().presentation).toMatchObject({
+      kind: 'score',
+      record: { stateVersion: 10, seatIndex: 1, categoryId: CATEGORY_ID.TWOS, score: 0 },
+    });
+    advance(1000);
+    expect(screen.getByRole('button', { name: 'Roll' }).getAttribute('aria-disabled')).toBe('true');
+    expect(screen.queryByText('YOUR TURN')).toBeNull();
+    if (readiness === 'expired') advance(102_020 - harness.clock.now());
+    await harness.acknowledge(nextOwnTurn, 8);
+    await expect(selectScore.mock.results[0]?.value).resolves.toMatchObject({
+      ok: true,
+      data: { stateVersion: 8 },
+    });
+    expect(harness.session.getSnapshot().game?.stateVersion).toBe(10);
+    const rollButton = screen.getByRole('button', { name: 'Roll' });
+    if (readiness === 'ready') {
+      expect(rollButton.getAttribute('aria-disabled')).toBe('false');
+      expect(screen.getByText('YOUR TURN')).not.toBeNull();
+      advance(649);
+      expect(screen.getByText('YOUR TURN')).not.toBeNull();
+      advance(1);
+      expect(screen.queryByText('YOUR TURN')).toBeNull();
+    } else {
+      expect(harness.clock.now()).toBe(102_020);
+      expect(rollButton.getAttribute('aria-disabled')).toBe('true');
+      expect(screen.queryByText('YOUR TURN')).toBeNull();
+      fireEvent.click(rollButton);
+      advance(1000);
+      expect(rollButton.getAttribute('aria-disabled')).toBe('true');
+      expect(screen.queryByText('YOUR TURN')).toBeNull();
+      fireEvent.click(rollButton);
+      expect(harness.socket.emitCommand).toHaveBeenCalledOnce();
+    }
+    expect(
+      harness.audio.playCue.mock.calls.filter(([cue]) => cue === PRODUCT_CUE.SCORE),
+    ).toHaveLength(2);
+  },
+);
 
 // Account for sub-millisecond render/effect work between reading and scheduling a boundary.
 test.each([0, 300, 900])(

@@ -19,12 +19,14 @@ import {
 
 import { useDelayedRollSpinner } from '@/features/game/game-display-hooks';
 import {
+  deriveGameInputReadiness,
   deriveGameInputScopes,
   deriveGameInteraction,
   type GameLayer,
 } from '@/features/game/game-interaction';
 import {
   createGameBoardPresentation,
+  createGameFeedbackPresentation,
   createGameScorePresentation,
   createResultPresentation,
 } from '@/features/game/game-presentation';
@@ -120,10 +122,12 @@ export default function GameScreen({
     retryCommand,
   } = useGameCommands(sessions, recovery, audio, feedback);
   const [layer, setLayer] = useState<GameLayer>('board');
-  const [skippedAchievementRollId, setSkippedAchievementRollId] = useState<string | null>(null);
+  const [suppressedAchievementRollId, setSuppressedAchievementRollId] = useState<string | null>(
+    null,
+  );
   useEffect(() => {
     if (layer === 'scoreboard' && presentationSnapshot.phase === 'achievement') {
-      setSkippedAchievementRollId(presentationSnapshot.rollId);
+      setSuppressedAchievementRollId(presentationSnapshot.rollId);
     }
   }, [layer, presentationSnapshot]);
   const [recordedCategoryNoticeTurnIdentity, setRecordedCategoryNoticeTurnIdentity] = useState<
@@ -188,6 +192,17 @@ export default function GameScreen({
   const connected = holderSnapshot.sessionSnapshot?.connection === 'connected';
   const recoveryActive = recoverySnapshot.status !== 'idle';
   const hasCommandNotice = rateLimited || commandRetryError !== null;
+  const readiness = useMemo(
+    () =>
+      deriveGameInputReadiness({
+        phase,
+        connected,
+        hasPendingCommand,
+        recoveryActive,
+        hasCommandNotice,
+      }),
+    [phase, connected, hasPendingCommand, recoveryActive, hasCommandNotice],
+  );
   const onRecordStart = useCallback(() => {
     if (preferences.getSnapshot().sfxEnabled) audio.playCue(PRODUCT_CUE.SCORE);
   }, [audio, preferences]);
@@ -200,12 +215,7 @@ export default function GameScreen({
       suspended: recoveryActive || (!connected && !finished),
       scoreVisible: (layer === 'board' || layer === 'bonus') && !hasCommandNotice,
       boardVisible: layer === 'board' && !hasCommandNotice && !recordedCategoryNoticeOpen,
-      canStartTurn:
-        connected &&
-        !hasPendingCommand &&
-        !hasCommandNotice &&
-        !recordedCategoryNoticeOpen &&
-        (phase === 'hidden' || phase === 'settled'),
+      commandPresentationReady: readiness.requestReady && readiness.presentationReady,
       rollPending,
     },
     clock,
@@ -220,10 +230,16 @@ export default function GameScreen({
     void audio.setScene(resultVisible ? 'result' : 'game');
   }, [audio, resultVisible]);
 
-  const summaryIsViewer =
-    record !== null && (record.final || record.phase !== 'incoming')
-      ? record.record.seatIndex === viewerSeatIndex
-      : (model?.turn?.isViewerTurn ?? true);
+  const feedbackPresentation = useMemo(
+    () =>
+      createGameFeedbackPresentation({
+        turn: model?.turn ?? null,
+        viewerSeatIndex: viewerSeatIndex ?? null,
+        record,
+      }),
+    [model?.turn, viewerSeatIndex, record],
+  );
+  const summaryIsViewer = feedbackPresentation.scoreDisplay.owner === 'viewer';
   const summaryScore = summaryIsViewer ? scorePresentation?.viewer : scorePresentation?.opponent;
   const summaryPlayer = useMemo(
     () => ({
@@ -236,29 +252,14 @@ export default function GameScreen({
   const inputScopes = useMemo(
     () =>
       deriveGameInputScopes({
-        phase,
-        hasPendingCommand,
-        connected,
+        readiness,
         deadlineReady,
         turnReady,
         recordFeedbackActive,
         layer,
-        recoveryActive,
-        hasCommandNotice,
         recordedCategoryNoticeOpen,
       }),
-    [
-      phase,
-      hasPendingCommand,
-      connected,
-      deadlineReady,
-      turnReady,
-      recordFeedbackActive,
-      layer,
-      recoveryActive,
-      hasCommandNotice,
-      recordedCategoryNoticeOpen,
-    ],
+    [readiness, deadlineReady, turnReady, recordFeedbackActive, layer, recordedCategoryNoticeOpen],
   );
   const interaction = useMemo(
     () => (model === null ? null : deriveGameInteraction(model, inputScopes)),
@@ -501,37 +502,18 @@ export default function GameScreen({
             ) : null
           }
           model={boardModel}
-          recordFeedback={
-            record?.visible
-              ? {
-                  identity: String(record.record.stateVersion),
-                  categoryId: record.record.categoryId,
-                  score: record.record.score,
-                  phase: record.phase,
-                  startedAt: record.startedAt,
-                  bonusEarned: record.bonusEarned,
-                }
-              : null
-          }
+          recordFeedback={feedbackPresentation.recordFeedback}
           yachtAvailable={yachtAvailable && !recordFeedbackActive}
           turnCue={
             turnFeedback.turnCue === null
               ? null
               : {
                   identity: turnFeedback.turnCue.turnId,
-                  startedAt: turnFeedback.turnCue.startedAt,
+                  timing: { mode: 'running', startedAt: turnFeedback.turnCue.startedAt },
                 }
           }
           turnCueLabel={translate(locale, 'game.turnStartCue')}
-          scoreDisplay={{
-            owner: summaryIsViewer ? 'viewer' : 'opponent',
-            rows: boardModel.scoreRows,
-            previewVisible:
-              inputScopes.previewVisible &&
-              Boolean(boardModel.turn && boardModel.turn.dice.length > 0),
-            showFirstRollGuide:
-              !recordFeedbackActive && (boardModel.turn?.showFirstRollGuide ?? false),
-          }}
+          scoreDisplay={feedbackPresentation.scoreDisplay}
           rollAction={boardPresentation.rollAction}
           summaryPlayer={summaryPlayer}
           bonusEarned={summaryScore.upperBonus > 0}
@@ -635,7 +617,7 @@ export default function GameScreen({
         </div>
       ) : null}
       {presentationSnapshot.phase === 'achievement' &&
-      presentationSnapshot.rollId !== skippedAchievementRollId ? (
+      presentationSnapshot.rollId !== suppressedAchievementRollId ? (
         <div className='web-game-achievement-overlay' data-game-achievement-layer='true'>
           <AchievementSequence
             kind={presentationSnapshot.achievement.kind}

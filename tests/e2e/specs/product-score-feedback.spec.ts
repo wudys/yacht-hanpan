@@ -165,6 +165,10 @@ test('both clients confirm zero and normal records with the source owner, then Y
           (event) => event.phase === 'confirming' && event.category === category,
         );
         expect(confirmation).toBeDefined();
+        expect(await audits[viewer]!.evaluate(({ sweep }) => sweep)).toEqual({
+          playState: 'running',
+          advanced: true,
+        });
         expect(
           observations
             .filter((event) => event.phase !== null)
@@ -221,7 +225,7 @@ test('both clients confirm zero and normal records with the source owner, then Y
 
 for (const [method, chosenGroup, width] of [
   ['click', 'lower', 360],
-  ['keyboard', 'upper', 430],
+  ['keyboard', 'lower', 430],
 ] as const) {
   test(`manual ${method} of the ${chosenGroup} tab during confirmation survives the handoff`, async ({
     page,

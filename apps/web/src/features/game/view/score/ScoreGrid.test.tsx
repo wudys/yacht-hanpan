@@ -32,9 +32,7 @@ test('renders only the active group as a two by three score grid', () => {
   const view = renderToStaticMarkup(
     <ScoreGrid
       rows={rows}
-      inputRows={rows}
       displayOwner='viewer'
-      previewVisible
       categories={categories}
       activeGroup='lower'
       mode='viewer-turn'
@@ -62,7 +60,6 @@ test('allows a selectable preview zero to emit its category intent', () => {
       input='selectable'
       label={categories.choice}
       emptyValueLabel='Unrecorded'
-      mode='viewer-turn'
       onSelect={(categoryId) => selected.push(categoryId)}
     />,
   );
@@ -82,7 +79,6 @@ test('keeps preview presentation while interaction is locked', () => {
       input='selectable'
       label={categories.choice}
       emptyValueLabel='Unrecorded'
-      mode='viewer-turn'
       interactionLocked
       onSelect={(categoryId) => selected.push(categoryId)}
     />,
@@ -91,7 +87,7 @@ test('keeps preview presentation while interaction is locked', () => {
   fireEvent.click(cell);
 
   expect(selected).toEqual([]);
-  expect(cell.getAttribute('data-mode')).toBe('viewer-turn');
+  expect(cell.getAttribute('data-input-available')).toBe('false');
   expect(cell.getAttribute('data-value-state')).toBe('preview');
 });
 
@@ -105,7 +101,6 @@ test('does not emit an intent for recorded or opponent values', () => {
         input='recorded'
         label={categories.ones}
         emptyValueLabel='Unrecorded'
-        mode='viewer-turn'
         onSelect={() => intents++}
       />
       <ScoreCategoryCell
@@ -114,7 +109,6 @@ test('does not emit an intent for recorded or opponent values', () => {
         input='disabled'
         label={categories.twos}
         emptyValueLabel='Unrecorded'
-        mode='opponent-turn'
         onSelect={() => intents++}
       />
     </>,
@@ -126,7 +120,8 @@ test('does not emit an intent for recorded or opponent values', () => {
 
   expect(intents).toBe(0);
   expect(recordedCell.getAttribute('data-value-state')).toBe('recorded');
-  expect(opponentCell.getAttribute('data-mode')).toBe('opponent-turn');
+  expect(opponentCell.getAttribute('data-value-state')).toBe('recorded');
+  expect(opponentCell.hasAttribute('disabled')).toBe(true);
 });
 
 test('reports a recorded viewer category as blocked without selecting it', () => {
@@ -139,7 +134,6 @@ test('reports a recorded viewer category as blocked without selecting it', () =>
       input='recorded'
       label={categories.ones}
       emptyValueLabel='Unrecorded'
-      mode='viewer-turn'
       onSelect={(categoryId) => selected.push(categoryId)}
       onBlockedSelect={(categoryId) => blocked.push(categoryId)}
     />,
@@ -154,42 +148,36 @@ test('reports a recorded viewer category as blocked without selecting it', () =>
 });
 
 test('renders empty slots without a dash while preserving their accessible meaning and recorded zero', () => {
-  for (const mode of ['disabled', 'opponent-turn'] as const) {
-    const view = renderToStaticMarkup(
-      <ScoreCategoryCell
-        categoryId='ones'
-        display={{ state: 'empty', value: null }}
-        input='disabled'
-        label={categories.ones}
-        mode={mode}
-        emptyValueLabel='Unrecorded'
-      />,
-    );
-    expect(view).toContain('aria-label="ones · Unrecorded"');
-    expect(view).toContain('data-score-value-kind="empty"></span>');
-    expect(view).not.toContain('—');
-  }
   const view = renderToStaticMarkup(
+    <ScoreCategoryCell
+      categoryId='ones'
+      display={{ state: 'empty', value: null }}
+      input='disabled'
+      label={categories.ones}
+      emptyValueLabel='Unrecorded'
+    />,
+  );
+  expect(view).toContain('aria-label="ones · Unrecorded"');
+  expect(view).toMatch(/data-score-value-kind="empty"[^>]*><\/span>/u);
+  expect(view).not.toContain('—');
+  const utils = renderToStaticMarkup(
     <ScoreCategoryCell
       categoryId='ones'
       display={{ state: 'recorded', value: 0 }}
       input='disabled'
       label={categories.ones}
-      mode='disabled'
       emptyValueLabel='Unrecorded'
     />,
   );
-  expect(view).toContain('aria-label="ones · 0"');
-  expect(view).toContain('data-score-value-kind="recorded">0</span>');
+  expect(utils).toContain('aria-label="ones · 0"');
+  expect(utils).toMatch(/data-score-value-kind="recorded"[^>]*>0<\/span>/u);
 });
 
 test('hides an absent group best without hiding a valid zero', () => {
   const view = renderToStaticMarkup(
     <ScoreGrid
       rows={rows}
-      inputRows={rows}
       displayOwner='viewer'
-      previewVisible
       categories={categories}
       activeGroup='lower'
       mode='viewer-turn'
@@ -214,28 +202,27 @@ test('only offers the input cue for an unlocked selectable preview, including ze
         display={{ state: 'preview', value: 0 }}
         input='selectable'
         label={categories.choice}
-        mode='viewer-turn'
         interactionLocked={locked}
         emptyValueLabel='Unrecorded'
       />,
     );
     expect(view).toContain(`data-input-available="${!locked}"`);
-    expect(view).toContain('data-score-value-kind="preview">0</span>');
+    expect(view).toMatch(/data-score-value-kind="preview"[^>]*>0<\/span>/u);
   }
 });
 
 test('changes displayed scores in the same cells while preserving latest input eligibility', () => {
   const selected: CategoryId[] = [];
   const blocked: CategoryId[] = [];
-  const displayRows = rows.map((row) => ({ ...row, viewerScore: 0, opponentScore: 20 }));
-  const inputRows = rows.map((row) => ({
-    ...row,
-    viewerScore: row.categoryId === 'choice' ? null : 3,
-  }));
+  const coherentRows = rows.map((row) =>
+    row.categoryId === 'choice'
+      ? { ...row, viewerScore: null, opponentScore: 20, previewScore: 24, selectable: true }
+      : row.categoryId === 'yacht'
+        ? { ...row, viewerScore: 0, opponentScore: 50, previewScore: null, selectable: false }
+        : row,
+  );
   const props = {
-    rows: displayRows,
-    inputRows,
-    previewVisible: false,
+    rows: coherentRows,
     categories,
     activeGroup: 'lower' as const,
     mode: 'viewer-turn' as const,
@@ -250,26 +237,30 @@ test('changes displayed scores in the same cells while preserving latest input e
     onBlockedSelect: (categoryId: CategoryId) => blocked.push(categoryId),
   };
   const { rerender } = render(<ScoreGrid {...props} displayOwner='viewer' />);
-  const cell = screen.getByRole('button', { name: 'choice · 0' });
+  const cell = screen.getByRole('button', { name: 'choice · 24' });
   rerender(<ScoreGrid {...props} displayOwner='opponent' />);
   expect(screen.getByRole('button', { name: 'choice · 20' })).toBe(cell);
   fireEvent.click(cell);
-  fireEvent.click(screen.getByRole('button', { name: 'yacht · 20' }));
+  fireEvent.click(screen.getByRole('button', { name: 'yacht · 50' }));
   expect(selected).toEqual(['choice']);
   expect(blocked).toEqual(['yacht']);
+  rerender(<ScoreGrid {...props} displayOwner='viewer' />);
+  expect(screen.getByRole('button', { name: 'choice · 24' })).toBe(cell);
+  fireEvent.click(screen.getByRole('button', { name: 'yacht · 0' }));
+  expect(blocked).toEqual(['yacht', 'yacht']);
   rerender(<ScoreGrid {...props} displayOwner='viewer' mode='opponent-turn' />);
-  fireEvent.click(screen.getByRole('button', { name: 'choice · 0' }));
+  fireEvent.click(screen.getByRole('button', { name: 'choice · 24' }));
+  fireEvent.click(screen.getByRole('button', { name: 'yacht · 0' }));
   expect(selected).toEqual(['choice']);
+  expect(blocked).toEqual(['yacht', 'yacht']);
 });
 
 /* eslint-disable testing-library/no-node-access -- Verify persistent cell parts and aria-hidden effect epochs across transitions. */
 test('keeps the score cell, icon and label stable through the record handoff', () => {
   vi.spyOn(performance, 'now').mockReturnValue(850);
   const props = {
-    rows,
-    inputRows: rows,
+    rows: rows.map((row) => ({ ...row, previewScore: null, selectable: false })),
     displayOwner: 'viewer' as const,
-    previewVisible: false,
     categories,
     activeGroup: 'upper' as const,
     mode: 'opponent-turn' as const,
@@ -285,7 +276,7 @@ test('keeps the score cell, icon and label stable through the record handoff', (
     identity: 'record-1',
     categoryId: 'ones' as const,
     score: 0,
-    startedAt: 0,
+    timing: { mode: 'running' as const, startedAt: 0 },
     bonusEarned: false,
   };
   const { rerender } = render(
@@ -313,10 +304,8 @@ test('keeps the score cell, icon and label stable through the record handoff', (
 test('does not restart expired record effects after a manual tab round trip', () => {
   const now = vi.spyOn(performance, 'now').mockReturnValue(100);
   const props = {
-    rows,
-    inputRows: rows,
+    rows: rows.map((row) => ({ ...row, previewScore: null, selectable: false })),
     displayOwner: 'viewer' as const,
-    previewVisible: false,
     categories,
     mode: 'opponent-turn' as const,
     labels: {
@@ -331,7 +320,7 @@ test('does not restart expired record effects after a manual tab round trip', ()
       categoryId: 'choice' as const,
       score: 20,
       phase: 'confirming' as const,
-      startedAt: 0,
+      timing: { mode: 'running' as const, startedAt: 0 },
       bonusEarned: false,
     },
   };
@@ -352,7 +341,6 @@ test('Yacht availability and record feedback do not grant scoring input', () => 
     label: 'Yacht',
     display: { state: 'preview' as const, value: 50 },
     input: 'disabled' as const,
-    mode: 'opponent-turn' as const,
     emptyValueLabel: 'Unrecorded',
   };
   const { rerender } = render(<ScoreCategoryCell {...props} yachtAvailable />);
@@ -367,7 +355,7 @@ test('Yacht availability and record feedback do not grant scoring input', () => 
         categoryId: 'yacht',
         score: 50,
         phase: 'confirming',
-        startedAt: 0,
+        timing: { mode: 'running' as const, startedAt: 0 },
         bonusEarned: false,
       }}
     />,

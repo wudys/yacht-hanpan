@@ -1,9 +1,9 @@
 import { useCallback, useState } from 'react';
 
-import type { TurnFeedbackState } from '@/features/game/turn-feedback-state';
+import type { TurnFeedbackSnapshot } from '@/features/game/use-turn-feedback';
 
 type ScoreGroup = 'upper' | 'lower';
-type ScoreTabFeedback = Pick<TurnFeedbackState, 'session' | 'record' | 'tabRequest'>;
+type ScoreTabFeedback = Pick<TurnFeedbackSnapshot, 'session' | 'record' | 'tabRequest'>;
 
 interface ScoreGroupSelection {
   readonly session: object | null;

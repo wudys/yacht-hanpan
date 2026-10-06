@@ -2,10 +2,12 @@ import type { GamePresentation, ScoreRecord } from '@repo/game-client-sdk/sessio
 import type { GameSnapshot } from '@repo/game-protocol/socket';
 import { type SeatIndex, summarizeScorecard, UPPER_CATEGORY_IDS } from '@repo/yacht-rules';
 
-export const RECORD_CONFIRMATION_MS = 1_000;
-export const RECORD_FADE_OUT_MS = 800;
-export const RECORD_SWAP_MS = 900;
-export const TURN_CUE_MS = 650;
+import {
+  RECORD_CONFIRMATION_MS,
+  RECORD_FADE_OUT_MS,
+  RECORD_SWAP_MS,
+  TURN_CUE_MS,
+} from '@/features/game/view/feedback-timing';
 
 export interface TurnFeedbackInput {
   readonly session: object | null;
@@ -17,7 +19,7 @@ export interface TurnFeedbackInput {
   readonly suspended: boolean;
   readonly scoreVisible: boolean;
   readonly boardVisible: boolean;
-  readonly canStartTurn: boolean;
+  readonly commandPresentationReady: boolean;
   readonly rollPending: boolean;
 }
 
@@ -27,6 +29,7 @@ interface ActiveRecord {
   readonly phase: 'confirming' | 'outgoing' | 'incoming';
   readonly bonusEarned: boolean;
   readonly final: boolean;
+  // Once hidden, effects stay hidden for this record while its confirmation lifetime continues.
   readonly visible: boolean;
 }
 
@@ -35,7 +38,9 @@ interface TurnCue {
   readonly startedAt: number;
 }
 
-interface PendingTurn extends TurnCue {
+interface PendingTurn {
+  readonly turnId: string;
+  readonly scheduledFor: number;
   readonly waitingForInput: boolean;
 }
 
@@ -129,7 +134,7 @@ export function advanceTurnFeedback(
             turn !== null && turn.seatIndex === input.viewerSeat && serverNow !== null
               ? {
                   turnId: turn.turnId,
-                  startedAt: Math.max(
+                  scheduledFor: Math.max(
                     now + RECORD_CONFIRMATION_MS,
                     now + turn.startedAt - serverNow,
                   ),
@@ -146,7 +151,7 @@ export function advanceTurnFeedback(
       ) {
         pendingTurn = {
           turnId: turn.turnId,
-          startedAt: now + Math.max(0, turn.startedAt - serverNow),
+          scheduledFor: now + Math.max(0, turn.startedAt - serverNow),
           waitingForInput: false,
         };
       }
@@ -178,24 +183,24 @@ export function advanceTurnFeedback(
     } else {
       if (pendingTurn !== null && pendingTurn.turnId !== turn.turnId) pendingTurn = null;
       if (turnCue !== null && turnCue.turnId !== turn.turnId) turnCue = null;
-      if (pendingTurn !== null && record === null && now >= pendingTurn.startedAt) {
+      if (pendingTurn !== null && record === null && now >= pendingTurn.scheduledFor) {
         if (serverNow !== null && serverNow < turn.startedAt) {
           pendingTurn = {
             ...pendingTurn,
-            startedAt: now + turn.startedAt - serverNow,
+            scheduledFor: now + turn.startedAt - serverNow,
             waitingForInput: false,
           };
         } else if (!input.boardVisible || serverNow === null || serverNow >= turn.deadlineAt) {
           pendingTurn = null;
-        } else if (!input.canStartTurn) {
+        } else if (!input.commandPresentationReady) {
           if (!pendingTurn.waitingForInput) {
             pendingTurn =
-              now < pendingTurn.startedAt + TURN_CUE_MS
+              now < pendingTurn.scheduledFor + TURN_CUE_MS
                 ? { ...pendingTurn, waitingForInput: true }
                 : null;
           }
         } else {
-          const cueStartedAt = pendingTurn.waitingForInput ? now : pendingTurn.startedAt;
+          const cueStartedAt = pendingTurn.waitingForInput ? now : pendingTurn.scheduledFor;
           if (now < cueStartedAt + TURN_CUE_MS)
             turnCue = { turnId: pendingTurn.turnId, startedAt: cueStartedAt };
           pendingTurn = null;
@@ -230,6 +235,6 @@ export function nextFeedbackBoundary(state: TurnFeedbackState): number | null {
             ? RECORD_SWAP_MS
             : RECORD_CONFIRMATION_MS)
     );
-  if (pendingTurn !== null && !pendingTurn.waitingForInput) return pendingTurn.startedAt;
+  if (pendingTurn !== null && !pendingTurn.waitingForInput) return pendingTurn.scheduledFor;
   return turnCue === null ? null : turnCue.startedAt + TURN_CUE_MS;
 }

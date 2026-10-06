@@ -1,5 +1,7 @@
 import type { CategoryId } from '@repo/yacht-rules';
 
+import type { FeedbackTiming } from '@/features/game/view/feedback-timing';
+
 export type CategoryLabels = Readonly<Record<CategoryId, string>>;
 
 export type PlayerScoreSummaryView = Readonly<{
@@ -26,6 +28,6 @@ export type ScoreRecordFeedback = Readonly<{
   categoryId: CategoryId;
   score: number;
   phase: 'confirming' | 'outgoing' | 'incoming';
-  startedAt: number;
+  timing: FeedbackTiming;
   bonusEarned: boolean;
 }>;

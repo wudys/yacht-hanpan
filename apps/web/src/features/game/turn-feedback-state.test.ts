@@ -54,7 +54,7 @@ function input(overrides: Partial<TurnFeedbackInput> = {}): TurnFeedbackInput {
     suspended: false,
     scoreVisible: true,
     boardVisible: true,
-    canStartTurn: true,
+    commandPresentationReady: true,
     rollPending: false,
     ...overrides,
   };
@@ -134,7 +134,7 @@ test('waits for an outstanding command before cueing actual input readiness', ()
     input({
       now: 1_300,
       serverNow: 1_300,
-      canStartTurn: false,
+      commandPresentationReady: false,
     }),
   );
   expect(awaitingReceipt.record).toBeNull();

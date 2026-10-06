@@ -6,7 +6,13 @@ import {
   createTurnFeedbackState,
   nextFeedbackBoundary,
   type TurnFeedbackInput,
+  type TurnFeedbackState,
 } from '@/features/game/turn-feedback-state';
+
+export type TurnFeedbackSnapshot = Pick<
+  TurnFeedbackState,
+  'session' | 'record' | 'turnCue' | 'tabRequest'
+>;
 
 function subscribeVisibility(onChange: () => void): () => void {
   document.addEventListener('visibilitychange', onChange);
@@ -20,7 +26,7 @@ export function useTurnFeedback(
   options: Omit<TurnFeedbackInput, 'now' | 'serverNow'>,
   clock: Pick<ServerClock, 'now'>,
   onRecordStart: () => void,
-) {
+): TurnFeedbackSnapshot {
   const hidden = useSyncExternalStore(subscribeVisibility, isHidden);
   const [state, setState] = useState(createTurnFeedbackState);
   const input = {
@@ -76,5 +82,10 @@ export function useTurnFeedback(
     if (record.visible && !isHidden()) onRecordStart();
   }, [next.session, onRecordStart, record]);
 
-  return next;
+  return {
+    session: next.session,
+    record: next.record,
+    turnCue: next.turnCue,
+    tabRequest: next.tabRequest,
+  };
 }

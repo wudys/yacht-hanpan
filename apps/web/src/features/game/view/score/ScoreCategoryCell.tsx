@@ -9,7 +9,6 @@ import {
 import type {
   ScoreCellDisplay,
   ScoreCellInput,
-  ScoreGridMode,
   ScoreRecordFeedback,
 } from '@/features/game/view/score/types';
 
@@ -20,7 +19,6 @@ export type ScoreCategoryCellProps = Readonly<{
   display: ScoreCellDisplay;
   input: ScoreCellInput;
   label: string;
-  mode: ScoreGridMode;
   emptyValueLabel: string;
   interactionLocked?: boolean;
   onSelect?: (categoryId: CategoryId) => void;
@@ -34,7 +32,6 @@ export function ScoreCategoryCell({
   display,
   input,
   label,
-  mode,
   emptyValueLabel,
   interactionLocked = false,
   onSelect,
@@ -57,7 +54,6 @@ export function ScoreCategoryCell({
       data-score-category={categoryId}
       data-score-confirmed={confirmed || undefined}
       data-yacht-available={yachtAvailable || undefined}
-      data-mode={mode}
       data-value-state={valueState}
       data-input-available={selectable}
       aria-label={`${label} · ${value ?? emptyValueLabel}`}

@@ -1,10 +1,14 @@
 import { createServer, request as createRequest } from 'node:http';
 
 import { PUBLIC_ERROR_CODE } from '@repo/game-protocol/errors';
+import { parseCreateRoomResponse } from '@repo/game-protocol/http';
 import { createCompatibilityContract } from '@repo/game-protocol/version';
 import { expect, test } from 'bun:test';
 
+import { InMemoryRoomRepository } from '@/rooms/application/room-repository';
+import { createRoomApplication } from '@/rooms/create-room-application';
 import type { ErrorReporter } from '@/runtime/error-reporter';
+import type { Logger } from '@/runtime/logger';
 import { createProductionIdentity } from '@/runtime/server-identity';
 import { HttpRequestAdmission } from '@/transport/http/http-request-admission';
 import {
@@ -16,6 +20,7 @@ async function fixture(
   createRoom: HttpRequestHandlerDependencies['rooms']['createRoom'],
   requestBodyTimeoutMs: number = 5_000,
   onReport?: ErrorReporter,
+  options: Partial<Pick<HttpRequestHandlerDependencies, 'clock' | 'logger'>> = {},
 ) {
   const admission = new HttpRequestAdmission(2);
   const reports: Array<Parameters<ErrorReporter>> = [];
@@ -49,6 +54,7 @@ async function fixture(
         cancelRoom: async () => failure,
         resumeRoom: async () => failure,
       },
+      ...options,
     }),
   );
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -67,6 +73,89 @@ async function fixture(
     },
   };
 }
+
+test('returns the committed room and usable authority with a receiver-dependent clock', async () => {
+  class RoomClock {
+    public readonly current: number = 1_000;
+    public now(): number {
+      return this.current;
+    }
+  }
+  const clock = new RoomClock();
+  const repository = new InMemoryRoomRepository();
+  const rooms = createRoomApplication(
+    {
+      clock,
+      expectedContract: createCompatibilityContract('test-release'),
+      identity: createProductionIdentity(),
+      publishRoomState() {},
+      onSchedulerError() {},
+      rolls: { execute: async () => ({ ok: false, reason: 'unavailable' }) },
+    },
+    { repository },
+  );
+  const server = await fixture(
+    (request, address) => rooms.createRoom(request, address),
+    5_000,
+    undefined,
+    {
+      clock,
+    },
+  );
+  try {
+    const response = await post(server.url);
+    const body = parseCreateRoomResponse(await response.json());
+    expect(response.status).toBe(201);
+    expect(body).toMatchObject({ ok: true, meta: { serverTime: 1_000 } });
+    expect(repository.counts()).toEqual({ rooms: 1, codes: 1 });
+    if (!body.ok) throw new Error('expected room authority');
+    expect(await rooms.resumeRoom(body.data.authority)).toMatchObject({
+      ok: true,
+      data: { view: { room: { roomId: body.data.authority.roomId } } },
+    });
+    expect(server.reports).toEqual([]);
+    expect(server.admission.pendingCount).toBe(0);
+  } finally {
+    await server.close();
+    rooms.close();
+  }
+});
+
+test('calls completion logger methods on their receiver for successful and rejected HTTP requests', async () => {
+  class RequestLogger implements Logger {
+    public readonly events: Array<{ level: string; event: string }> = [];
+    public debug(event: string): void {
+      this.events.push({ level: 'debug', event });
+    }
+    public warn(event: string): void {
+      this.events.push({ level: 'warn', event });
+    }
+    public info(): void {}
+    public error(): void {}
+  }
+  const logger = new RequestLogger();
+  const server = await fixture(
+    async () => ({
+      ok: false,
+      error: { code: PUBLIC_ERROR_CODE.INVALID_AUTHORITY, params: {} },
+    }),
+    5_000,
+    undefined,
+    { logger },
+  );
+  try {
+    expect((await fetch(`${server.url}/health/ready`)).status).toBe(200);
+    expect((await post(server.url)).status).toBe(403);
+    expect(logger.events).toEqual([
+      { level: 'debug', event: 'http.request.completed' },
+      { level: 'warn', event: 'http.request.completed' },
+    ]);
+    expect(server.reports).toEqual([]);
+    expect(server.admission.pendingCount).toBe(0);
+  } finally {
+    await server.close();
+  }
+});
 
 function post(url: string): Promise<Response> {
   return fetch(`${url}/rooms`, {

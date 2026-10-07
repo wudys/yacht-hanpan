@@ -31,6 +31,7 @@ import {
 } from '@repo/game-protocol/version';
 
 import type { RoomApplication } from '@/rooms/room-application';
+import { type Clock, systemClock } from '@/runtime/clock';
 import { type ErrorReporter, reportUnexpected } from '@/runtime/error-reporter';
 import type { Logger } from '@/runtime/logger';
 import type { ServerIdentity } from '@/runtime/server-identity';
@@ -50,7 +51,7 @@ export interface HttpRequestHandlerDependencies {
   readonly admission?: HttpRequestAdmission;
   readonly requestBodyTimeoutMs?: number;
   readonly expectedContract: CompatibilityContract;
-  readonly clock?: { readonly now: () => number };
+  readonly clock?: Clock;
   readonly allowedOrigins: readonly string[];
   readonly identity: Pick<ServerIdentity, 'createRequestId'>;
   readonly isAcceptingRequests: () => boolean;
@@ -103,7 +104,7 @@ async function handleRequest(
         requestId,
         parseCreateRoomResponse,
         200,
-        dependencies.clock?.now,
+        dependencies.clock,
       );
       publicCode = error.code;
       return;
@@ -125,12 +126,12 @@ async function handleRequest(
       requestId,
       parseCreateRoomResponse,
       200,
-      dependencies.clock?.now,
+      dependencies.clock,
     );
     publicCode = failure.code;
   } finally {
-    const log = status >= 400 ? dependencies.logger.warn : dependencies.logger.debug;
-    log('http.request.completed', {
+    const level = status >= 400 ? 'warn' : 'debug';
+    dependencies.logger[level]('http.request.completed', {
       requestId,
       method: request.method ?? null,
       path: safePathname(request.url),
@@ -209,7 +210,7 @@ async function routeRequest(
       requestId,
       parseCreateRoomResponse,
       200,
-      dependencies.clock?.now,
+      dependencies.clock,
     );
     return { status, publicCode: error.code };
   }
@@ -227,7 +228,7 @@ async function routeRequest(
       requestId,
       parseCreateRoomResponse,
       200,
-      dependencies.clock?.now,
+      dependencies.clock,
     );
     return { status, publicCode: error.code };
   }
@@ -249,7 +250,7 @@ async function routeRequest(
       requestId,
       parseCreateRoomResponse,
       201,
-      dependencies.clock?.now,
+      dependencies.clock,
     );
     return {
       status,
@@ -271,7 +272,7 @@ async function routeRequest(
       requestId,
       parseResumeRoomResponse,
       200,
-      dependencies.clock?.now,
+      dependencies.clock,
     );
     return {
       status,
@@ -293,7 +294,7 @@ async function routeRequest(
       requestId,
       parseCancelRoomResponse,
       200,
-      dependencies.clock?.now,
+      dependencies.clock,
     );
     return {
       status,
@@ -314,7 +315,7 @@ async function routeRequest(
     requestId,
     parseJoinRoomResponse,
     200,
-    dependencies.clock?.now,
+    dependencies.clock,
   );
   return { status, publicCode: applicationResult.ok ? undefined : applicationResult.error.code };
 }
@@ -340,14 +341,14 @@ function sendPublicResponse(
   requestId: string,
   parser: PublicResponseParser,
   successStatus: number,
-  now: () => number = Date.now,
+  clock: Clock = systemClock,
 ): number {
   const envelope = parser({
     ...result,
     meta: {
       requestId,
       gameProtocolVersion: GAME_PROTOCOL_VERSION,
-      ...(result.ok ? { serverTime: now() } : {}),
+      ...(result.ok ? { serverTime: clock.now() } : {}),
     },
   });
   const status = result.ok ? successStatus : httpStatusForPublicError(result.error.code);

@@ -143,8 +143,8 @@ export async function handleCommand(
     });
   }
   acknowledgeSafely(acknowledge, ack, socket, dependencies, 'socket.command');
-  const log = execution.result.ok ? dependencies.logger.debug : dependencies.logger.warn;
-  log('socket.command.completed', {
+  const level = execution.result.ok ? 'debug' : 'warn';
+  dependencies.logger[level]('socket.command.completed', {
     requestId,
     roomId: socket.data.roomId,
     seatIndex: socket.data.seatIndex,

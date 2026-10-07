@@ -5,6 +5,7 @@ import { expect, test } from 'bun:test';
 import { roomId } from '@/rooms/domain/room-model';
 import type { RoomApplication } from '@/rooms/room-application';
 import type { ErrorReporter } from '@/runtime/error-reporter';
+import type { Logger } from '@/runtime/logger';
 import { handleCommand, handleSync } from '@/transport/socket/socket-game-handlers';
 
 const socket = {
@@ -18,6 +19,38 @@ const refusal = {
   ok: false,
   error: createPublicError(PUBLIC_ERROR_CODE.MATCH_FINISHED, {}),
 } as const;
+
+test('finishes a refused command and logs completion with the injected logger receiver', async () => {
+  class CommandLogger implements Logger {
+    public readonly events: string[] = [];
+    public warn(event: string): void {
+      this.events.push(event);
+    }
+    public debug(): void {}
+    public info(): void {}
+    public error(): void {}
+  }
+  const { dependencies, reports } = fixture('none', new Error('unused'));
+  const logger = new CommandLogger();
+  const acknowledgements: CommandAck[] = [];
+  await expect(
+    handleCommand(
+      socket,
+      command,
+      (ack) => acknowledgements.push(ack),
+      2_000,
+      {
+        ...dependencies,
+        logger,
+      },
+      true,
+    ),
+  ).resolves.toBeUndefined();
+  expect(acknowledgements).toHaveLength(1);
+  expect(acknowledgements[0]).toMatchObject(refusal);
+  expect(logger.events).toEqual(['socket.command.completed']);
+  expect(reports).toEqual([]);
+});
 
 function fixture(fault: 'application' | 'output' | 'none', original: Error) {
   const reports: Array<Parameters<ErrorReporter>> = [];

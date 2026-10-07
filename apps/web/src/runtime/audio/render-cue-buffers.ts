@@ -1,4 +1,9 @@
-import { type CueRecipe, type CueRecipeId, cueRecipes } from '@/runtime/audio/cue-recipes';
+import {
+  type CueRecipe,
+  type CueRecipeId,
+  cueRecipes,
+  type LevelledOptions,
+} from '@/runtime/audio/cue-recipes';
 
 export type { CueRecipeId } from '@/runtime/audio/cue-recipes';
 
@@ -35,49 +40,11 @@ export async function renderCueBuffers(
                 gain: 10 ** ((recipe.profile === 'fm-patch' ? recipe.trimDb : 0) / 20),
               }),
             ).toDestination();
-      for (const event of recipe.events) {
-        let voice: InstanceType<typeof Synth> | InstanceType<typeof FMSynth>;
-        let gate: number;
-        if ('patch' in event) {
-          voice = own(new FMSynth({ ...event.patch, context }));
-          gate = event.patch.envelope.attack + event.patch.envelope.decay + 0.005;
-        } else {
-          gate = event.gate;
-          const o = event.options;
-          const isFmLevelled = recipe.profile === 'fm-levelled';
-          const envelope = {
-            attack: o.attack ?? 0.002,
-            decay: o.decay ?? 0.08,
-            sustain: o.sustain ?? 0.08,
-            release: o.release ?? 0.09,
-          };
-          voice = isFmLevelled
-            ? own(
-                new FMSynth({
-                  context,
-                  volume: 20 * Math.log10(o.amp ?? 0.5),
-                  harmonicity: 2,
-                  modulationIndex: o.wave === 'triangle' ? 0.22 : 0.8,
-                  oscillator: { type: 'sine' },
-                  modulation: { type: 'sine' },
-                  envelope,
-                  modulationEnvelope: {
-                    attack: 0.001,
-                    decay: 0.018,
-                    sustain: 0,
-                    release: 0.008,
-                  },
-                }),
-              )
-            : own(
-                new Synth({
-                  context,
-                  volume: 20 * Math.log10(o.amp ?? 0.5),
-                  oscillator: { type: o.wave === 'triangle' ? 'triangle' : 'sine' },
-                  envelope,
-                }),
-              );
-        }
+      const playVoice = (
+        voice: InstanceType<typeof Synth> | InstanceType<typeof FMSynth>,
+        event: CueRecipe['events'][number],
+        gate: number,
+      ) => {
         voice.connect(bus);
         voice.triggerAttackRelease(
           'note' in event ? event.note : event.frequency,
@@ -85,6 +52,56 @@ export async function renderCueBuffers(
           event.at + 0.004,
           'velocity' in event ? event.velocity : 0.8,
         );
+      };
+      if (recipe.profile === 'fm-patch') {
+        for (const event of recipe.events) {
+          playVoice(
+            own(new FMSynth({ ...event.patch, context })),
+            event,
+            event.patch.envelope.attack + event.patch.envelope.decay + 0.005,
+          );
+        }
+      } else if (recipe.profile === 'fm-levelled') {
+        for (const event of recipe.events) {
+          const o = event.options;
+          playVoice(
+            own(
+              new FMSynth({
+                context,
+                volume: 20 * Math.log10(o.amp ?? 0.5),
+                harmonicity: 2,
+                modulationIndex: o.modulationIndex,
+                oscillator: { type: 'sine' },
+                modulation: { type: 'sine' },
+                envelope: levelledEnvelope(o),
+                modulationEnvelope: {
+                  attack: 0.001,
+                  decay: 0.018,
+                  sustain: 0,
+                  release: 0.008,
+                },
+              }),
+            ),
+            event,
+            event.gate,
+          );
+        }
+      } else {
+        for (const event of recipe.events) {
+          const o = event.options;
+          playVoice(
+            own(
+              new Synth({
+                context,
+                volume: 20 * Math.log10(o.amp ?? 0.5),
+                oscillator: { type: o.waveform ?? 'sine' },
+                envelope: levelledEnvelope(o),
+              }),
+            ),
+            event,
+            event.gate,
+          );
+        }
       }
       const rendered = (await context.render()).get()!;
       buffers.set(key, masterBuffer(native, rendered.getChannelData(0), recipe));
@@ -94,6 +111,15 @@ export async function renderCueBuffers(
     }
   }
   return buffers;
+}
+
+function levelledEnvelope(options: LevelledOptions) {
+  return {
+    attack: options.attack ?? 0.002,
+    decay: options.decay ?? 0.08,
+    sustain: options.sustain ?? 0.08,
+    release: options.release ?? 0.09,
+  };
 }
 
 function masterBuffer(context: AudioContext, raw: Float32Array, recipe: CueRecipe): AudioBuffer {

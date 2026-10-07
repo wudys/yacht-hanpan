@@ -8,17 +8,28 @@ interface SourceEvent {
     envelope: { attack: number; decay: number };
   };
 }
-interface SynthEvent {
+interface LevelledEvent {
   at: number;
   frequency: number;
   gate: number;
-  options: {
-    wave?: 'sine' | 'triangle' | 'square';
-    amp?: number;
-    attack?: number;
-    decay?: number;
-    sustain?: number;
-    release?: number;
+}
+export interface LevelledOptions {
+  amp?: number;
+  attack?: number;
+  decay?: number;
+  sustain?: number;
+  release?: number;
+}
+interface OscillatorEvent extends LevelledEvent {
+  options: LevelledOptions & {
+    waveform?: 'sine' | 'triangle';
+    modulationIndex?: never;
+  };
+}
+interface FmLevelledEvent extends LevelledEvent {
+  options: LevelledOptions & {
+    modulationIndex: number;
+    waveform?: never;
   };
 }
 // Profiles select synthesis and mastering behavior; cue keys describe their product role.
@@ -33,7 +44,7 @@ export type CueRecipe =
   | {
       profile: 'oscillator-levelled';
       duration: number;
-      events: SynthEvent[];
+      events: OscillatorEvent[];
       highpass: number;
       baselineRms80: number;
       minSeconds: number;
@@ -42,7 +53,7 @@ export type CueRecipe =
   | {
       profile: 'fm-levelled';
       duration: number;
-      events: SynthEvent[];
+      events: FmLevelledEvent[];
       targetRms: number;
     };
 
@@ -262,7 +273,7 @@ export const cueRecipes = {
         at: 0,
         gate: 0.067,
         options: {
-          wave: 'triangle',
+          waveform: 'triangle',
           amp: 0.42,
           attack: 0.007,
           decay: 0.055,
@@ -298,7 +309,7 @@ export const cueRecipes = {
         at: 0.008,
         gate: 0.025,
         options: {
-          wave: 'square',
+          modulationIndex: 0.8,
           amp: 0.13,
           attack: 0.001,
           decay: 0.025,
@@ -311,7 +322,7 @@ export const cueRecipes = {
         at: 0.037000000000000005,
         gate: 0.025,
         options: {
-          wave: 'square',
+          modulationIndex: 0.8,
           amp: 0.139,
           attack: 0.001,
           decay: 0.025,
@@ -324,7 +335,7 @@ export const cueRecipes = {
         at: 0.066,
         gate: 0.025,
         options: {
-          wave: 'square',
+          modulationIndex: 0.8,
           amp: 0.148,
           attack: 0.001,
           decay: 0.025,
@@ -337,7 +348,7 @@ export const cueRecipes = {
         at: 0.095,
         gate: 0.025,
         options: {
-          wave: 'square',
+          modulationIndex: 0.8,
           amp: 0.157,
           attack: 0.001,
           decay: 0.025,
@@ -350,7 +361,7 @@ export const cueRecipes = {
         at: 0.124,
         gate: 0.025,
         options: {
-          wave: 'square',
+          modulationIndex: 0.8,
           amp: 0.166,
           attack: 0.001,
           decay: 0.025,
@@ -363,7 +374,7 @@ export const cueRecipes = {
         at: 0.155,
         gate: 0.18,
         options: {
-          wave: 'square',
+          modulationIndex: 0.8,
           amp: 0.15,
           attack: 0.002,
           decay: 0.11,
@@ -376,7 +387,7 @@ export const cueRecipes = {
         at: 0.155,
         gate: 0.18,
         options: {
-          wave: 'triangle',
+          modulationIndex: 0.22,
           amp: 0.19,
           decay: 0.11,
           sustain: 0.23,
@@ -395,7 +406,7 @@ export const cueRecipes = {
         at: 0.008,
         gate: 0.029,
         options: {
-          wave: 'square',
+          modulationIndex: 0.8,
           amp: 0.12,
           attack: 0.001,
           decay: 0.025,
@@ -408,7 +419,7 @@ export const cueRecipes = {
         at: 0.041,
         gate: 0.029,
         options: {
-          wave: 'square',
+          modulationIndex: 0.8,
           amp: 0.128,
           attack: 0.001,
           decay: 0.025,
@@ -421,7 +432,7 @@ export const cueRecipes = {
         at: 0.07400000000000001,
         gate: 0.029,
         options: {
-          wave: 'square',
+          modulationIndex: 0.8,
           amp: 0.136,
           attack: 0.001,
           decay: 0.025,
@@ -434,7 +445,7 @@ export const cueRecipes = {
         at: 0.10700000000000001,
         gate: 0.029,
         options: {
-          wave: 'square',
+          modulationIndex: 0.8,
           amp: 0.144,
           attack: 0.001,
           decay: 0.025,
@@ -447,7 +458,7 @@ export const cueRecipes = {
         at: 0.14,
         gate: 0.029,
         options: {
-          wave: 'square',
+          modulationIndex: 0.8,
           amp: 0.152,
           attack: 0.001,
           decay: 0.025,
@@ -460,7 +471,7 @@ export const cueRecipes = {
         at: 0.18,
         gate: 0.1,
         options: {
-          wave: 'square',
+          modulationIndex: 0.8,
           amp: 0.15,
           attack: 0.001,
           decay: 0.08,
@@ -473,7 +484,7 @@ export const cueRecipes = {
         at: 0.18,
         gate: 0.1,
         options: {
-          wave: 'triangle',
+          modulationIndex: 0.22,
           amp: 0.19,
           decay: 0.11,
           sustain: 0.23,
@@ -485,7 +496,7 @@ export const cueRecipes = {
         at: 0.325,
         gate: 0.052,
         options: {
-          wave: 'square',
+          modulationIndex: 0.8,
           amp: 0.12,
           attack: 0.001,
           decay: 0.025,
@@ -498,7 +509,7 @@ export const cueRecipes = {
         at: 0.399,
         gate: 0.052,
         options: {
-          wave: 'square',
+          modulationIndex: 0.8,
           amp: 0.14,
           attack: 0.001,
           decay: 0.025,
@@ -511,7 +522,7 @@ export const cueRecipes = {
         at: 0.483,
         gate: 0.31,
         options: {
-          wave: 'square',
+          modulationIndex: 0.8,
           amp: 0.15,
           attack: 0.002,
           decay: 0.13,
@@ -524,7 +535,7 @@ export const cueRecipes = {
         at: 0.483,
         gate: 0.31,
         options: {
-          wave: 'triangle',
+          modulationIndex: 0.22,
           amp: 0.14,
           decay: 0.11,
           sustain: 0.26,
@@ -536,7 +547,7 @@ export const cueRecipes = {
         at: 0.483,
         gate: 0.31,
         options: {
-          wave: 'triangle',
+          modulationIndex: 0.22,
           amp: 0.1,
           decay: 0.11,
           sustain: 0.23,

@@ -1,3 +1,4 @@
+import type { ProfileSelection } from '@repo/game-assets/characters';
 import type { ClientError } from '@repo/game-client-sdk/errors';
 import { PUBLIC_ERROR_CODE } from '@repo/game-protocol';
 import { assign, fromCallback, fromPromise, setup, type SnapshotFrom } from 'xstate';
@@ -10,6 +11,7 @@ import {
   type LobbyError,
   lobbyError,
   readinessError,
+  readinessFailureDisposition,
 } from '@/features/lobby/lobby-errors';
 import { isCompleteRoomCode, normalizeRoomCode } from '@/features/lobby/room-code';
 import type { ProfileSelectionStore } from '@/runtime/profile/profile-selection-store';
@@ -25,14 +27,13 @@ import { reportClientFailure } from '@/runtime/telemetry/error-policy';
 import { clientFailureFields, type Telemetry } from '@/runtime/telemetry/telemetry';
 
 type Operation = 'create' | 'join' | 'cancel';
-type Profile = ReturnType<ProfileSelectionStore['getSnapshot']>['selection'];
 interface LobbyContext {
   admissionOperation: 'create' | 'join';
   joinCode: string;
   joinRetryAfterMs: number;
   error: LobbyError | null;
   waitingRoom: WaitingRoomSummary | null;
-  requestProfile: Profile;
+  requestProfile: ProfileSelection;
   requestStarted: number;
   waitingStarted: number | null;
 }
@@ -124,7 +125,7 @@ export function createLobbyMachine(
           stop();
         };
       }),
-      create: fromPromise(({ input, signal }: { input: Profile; signal: AbortSignal }) =>
+      create: fromPromise(({ input, signal }: { input: ProfileSelection; signal: AbortSignal }) =>
         access.create(input, signal),
       ),
       join: fromPromise(
@@ -132,7 +133,7 @@ export function createLobbyMachine(
           input,
           signal,
         }: {
-          input: { profile: Profile; roomCode: string };
+          input: { profile: ProfileSelection; roomCode: string };
           signal: AbortSignal;
         }) => access.join(input, signal),
       ),
@@ -345,8 +346,7 @@ export function createLobbyMachine(
               guard: ({ event }: AdmissionDone) =>
                 event.output.status === 'failure' &&
                 event.output.stage === 'readiness' &&
-                event.output.readiness.reason !== 'incompatible' &&
-                event.output.readiness.reason !== 'invalid-response',
+                readinessFailureDisposition(event.output.readiness) === 'retry',
               target: 'createFailed',
               actions: {
                 type: 'createFailure',
@@ -441,8 +441,7 @@ export function createLobbyMachine(
                 event.output.status === 'failure' &&
                 ((event.output.stage === 'response' && isInlineJoinError(event.output.error)) ||
                   (event.output.stage === 'readiness' &&
-                    event.output.readiness.reason !== 'incompatible' &&
-                    event.output.readiness.reason !== 'invalid-response')),
+                    readinessFailureDisposition(event.output.readiness) === 'retry')),
               target: 'joinRoom',
               actions: {
                 type: 'joinFailure',

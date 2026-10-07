@@ -1,4 +1,5 @@
 import { expect, type WebSocketRoute } from '@playwright/test';
+import { SOCKET_EVENT } from '@repo/game-protocol/socket';
 
 import { joinProductGame, PRODUCT_GAME_ORIGIN } from '../helpers/product-game';
 import { createTestContext, test } from '../helpers/test';
@@ -48,7 +49,7 @@ for (const locale of ['ko', 'en'] as const) {
     }
   });
 
-  test(`Game reconnect keeps the open layer and timer while synchronizing in ${locale}`, async ({
+  test(`Game reconnect confirms after one ACK timeout and preserves the open layer and timer in ${locale}`, async ({
     page,
     browser,
   }) => {
@@ -56,6 +57,21 @@ for (const locale of ['ko', 'en'] as const) {
     let activeSocket: WebSocketRoute | undefined;
     let holdSync = false;
     let releaseSync: (() => void) | undefined;
+    let syncRequests = 0;
+    await page.addInitScript(() => {
+      const { start } = AudioBufferSourceNode.prototype;
+      Reflect.set(window, '__recoveryAudioStarts', 0);
+      AudioBufferSourceNode.prototype.start = function (
+        ...args: Parameters<AudioBufferSourceNode['start']>
+      ) {
+        Reflect.set(
+          window,
+          '__recoveryAudioStarts',
+          Number(Reflect.get(window, '__recoveryAudioStarts')) + 1,
+        );
+        return Reflect.apply(start, this, args);
+      };
+    });
     await page.routeWebSocket(/\/game-socket\//u, (socket) => {
       activeSocket = socket;
       const server = socket.connectToServer();
@@ -67,10 +83,19 @@ for (const locale of ['ko', 'en'] as const) {
           message.startsWith('43') &&
           message.includes('serverTime')
         ) {
+          holdSync = false;
           releaseSync = () => socket.send(message);
           return;
         }
         socket.send(message);
+      });
+      socket.onMessage((message) => {
+        const packet = typeof message === 'string' ? /^42\d+(\[.*\])$/u.exec(message) : null;
+        if (packet) {
+          const [event] = JSON.parse(packet[1]!) as [string];
+          if (event === SOCKET_EVENT.GAME_SYNC) syncRequests += 1;
+        }
+        server.send(message);
       });
     });
     await page.setViewportSize({ width: 320, height: 740 });
@@ -109,6 +134,23 @@ for (const locale of ['ko', 'en'] as const) {
       const beforeTimer = await timer.textContent();
       const canvasHandle = await page.locator('.web-dice-canvas-host canvas').elementHandle();
       expect(canvasHandle).not.toBeNull();
+      const presentation = page.locator('[data-dice-presentation-phase]');
+      await presentation.evaluate((element) => {
+        let previous = element.getAttribute('data-dice-presentation-phase');
+        let rollingStarts = 0;
+        const observe = () => {
+          const phase = element.getAttribute('data-dice-presentation-phase');
+          if (phase === 'rolling' && previous !== 'rolling') rollingStarts += 1;
+          previous = phase;
+          element.setAttribute('data-recovery-rolling-starts', String(rollingStarts));
+        };
+        observe();
+        new MutationObserver(observe).observe(element, {
+          attributes: true,
+          attributeFilter: ['data-dice-presentation-phase'],
+        });
+      });
+      const requestsBeforeReconnect = syncRequests;
       holdSync = true;
       expect(activeSocket).toBeDefined();
       await activeSocket!.close({ code: 1012, reason: 'recovery regression test' });
@@ -125,12 +167,25 @@ for (const locale of ['ko', 'en'] as const) {
       await page.screenshot({
         path: `/tmp/hanpan-recovery-${locale}-320-${test.info().project.name}.png`,
       });
-      holdSync = false;
-      releaseSync!();
-      await expect(page.locator('[data-game-recovery-overlay]')).toHaveCount(0);
+      // The first ACK stays held past its 3s SDK waiter; only a fresh request can unlock.
+      await expect(page.locator('[data-game-recovery-overlay]')).toHaveCount(0, {
+        timeout: 10_000,
+      });
+      expect(syncRequests).toBeGreaterThanOrEqual(requestsBeforeReconnect + 2);
       await expect(surface).not.toHaveAttribute('inert');
       expect(await settingsHandle!.evaluate((element) => element.isConnected)).toBe(true);
       expect(await canvasHandle!.evaluate((element) => element.isConnected)).toBe(true);
+      await expect(presentation).toHaveAttribute('data-recovery-rolling-starts', '0');
+      const audioStarts = await page.evaluate(() => Reflect.get(window, '__recoveryAudioStarts'));
+      releaseSync!();
+      // Allow the discarded ACK to reach the SDK before observing replay/audio stability.
+      await page.waitForTimeout(200);
+      await expect(page.locator('[data-game-recovery-overlay]')).toHaveCount(0);
+      await expect(presentation).toHaveAttribute('data-dice-presentation-phase', 'settled');
+      await expect(presentation).toHaveAttribute('data-recovery-rolling-starts', '0');
+      expect(await page.evaluate(() => Reflect.get(window, '__recoveryAudioStarts'))).toBe(
+        audioStarts,
+      );
       await page
         .getByRole('button', { name: locale === 'en' ? 'Close' : '닫기', exact: true })
         .click();

@@ -45,7 +45,8 @@ export function createWaitingOperations({
         sessions.clear();
         return { status: 'gone' };
       }
-      sessions.setRoom(result.data.view.room);
+      sessions.setProvisionalRoom(result.data.view.room);
+      if (signal.aborted || !current(session)) return { status: 'stale' };
       if (result.data.view.room.status === 'waiting')
         return { status: 'waiting', room: result.data.view.room };
       const sync = await session.synchronize();
@@ -54,13 +55,10 @@ export function createWaitingOperations({
     },
     async cancel(
       signal: AbortSignal,
-      onResponse: (error?: ClientError) => void,
+      onHttpResponse: (error?: ClientError) => void,
     ): Promise<Cancellation> {
       const { authority, session } = sessions.getSnapshot();
-      if (!authority || !session) {
-        onResponse();
-        return { status: 'cancelled' };
-      }
+      if (!authority || !session) return { status: 'cancelled' };
       const result = await client.cancelRoom(
         {
           roomId: authority.roomId,
@@ -70,7 +68,7 @@ export function createWaitingOperations({
       );
       if (signal.aborted || !current(session)) return { status: 'stale' };
       // Report the HTTP outcome before any follow-up synchronization completes.
-      onResponse(result.ok ? undefined : result.error);
+      onHttpResponse(result.ok ? undefined : result.error);
       if (signal.aborted || !current(session)) return { status: 'stale' };
       if (sessions.getSnapshot().sessionSnapshot?.game) return { status: 'matched' };
       if (result.ok) {

@@ -46,6 +46,7 @@ function setup(
   const onIntent = vi.fn();
   const sessions = createGameSessionHolder(client);
   const profile = createProfileSelectionStore({ getItem: () => null, setItem: () => {} }, () => 0);
+  profile.initialize();
   const activity = new AbortController().signal;
   const readiness = { wait: () => Promise.resolve({ ok: true as const }) };
   const access = createRoomAccess({

@@ -13,7 +13,7 @@ import {
 } from '@/features/lobby/lobby-machine';
 import { createServerReadiness } from '@/runtime/network/server-readiness';
 import { createProfileSelectionStore } from '@/runtime/profile/profile-selection-store';
-import { createRoomAccess } from '@/runtime/room-access/room-access';
+import { createRoomAccess, type ReadinessFailure } from '@/runtime/room-access/room-access';
 import {
   createStoredRoomReentry,
   type StoredRoomReentrySnapshot,
@@ -127,6 +127,7 @@ function setup(
   const baseServices = sessionCredentialStore
     ? { ...services, reentry: createStoredRoomReentry({ ...services, sessionCredentialStore }) }
     : services;
+  services.profile.initialize();
   const admissionServices = {
     ...baseServices,
     access: createRoomAccess({ ...baseServices, reentry: baseServices.reentry }),
@@ -554,7 +555,7 @@ test.each(['waiting entry', 'session capture'] as const)(
     expect(session.synchronize).not.toHaveBeenCalled();
     publishGame();
     await waitFor(actor, (state) => state.status === 'done');
-    publish({ status: 'playing' });
+    publish({ status: 'gameReady' });
     expect(navigate).toHaveBeenCalledOnce();
     actor.stop();
   },
@@ -681,7 +682,7 @@ test('lets every root observer see resumed success before the single route hando
   await Promise.resolve();
   expect(navigate).not.toHaveBeenCalled();
   publishAttempt({ phase: 'finished', outcome: 'success', durationMs: 12 });
-  publish({ status: 'playing' });
+  publish({ status: 'gameReady' });
   await waitFor(actor, (state) => state.status === 'done');
   expect(navigate).toHaveBeenCalledOnce();
   expect(trackEvent.mock.calls.map(([event]) => event)).toEqual([
@@ -938,6 +939,41 @@ test('reports malformed waiting-room expiry responses and preserves the refresh-
     actor.stop();
   }
 });
+
+test.each<{
+  operation: 'create' | 'join';
+  reason: ReadinessFailure['reason'];
+  view: 'createFailed' | 'joinRoom' | 'connectionFailed';
+}>([
+  { operation: 'create', reason: 'unavailable', view: 'createFailed' },
+  { operation: 'create', reason: 'cancelled', view: 'createFailed' },
+  { operation: 'create', reason: 'incompatible', view: 'connectionFailed' },
+  { operation: 'create', reason: 'invalid-response', view: 'connectionFailed' },
+  { operation: 'join', reason: 'unavailable', view: 'joinRoom' },
+  { operation: 'join', reason: 'cancelled', view: 'joinRoom' },
+  { operation: 'join', reason: 'incompatible', view: 'connectionFailed' },
+  { operation: 'join', reason: 'invalid-response', view: 'connectionFailed' },
+])(
+  'routes $operation readiness $reason to $view without a mutation',
+  async ({ operation, reason, view }) => {
+    const { actor, services, client } = setup();
+    services.readiness.wait = () => Promise.resolve({ ok: false, reason });
+    try {
+      if (operation === 'join') {
+        actor.send({ type: 'OPEN_JOIN_ROOM' });
+        actor.send({ type: 'JOIN_CODE_CHANGED', code: '001234' });
+        actor.send({ type: 'JOIN_REQUESTED' });
+      } else actor.send({ type: 'CREATE_REQUESTED' });
+      await waitFor(actor, (state) => state.context.error !== null);
+      expect(selectLobbyView(actor.getSnapshot())).toBe(view);
+      if (operation === 'join') expect(actor.getSnapshot().context.joinCode).toBe('001234');
+      expect(client.createRoom).not.toHaveBeenCalled();
+      expect(client.joinRoom).not.toHaveBeenCalled();
+    } finally {
+      actor.stop();
+    }
+  },
+);
 
 test.each<{ operation: 'create' | 'join'; events: LobbyEvent[] }>([
   { operation: 'create', events: [{ type: 'CREATE_REQUESTED' }] },

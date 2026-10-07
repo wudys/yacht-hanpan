@@ -155,19 +155,23 @@ describe('resolveRollPlayback', () => {
         dice: artifact.outcome.authoritativeValuesBySlot,
       });
       expect(playback).not.toHaveProperty('timeline');
+      expect(playback).not.toHaveProperty('cause');
     },
   );
 
-  test('simulation failures preserve the authoritative static outcome', async () => {
-    const cause = new WebAssembly.RuntimeError('WASM failed');
-    const playback = await resolveRollPlayback(artifact, () => Promise.reject(cause));
-    expect(playback).toMatchObject({
-      status: 'static-fallback',
-      reason: 'SIMULATION_FAILED',
-      cause,
-    });
-    if (playback.status === 'static-fallback') expect(playback.cause).toBe(cause);
-  });
+  test.each([new WebAssembly.RuntimeError('WASM failed'), 'simulation failed', undefined])(
+    'simulation failures preserve the authoritative static outcome and cause %s',
+    async (cause) => {
+      const playback = await resolveRollPlayback(artifact, () => Promise.reject(cause));
+      expect(playback).toMatchObject({
+        status: 'static-fallback',
+        reason: 'SIMULATION_FAILED',
+        cause,
+      });
+      expect(playback).toHaveProperty('cause');
+      if (playback.status === 'static-fallback') expect(playback.cause).toBe(cause);
+    },
+  );
 
   test('a locally rejected candidate preserves authority without retrying or replacing the seed', async () => {
     const cause = new SimulationRejectedError({ reason: 'repeated-assist', simulationMs: 3300 });

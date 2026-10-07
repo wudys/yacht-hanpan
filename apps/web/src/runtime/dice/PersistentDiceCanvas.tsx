@@ -2,14 +2,14 @@ import { lazy, Suspense, useSyncExternalStore } from 'react';
 
 import { CanvasFailureBoundary } from '@/runtime/dice/canvas/CanvasFailureBoundary';
 import type { RendererReadiness } from '@/runtime/dice/canvas/renderer-readiness';
-import type { DicePresentation } from '@/runtime/dice/dice-presentation';
+import type { DicePresentationView } from '@/runtime/dice/dice-presentation';
 
 const DiceCanvasHost = lazy(() => import('@/runtime/dice/canvas/DiceCanvasHost'));
 
 export function PersistentDiceCanvas({
   presentation,
   renderer,
-}: Readonly<{ presentation: DicePresentation; renderer: RendererReadiness }>) {
+}: Readonly<{ presentation: DicePresentationView; renderer: RendererReadiness }>) {
   const snapshot = useSyncExternalStore(renderer.subscribe, renderer.getSnapshot);
   if (
     snapshot.status === 'idle' ||

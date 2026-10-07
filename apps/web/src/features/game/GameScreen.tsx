@@ -22,6 +22,7 @@ import {
   deriveGameInputReadiness,
   deriveGameInputScopes,
   deriveGameInteraction,
+  deriveGameRecoveryPresentation,
   type GameLayer,
 } from '@/features/game/game-interaction';
 import {
@@ -190,18 +191,25 @@ export default function GameScreen({
   const { phase } = presentationSnapshot;
   const hasPendingCommand = pendingCommandKind !== null;
   const connected = holderSnapshot.sessionSnapshot?.connection === 'connected';
-  const recoveryActive = recoverySnapshot.status !== 'idle';
-  const hasCommandNotice = rateLimited || commandRetryError !== null;
+  const recoveryPresentation = useMemo(
+    () =>
+      deriveGameRecoveryPresentation({
+        snapshot: recoverySnapshot,
+        rateLimited,
+        commandRetryError,
+      }),
+    [recoverySnapshot, rateLimited, commandRetryError],
+  );
+  const { recoveryActive, hasCommandNotice, recoveryBlocked } = recoveryPresentation;
   const readiness = useMemo(
     () =>
       deriveGameInputReadiness({
         phase,
         connected,
         hasPendingCommand,
-        recoveryActive,
-        hasCommandNotice,
+        recoveryBlocked,
       }),
-    [phase, connected, hasPendingCommand, recoveryActive, hasCommandNotice],
+    [phase, connected, hasPendingCommand, recoveryBlocked],
   );
   const onRecordStart = useCallback(() => {
     if (preferences.getSnapshot().sfxEnabled) audio.playCue(PRODUCT_CUE.SCORE);
@@ -367,10 +375,7 @@ export default function GameScreen({
     >
       <GameRecoveryFrame
         locale={locale}
-        interactionLocked={inputScopes.recoveryBlocked}
-        commandRetryError={commandRetryError}
-        rateLimited={rateLimited}
-        snapshot={recoverySnapshot}
+        presentation={recoveryPresentation}
         onDismissRateLimit={() => {
           audio.playCue(PRODUCT_CUE.CLICK);
           dismissRateLimit();

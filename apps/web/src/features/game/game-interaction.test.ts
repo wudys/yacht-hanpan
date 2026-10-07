@@ -1,11 +1,14 @@
+import type { ClientError } from '@repo/game-client-sdk/errors';
 import { describe, expect, test } from 'vitest';
 
 import {
   deriveGameInputReadiness,
   deriveGameInputScopes,
   deriveGameInteraction,
+  deriveGameRecoveryPresentation,
 } from '@/features/game/game-interaction';
 import { deriveGameViewModel } from '@/features/game/view/game-view-model';
+import type { SessionRecoverySnapshot } from '@/runtime/session/session-recovery';
 import { playingGame } from '@/testing/game-fixtures';
 
 const ready = {
@@ -16,8 +19,7 @@ const ready = {
   turnReady: true,
   recordFeedbackActive: false,
   layer: 'board',
-  recoveryActive: false,
-  hasCommandNotice: false,
+  recoveryBlocked: false,
   recordedCategoryNoticeOpen: false,
 } as const;
 
@@ -50,7 +52,7 @@ describe('Game input scopes', () => {
     },
   );
 
-  test.each([{ hasPendingCommand: true }, { recoveryActive: true }, { layer: 'bonus' }] as const)(
+  test.each([{ hasPendingCommand: true }, { recoveryBlocked: true }, { layer: 'bonus' }] as const)(
     'retains settled preview data while a command or layer is locked: %j',
     (lock) => {
       const model = deriveGameViewModel(playingGame, 0);
@@ -125,12 +127,8 @@ describe('Game input scopes', () => {
     });
   });
 
-  test.each([
-    { recoveryActive: true, hasCommandNotice: false },
-    { recoveryActive: false, hasCommandNotice: true },
-    { recoveryActive: true, hasCommandNotice: true },
-  ])('recovery and command notices block the underlying layers', (overlay) => {
-    expect(inputScopes({ ...ready, ...overlay, layer: 'settings' })).toMatchObject({
+  test('recovery and command notices block the underlying layers', () => {
+    expect(inputScopes({ ...ready, recoveryBlocked: true, layer: 'settings' })).toMatchObject({
       gameplayBlocked: true,
       commandBlocked: true,
       recoveryBlocked: true,
@@ -171,4 +169,51 @@ describe('Game input scopes', () => {
       canToggleBonus: true,
     });
   });
+});
+
+const retryError: ClientError = { kind: 'transport', code: 'ACK_TIMEOUT' };
+const recoverySnapshots: readonly SessionRecoverySnapshot[] = [
+  { status: 'idle' },
+  { status: 'reconnecting' },
+  { status: 'synchronizing' },
+  { status: 'permanentFailure', error: retryError },
+  { status: 'refreshRequired', error: null },
+];
+
+describe('Game recovery presentation', () => {
+  for (const snapshot of recoverySnapshots) {
+    test.each([
+      { rateLimited: false, commandRetryError: null },
+      { rateLimited: true, commandRetryError: null },
+      { rateLimited: false, commandRetryError: retryError },
+      { rateLimited: true, commandRetryError: retryError },
+    ])(
+      `${snapshot.status} preserves raw notices and selects the highest priority surface: %j`,
+      (notices) => {
+        const presentation = deriveGameRecoveryPresentation({ snapshot, ...notices });
+        const recoveryActive = snapshot.status !== 'idle';
+        const hasCommandNotice = notices.rateLimited || notices.commandRetryError !== null;
+        expect(presentation).toMatchObject({
+          recoveryActive,
+          hasCommandNotice,
+          recoveryBlocked: recoveryActive || hasCommandNotice,
+        });
+        if (snapshot.status === 'permanentFailure' || snapshot.status === 'refreshRequired') {
+          expect(presentation.surface).toEqual({ kind: 'terminal', ...snapshot });
+        } else if (snapshot.status === 'reconnecting' || snapshot.status === 'synchronizing') {
+          expect(presentation.surface).toEqual({ kind: 'progress', status: snapshot.status });
+        } else if (notices.rateLimited) {
+          expect(presentation.surface).toEqual({ kind: 'rate-limited' });
+        } else if (notices.commandRetryError !== null) {
+          expect(presentation.surface).toEqual({ kind: 'retryable', error: retryError });
+        } else {
+          expect(presentation.surface).toEqual({ kind: 'none' });
+        }
+        expect(
+          deriveGameInputReadiness({ ...ready, recoveryBlocked: presentation.recoveryBlocked })
+            .requestReady,
+        ).toBe(!presentation.recoveryBlocked);
+      },
+    );
+  }
 });

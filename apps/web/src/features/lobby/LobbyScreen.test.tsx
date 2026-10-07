@@ -173,13 +173,30 @@ function createHolder(session: GameSession): GameSessionHolder {
   const listeners = new Set<() => void>();
   const publish = () => listeners.forEach((listener) => listener());
   return {
-    installAuthority(authority: RoomAuthority) {
-      snapshot = { authority, room: null, session, sessionSnapshot: session.getSnapshot() };
+    installAuthority(
+      authority: RoomAuthority,
+      initialRoom: Parameters<GameSessionHolder['installAuthority']>[1],
+    ) {
+      const sessionSnapshot = session.getSnapshot();
+      snapshot = {
+        authority,
+        room:
+          sessionSnapshot.room ?? (initialRoom?.roomId === authority.roomId ? initialRoom : null),
+        session,
+        sessionSnapshot,
+      };
       publish();
       return session;
     },
-    setRoom(room: Parameters<GameSessionHolder['setRoom']>[0]) {
-      if (!snapshot.authority) return;
+    setProvisionalRoom(room: Parameters<GameSessionHolder['setProvisionalRoom']>[0]) {
+      if (
+        !snapshot.authority ||
+        snapshot.sessionSnapshot.room !== null ||
+        room.roomId !== snapshot.authority.roomId ||
+        snapshot.room === room ||
+        (room.status === 'waiting' && snapshot.room !== null && snapshot.room.status !== 'waiting')
+      )
+        return;
       snapshot = { ...snapshot, room };
       publish();
     },
@@ -251,6 +268,7 @@ function renderLobby(
     setItem: vi.fn(),
   };
   const profile = createProfileSelectionStore(profileStorage);
+  profile.initialize();
   const audio = createAudio();
   const activity = new AbortController().signal;
   const access = createRoomAccess({
@@ -493,6 +511,8 @@ test('activates recent-room reentry before the first Lobby frame can expose admi
   const host = document.createElement('div');
   document.body.append(host);
   const root = createRoot(host);
+  const profile = createProfileSelectionStore({ getItem: () => null, setItem: vi.fn() }, () => 0);
+  profile.initialize();
 
   flushSync(() => {
     root.render(
@@ -502,7 +522,7 @@ test('activates recent-room reentry before the first Lobby frame can expose admi
         audio={createAudio()}
         locale={LOCALE.EN}
         clock={client.clock}
-        profile={createProfileSelectionStore({ getItem: () => null, setItem: vi.fn() }, () => 0)}
+        profile={profile}
         preferences={createPreferencesStore({ getItem: () => null, setItem: vi.fn() })}
       />,
     );
@@ -685,14 +705,14 @@ test('ignores delayed clipboard completion after cancellation and room replaceme
   expect(screen.queryByRole('alert')).toBeNull();
 });
 
-test('navigates a resumed match only after the coordinator publishes playing', async () => {
+test('navigates a resumed match only after the coordinator publishes gameReady', async () => {
   const reentry = createReentry({ status: 'synchronizing' });
   const client = { clock: { now: () => 1_000 } } as unknown as GameClient;
   renderLobby(client, { session: createSession(), reentry: reentry.value });
 
   expect(navigate).not.toHaveBeenCalled();
 
-  await act(async () => reentry.publish({ status: 'playing' }));
+  await act(async () => reentry.publish({ status: 'gameReady' }));
 
   expect(navigate).toHaveBeenCalledOnce();
   expect(reentry.value.completeHandoff).toHaveBeenCalledOnce();

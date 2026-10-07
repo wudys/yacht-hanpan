@@ -116,11 +116,14 @@ export function createProductExecution({
       sessions: executionSessions,
       requestSynchronization: executionRecovery.requestSynchronization,
       onUnexpected: (error) => telemetry.reportUnexpected(error, { stage: 'replay' }),
-      requireRefreshAfterSynchronization: (reason, cause) => {
-        telemetry.reportUnexpected(reason === 'SIMULATION_FAILED' ? cause : new Error(reason), {
-          stage: 'replay',
-          replay_reason: reason,
-        });
+      requireRefreshAfterSynchronization: (failure) => {
+        telemetry.reportUnexpected(
+          failure.reason === 'SIMULATION_FAILED' ? failure.cause : new Error(failure.reason),
+          {
+            stage: 'replay',
+            replay_reason: failure.reason,
+          },
+        );
         executionRecovery.requireRefreshAfterSynchronization();
       },
       playCue: executionAudio.playCue,

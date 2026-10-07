@@ -2,40 +2,32 @@ import { CLIENT_ERROR_CODE, type ClientError } from '@repo/game-client-sdk/error
 import { PUBLIC_ERROR_CODE } from '@repo/game-protocol';
 import type { ReactNode } from 'react';
 
+import type { GameRecoveryPresentation } from '@/features/game/game-interaction';
 import { CLIENT_ERROR_MESSAGE_KEY, type Locale, PUBLIC_ERROR_MESSAGE_KEY, translate } from '@/i18n';
-import type { SessionRecoverySnapshot } from '@/runtime/session/session-recovery';
 import { Button } from '@/ui/button';
 import { ScrollablePanel } from '@/ui/panel';
 import { ColorCycleDiceLoader } from '@/ui/status';
 
 export function GameRecoveryFrame({
   children,
-  interactionLocked,
-  commandRetryError,
   locale,
-  rateLimited,
-  snapshot,
+  presentation,
   onDismissRateLimit,
   onPermanentFailure,
   onRefresh,
   onRetryCommand,
 }: Readonly<{
   children: ReactNode;
-  interactionLocked: boolean;
-  commandRetryError: ClientError | null;
   locale: Locale;
-  rateLimited: boolean;
-  snapshot: SessionRecoverySnapshot;
+  presentation: GameRecoveryPresentation;
   onDismissRateLimit: () => void;
   onPermanentFailure: () => void;
   onRefresh: () => void;
   onRetryCommand: () => void;
 }>) {
-  const transient = snapshot.status === 'reconnecting' || snapshot.status === 'synchronizing';
-  const terminal =
-    snapshot.status === 'permanentFailure' || snapshot.status === 'refreshRequired'
-      ? snapshot
-      : null;
+  const { surface, recoveryBlocked } = presentation;
+  const progress = surface.kind === 'progress' ? surface : null;
+  const terminal = surface.kind === 'terminal' ? surface : null;
   const terminalCode =
     terminal?.error?.kind === 'server' ? terminal.error.error.code : terminal?.error?.code;
   const recoveryStopped =
@@ -54,38 +46,41 @@ export function GameRecoveryFrame({
         ),
         onIntent: terminal.status === 'permanentFailure' ? onPermanentFailure : onRefresh,
       }
-    : snapshot.status === 'idle' && rateLimited
+    : surface.kind === 'rate-limited'
       ? {
           kind: 'rate-limited' as const,
           message: translate(locale, 'error.rateLimited'),
           label: translate(locale, 'common.confirm'),
           onIntent: onDismissRateLimit,
         }
-      : snapshot.status === 'idle' && commandRetryError !== null
+      : surface.kind === 'retryable'
         ? {
             kind: 'retryable' as const,
-            message: recoveryErrorMessage(locale, commandRetryError),
+            message: recoveryErrorMessage(locale, surface.error),
             label: translate(locale, 'common.retry'),
             onIntent: onRetryCommand,
           }
         : null;
 
   return (
-    <div className='web-game-recovery-host' data-game-recovery={snapshot.status}>
+    <div
+      className='web-game-recovery-host'
+      data-game-recovery={terminal?.status ?? progress?.status ?? 'idle'}
+    >
       <div
         className='web-game-interaction-surface'
         data-game-interaction-surface='true'
         role='group'
         aria-label={translate(locale, 'game.title')}
-        inert={interactionLocked || undefined}
-        aria-hidden={interactionLocked || undefined}
+        inert={recoveryBlocked || undefined}
+        aria-hidden={recoveryBlocked || undefined}
       >
         {children}
       </div>
-      {transient ? (
+      {progress ? (
         <div
           className='web-game-recovery-overlay'
-          data-game-recovery-overlay={snapshot.status}
+          data-game-recovery-overlay={progress.status}
           role='status'
           aria-live='polite'
         >
@@ -93,7 +88,7 @@ export function GameRecoveryFrame({
           <p>
             {translate(
               locale,
-              snapshot.status === 'reconnecting'
+              progress.status === 'reconnecting'
                 ? 'lobby.reentryConnecting'
                 : 'lobby.reentrySynchronizing',
             )}

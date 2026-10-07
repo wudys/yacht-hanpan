@@ -28,7 +28,7 @@ export type StoredRoomReentrySnapshot =
   | Readonly<{ status: 'connecting' }>
   | Readonly<{ status: 'synchronizing' }>
   | Readonly<{ status: 'waiting'; roomCode: string; expiresAt: number }>
-  | Readonly<{ status: 'playing' }>
+  | Readonly<{ status: 'gameReady' }>
   | Readonly<{ status: 'permanentFailure'; error: ClientError }>
   | Readonly<{ status: 'refreshRequired'; error: ClientError | null; reason?: 'storage' }>;
 
@@ -100,7 +100,7 @@ export function createStoredRoomReentry(
       next.status !== 'checking'
     ) {
       finishAttempt(
-        next.status === 'waiting' || next.status === 'playing'
+        next.status === 'waiting' || next.status === 'gameReady'
           ? 'success'
           : next.status === 'idle'
             ? 'cancelled'
@@ -162,6 +162,8 @@ export function createStoredRoomReentry(
     }
     if (!synchronizationConfirmed) {
       publish({ status: 'synchronizing' });
+      if (!isCurrent(currentGeneration) || options.sessions.getSnapshot().session !== session)
+        return;
       if (synchronization === null) {
         const pending = session.synchronize();
         synchronization = pending;
@@ -190,7 +192,7 @@ export function createStoredRoomReentry(
     if (sessionSnapshot.presence === null) return;
     if (sessionSnapshot.game !== null) {
       releaseIncident(false);
-      publish({ status: 'playing' });
+      publish({ status: 'gameReady' });
       return;
     }
     if (current.room.status === 'waiting') {
@@ -205,8 +207,12 @@ export function createStoredRoomReentry(
     publish({ status: 'synchronizing' });
   };
 
-  const run = async (currentGeneration: number, savedRoom: RecentRoom): Promise<void> => {
-    const readiness = await options.readiness.wait(operation?.signal);
+  const run = async (
+    currentGeneration: number,
+    savedRoom: RecentRoom,
+    signal: AbortSignal,
+  ): Promise<void> => {
+    const readiness = await options.readiness.wait(signal);
     if (!isCurrent(currentGeneration)) return;
     if (!readiness.ok) {
       if (readiness.reason !== 'cancelled') {
@@ -230,7 +236,7 @@ export function createStoredRoomReentry(
 
     const result = await options.client.resumeRoom(
       { roomId: savedRoom.roomId, seatToken: savedRoom.seatToken },
-      { signal: operation?.signal },
+      { signal },
     );
     if (!isCurrent(currentGeneration)) return;
     if (!result.ok) {
@@ -249,8 +255,13 @@ export function createStoredRoomReentry(
       seatToken: savedRoom.seatToken,
       seatIndex: result.data.seatIndex,
     };
-    const session = options.sessions.installAuthority(authority);
-    options.sessions.setRoom(result.data.view.room);
+    const session = options.sessions.installAuthority(authority, result.data.view.room);
+    if (!isCurrent(currentGeneration)) return;
+    if (options.sessions.getSnapshot().session !== session) {
+      releaseIncident(false);
+      publish(IDLE);
+      return;
+    }
     incidentSession = session;
     synchronizationConfirmed = false;
     unsubscribeSession = options.sessions.subscribe(() =>
@@ -258,6 +269,7 @@ export function createStoredRoomReentry(
     );
     publish({ status: 'connecting' });
     observeSession(currentGeneration, session);
+    if (!isCurrent(currentGeneration) || options.sessions.getSnapshot().session !== session) return;
 
     void session.connect().then(
       (connection) => {
@@ -293,11 +305,14 @@ export function createStoredRoomReentry(
       }
       recentRoom = stored.room;
       if (recentRoom === null) return;
+      const savedRoom = recentRoom;
       const currentGeneration = ++generation;
       failedIncident = null;
-      operation = new AbortController();
+      const controller = new AbortController();
+      operation = controller;
       publish({ status: 'checking' });
-      void run(currentGeneration, recentRoom).catch((error: unknown) => {
+      if (!isCurrent(currentGeneration)) return;
+      void run(currentGeneration, savedRoom, controller.signal).catch((error: unknown) => {
         if (!isCurrent(currentGeneration)) return;
         options.onUnexpected?.(error);
         releaseIncident(true);
@@ -305,7 +320,7 @@ export function createStoredRoomReentry(
       });
     },
     completeHandoff() {
-      if (snapshot.status !== 'waiting' && snapshot.status !== 'playing') return;
+      if (snapshot.status !== 'waiting' && snapshot.status !== 'gameReady') return;
       releaseIncident(false);
       publish(IDLE);
     },

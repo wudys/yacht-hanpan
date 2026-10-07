@@ -66,12 +66,19 @@ export function createFailureDisposition(error: ClientError): 'retry' | 'refresh
     return 'retry';
   return 'notice';
 }
+export function readinessFailureDisposition(result: ReadinessFailure): 'retry' | 'refresh' {
+  return result.reason === 'incompatible' || result.reason === 'invalid-response'
+    ? 'refresh'
+    : 'retry';
+}
 export function readinessError(result: ReadinessFailure): ClientError {
-  if (!result.ok && result.reason === 'invalid-response')
-    return createProtocolError(CLIENT_ERROR_CODE.INVALID_RESPONSE);
-  return !result.ok && result.reason === 'incompatible'
-    ? createProtocolError(CLIENT_ERROR_CODE.PROTOCOL_MISMATCH)
-    : createTransportError(CLIENT_ERROR_CODE.NETWORK_UNAVAILABLE);
+  if (readinessFailureDisposition(result) === 'retry')
+    return createTransportError(CLIENT_ERROR_CODE.NETWORK_UNAVAILABLE);
+  return createProtocolError(
+    result.reason === 'invalid-response'
+      ? CLIENT_ERROR_CODE.INVALID_RESPONSE
+      : CLIENT_ERROR_CODE.PROTOCOL_MISMATCH,
+  );
 }
 
 export function connectionFailureError(error: ClientError | null): LobbyError {

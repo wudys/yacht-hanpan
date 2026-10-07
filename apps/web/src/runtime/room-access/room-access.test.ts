@@ -1,4 +1,6 @@
 import type { GameClient, GameSession, GameSessionSnapshot } from '@repo/game-client-sdk';
+import { parseResumeRoomResponse } from '@repo/game-protocol/http';
+import { GAME_PROTOCOL_VERSION } from '@repo/game-protocol/version';
 import { expect, test, vi } from 'vitest';
 
 import { createRoomAccess } from '@/runtime/room-access/room-access';
@@ -41,6 +43,7 @@ function setup(providedReentry?: StoredRoomReentry) {
     createSession: vi.fn(() => session),
     createRoom: vi.fn(async () => ({ ok: true, data: { authority, view: { room: waitingRoom } } })),
     joinRoom: vi.fn(),
+    resumeRoom: vi.fn(),
     cancelRoom: vi.fn(async () => ({ ok: true, data: {}, meta: {} })),
   } as unknown as GameClient;
   const sessions = createGameSessionHolder(client);
@@ -84,6 +87,22 @@ function setup(providedReentry?: StoredRoomReentry) {
   };
 }
 
+test('finishes a local cancellation without reporting an HTTP response when authority is absent', async () => {
+  const { access, client, sessions, sessionCredentialStore } = setup();
+  const onHttpResponse = vi.fn();
+
+  expect(await access.cancelWaiting(new AbortController().signal, onHttpResponse)).toEqual({
+    status: 'cancelled',
+  });
+
+  expect(client.cancelRoom).not.toHaveBeenCalled();
+  expect(onHttpResponse).not.toHaveBeenCalled();
+  expect(sessionCredentialStore.removeRoom).not.toHaveBeenCalled();
+  expect(access.getSnapshot()).toEqual({ status: 'idle' });
+  access.dispose();
+  sessions.dispose();
+});
+
 test('registers admission before publishing so an observer cannot submit a second HTTP mutation', async () => {
   const { access, client, session, sessions } = setup();
   let nested: ReturnType<typeof access.create> | undefined;
@@ -117,28 +136,34 @@ test.each(['route', 'execution'] as const)(
   },
 );
 
-test('does not set a room or connect a session replaced by an installation observer', async () => {
-  const { access, client, sessions, session } = setup();
-  const setRoom = vi.spyOn(sessions, 'setRoom');
-  let changed = false;
-  sessions.subscribe(() => {
-    if (changed || sessions.getSnapshot().authority === null) return;
-    changed = true;
-    sessions.installAuthority({
-      ...authority,
-      roomId: '019cebf0-79b8-7a22-8000-000000000002' as typeof authority.roomId,
+test.each(['replace', 'clear', 'stop'] as const)(
+  'does not connect after an atomic installation observer wins with %s',
+  async (action) => {
+    const { access, activity, client, sessions, session, sessionCredentialStore } = setup();
+    let changed = false;
+    sessions.subscribe(() => {
+      if (changed || sessions.getSnapshot().authority === null) return;
+      changed = true;
+      expect(sessions.getSnapshot().room).toBe(waitingRoom);
+      if (action === 'clear') sessions.clear();
+      else if (action === 'stop') activity.abort();
+      else
+        sessions.installAuthority({
+          ...authority,
+          roomId: '019cebf0-79b8-7a22-8000-000000000002' as typeof authority.roomId,
+        });
     });
-  });
-  // Distinct instances establish session identity even when an observer replaces authority.
-  vi.mocked(client.createSession)
-    .mockReturnValueOnce(session)
-    .mockReturnValueOnce({ ...session } as GameSession);
-  expect(await access.create(profile, new AbortController().signal)).toEqual({ status: 'stale' });
-  expect(setRoom).not.toHaveBeenCalled();
-  expect(session.connect).not.toHaveBeenCalled();
-  access.dispose();
-  sessions.dispose();
-});
+    // Distinct instances establish session identity even when an observer replaces authority.
+    vi.mocked(client.createSession)
+      .mockReturnValueOnce(session)
+      .mockReturnValueOnce({ ...session } as GameSession);
+    expect(await access.create(profile, new AbortController().signal)).toEqual({ status: 'stale' });
+    expect(session.connect).not.toHaveBeenCalled();
+    expect(sessionCredentialStore.removeRoom).not.toHaveBeenCalled();
+    access.dispose();
+    sessions.dispose();
+  },
+);
 
 test('does not emit a new admission when authority is installed during readiness', async () => {
   const { access, client, sessions, readiness } = setup();
@@ -174,6 +199,51 @@ test('keeps authoritative Game when a storage observer publishes it before cance
   access.dispose();
   sessions.dispose();
 });
+
+test.each(['waiting', 'playing'] as const)(
+  'does not continue expiry work after a %s metadata observer clears the session',
+  async (status) => {
+    const { access, client, session, sessions, sessionCredentialStore } = setup();
+    await access.create(profile, new AbortController().signal);
+    const resumedRoom = status === 'waiting' ? { ...waitingRoom, expiresAt: 400_000 } : room;
+    const response = parseResumeRoomResponse({
+      ok: true,
+      data: {
+        seatIndex: 0,
+        view: {
+          room: resumedRoom,
+          game: status === 'playing' ? playingGame : null,
+          presence: {
+            roomId: authority.roomId,
+            presenceVersion: 1,
+            seats:
+              status === 'playing'
+                ? [{ status: 'connected' }, { status: 'connected' }]
+                : [{ status: 'connected' }],
+          },
+        },
+      },
+      meta: {
+        requestId: '019cebf0-79b8-7a22-8000-000000000003',
+        serverTime: 1_000,
+        gameProtocolVersion: GAME_PROTOCOL_VERSION,
+      },
+    });
+    if (!response.ok) throw new Error('Expected resume fixture');
+    vi.mocked(client.resumeRoom).mockResolvedValue(response);
+    sessions.subscribe(() => {
+      if (sessions.getSnapshot().room === response.data.view.room) sessions.clear();
+    });
+
+    expect(await access.checkWaitingExpiry(new AbortController().signal)).toEqual({
+      status: 'stale',
+    });
+    expect(session.synchronize).not.toHaveBeenCalled();
+    expect(sessionCredentialStore.removeRoom).not.toHaveBeenCalled();
+    access.dispose();
+    sessions.dispose();
+  },
+);
 
 test('does not remove authority when cancellation is aborted before its HTTP response', async () => {
   const { access, activity, client, sessionCredentialStore, sessions } = setup();
@@ -331,13 +401,13 @@ test.each(['before', 'after'] as const)(
     sessions.installAuthority(authority);
     publishGame();
     expect(access.getSnapshot().status).toBe('restoring');
-    publish({ status: 'playing' });
+    publish({ status: 'gameReady' });
     await Promise.resolve();
     expect(accessObserved).toContain('handoff');
-    expect(reentry.getSnapshot().status).toBe('playing');
+    expect(reentry.getSnapshot().status).toBe('gameReady');
     await Promise.resolve();
     expect(reentry.completeHandoff).toHaveBeenCalledOnce();
-    expect(observations).toEqual(['playing', 'idle']);
+    expect(observations).toEqual(['gameReady', 'idle']);
     expect(trackEvent).toHaveBeenCalledWith({ name: 'play_started', entry: 'resumed' });
     stopTelemetry();
     access.dispose();

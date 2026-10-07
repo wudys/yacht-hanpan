@@ -411,7 +411,7 @@ describe('DicePresentation', () => {
     expect(requireRefreshAfterSynchronization).toHaveBeenCalledTimes(1);
     expect(requestSynchronization).not.toHaveBeenCalled();
     expect(warn).toHaveBeenCalledWith('dice_replay_static_fallback', 'OUTCOME_MISMATCH');
-    expect(requireRefreshAfterSynchronization).toHaveBeenCalledWith('OUTCOME_MISMATCH');
+    expect(requireRefreshAfterSynchronization).toHaveBeenCalledExactlyOnceWith(fallback);
     presentation.completePlayback('roll-fallback');
     publish({ connection: 'connected' });
     expect(presentation.getSnapshot()).toMatchObject({ phase: 'rolling', playback: fallback });
@@ -592,7 +592,7 @@ test('settles immediately after full synchronization during reveal and ignores s
   presentation.dispose();
 });
 
-test.each(['resolve', 'reject'] as const)(
+test.each(['resolve', 'reject', 'fallback'] as const)(
   'a restored view cancels pending resolution and ignores its late %s',
   async (completion) => {
     const values = [6, 6, 6, 6, 6] as const;
@@ -626,6 +626,14 @@ test.each(['resolve', 'reject'] as const)(
       dice: values.map((value, slot) => ({ slot, value })),
     });
     if (completion === 'resolve') resolvePending(verifiedPlayback('restored'));
+    else if (completion === 'fallback')
+      resolvePending({
+        status: 'static-fallback',
+        rollId: 'restored',
+        reason: 'SIMULATION_FAILED',
+        cause: undefined,
+        dice: [],
+      });
     else rejectPending(new Error('stale resolution failed'));
     await flushPromises();
     expect(presentation.getSnapshot().phase).toBe('settled');
@@ -843,38 +851,48 @@ test('reports an active resolver rejection once and settles while requesting syn
   presentation.dispose();
 });
 
-test('passes the original simulation fallback cause once to the refresh owner', async () => {
-  const { sessions, publish } = createHolder(playingGame('turn-a', null));
-  const cause = new WebAssembly.RuntimeError('simulation trapped');
-  const requireRefreshAfterSynchronization = vi.fn();
-  const onUnexpected = vi.fn();
-  vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-  const presentation = createDicePresentation({
-    sessions,
-    onUnexpected,
-    playCue: vi.fn(),
-    requestSynchronization: vi.fn(),
-    requireRefreshAfterSynchronization,
-    loadResolver: async () => async (roll) => ({
+test.each([new WebAssembly.RuntimeError('simulation trapped'), 'simulation failed', undefined])(
+  'passes the original simulation fallback cause %s once to the refresh owner',
+  async (cause) => {
+    const { sessions, publish } = createHolder(playingGame('turn-a', null));
+    const requireRefreshAfterSynchronization = vi.fn();
+    const onUnexpected = vi.fn();
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const presentation = createDicePresentation({
+      sessions,
+      onUnexpected,
+      playCue: vi.fn(),
+      requestSynchronization: vi.fn(),
+      requireRefreshAfterSynchronization,
+      loadResolver: async () => async (roll) => ({
+        status: 'static-fallback',
+        rollId: roll.replay.rollId,
+        reason: 'SIMULATION_FAILED',
+        cause,
+        dice: [],
+      }),
+    });
+    await presentation.prepare();
+    presentation.start();
+    const values = [1, 2, 3, 4, 5] as const;
+    publish({ game: playingGame('turn-a', values, [], 2), roll: artifact('failed', values) });
+    await flushPromises();
+    expect(requireRefreshAfterSynchronization).toHaveBeenCalledExactlyOnceWith({
       status: 'static-fallback',
-      rollId: roll.replay.rollId,
+      rollId: 'failed',
       reason: 'SIMULATION_FAILED',
       cause,
       dice: [],
-    }),
-  });
-  await presentation.prepare();
-  presentation.start();
-  const values = [1, 2, 3, 4, 5] as const;
-  publish({ game: playingGame('turn-a', values, [], 2), roll: artifact('failed', values) });
-  await flushPromises();
-  expect(requireRefreshAfterSynchronization).toHaveBeenCalledExactlyOnceWith(
-    'SIMULATION_FAILED',
-    cause,
-  );
-  expect(onUnexpected).not.toHaveBeenCalled();
-  presentation.dispose();
-});
+    });
+    const snapshot = presentation.getSnapshot();
+    expect(snapshot.phase).toBe('rolling');
+    if (snapshot.phase === 'rolling')
+      expect(requireRefreshAfterSynchronization.mock.calls[0]?.[0]).toBe(snapshot.playback);
+    expect(requireRefreshAfterSynchronization.mock.calls[0]?.[0].cause).toBe(cause);
+    expect(onUnexpected).not.toHaveBeenCalled();
+    presentation.dispose();
+  },
+);
 
 test('does not start replay after disposal before its scheduled resolution', async () => {
   const { sessions, publish } = createHolder(playingGame('turn-a', null));

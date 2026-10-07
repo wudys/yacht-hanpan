@@ -8,8 +8,8 @@ import DiceCanvasHost from '@/runtime/dice/canvas/DiceCanvasHost';
 import { createRendererReadiness } from '@/runtime/dice/canvas/renderer-readiness';
 import {
   DICE_REVEAL_DURATION_MS,
-  type DicePresentation,
   type DicePresentationSnapshot,
+  type DicePresentationView,
 } from '@/runtime/dice/dice-presentation';
 import type { ProceduralDiceResources } from '@/runtime/dice/resources';
 
@@ -111,7 +111,7 @@ function FixtureCanvas({
     return () => clearTimeout(timer);
   }, [phase, onComplete]);
   const rendererState = useSyncExternalStore(renderer.subscribe, renderer.getSnapshot);
-  const presentation = useMemo<DicePresentation>(() => {
+  const presentation = useMemo<DicePresentationView>(() => {
     const hidden = { phase: 'hidden' as const, resources };
     const snapshot: DicePresentationSnapshot = {
       phase,
@@ -129,10 +129,6 @@ function FixtureCanvas({
       getSnapshot: () => (rendererState.status === 'ready' ? snapshot : hidden),
       subscribe: () => () => {},
       completePlayback: () => (arrange ? setPhase('revealing') : onComplete(true)),
-      prepare: async () => {},
-      start() {},
-      setResources() {},
-      dispose() {},
     };
   }, [result, resources, onComplete, rendererState.status, phase, arrange]);
   useEffect(() => {

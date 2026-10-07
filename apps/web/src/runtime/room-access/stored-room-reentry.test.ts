@@ -59,6 +59,101 @@ function deferred<T>() {
 }
 
 describe('Lobby reentry', () => {
+  test('does not start readiness after a checking observer disposes restore', async () => {
+    const session = createSessionFixture();
+    const holder = createGameSessionHolder({ createSession: () => session.value });
+    const readiness = readyReadiness();
+    const client = createClient(session.value);
+    const reentry = createStoredRoomReentry({
+      client,
+      readiness,
+      sessions: holder,
+      sessionCredentialStore: createStore(RECENT_ROOM),
+    });
+    const attempts = vi.fn();
+    const notifications = vi.fn();
+    reentry.subscribeAttempt(attempts);
+    reentry.subscribe(() => {
+      notifications();
+      if (reentry.getSnapshot().status === 'checking') reentry.dispose();
+    });
+
+    reentry.check();
+    await flushPromises();
+
+    expect(readiness.wait).not.toHaveBeenCalled();
+    expect(client.resumeRoom).not.toHaveBeenCalled();
+    expect(session.value.connect).not.toHaveBeenCalled();
+    expect(notifications).toHaveBeenCalledOnce();
+    expect(attempts.mock.calls).toEqual([
+      [{ phase: 'started' }],
+      [{ phase: 'finished', outcome: 'cancelled', durationMs: expect.any(Number) }],
+    ]);
+    holder.dispose();
+  });
+
+  test.each(['clear', 'replace', 'dispose'] as const)(
+    'does not connect or clean credentials after an installation observer wins with %s',
+    async (action) => {
+      const session = createSessionFixture();
+      const replacement = createSessionFixture();
+      const createSession = vi
+        .fn()
+        .mockReturnValueOnce(session.value)
+        .mockReturnValueOnce(replacement.value);
+      const holder = createGameSessionHolder({ createSession });
+      const sessionCredentialStore = createStore(RECENT_ROOM);
+      const reentry = createStoredRoomReentry({
+        client: createClient(session.value),
+        readiness: readyReadiness(),
+        sessions: holder,
+        sessionCredentialStore,
+      });
+      let changed = false;
+      holder.subscribe(() => {
+        if (changed || holder.getSnapshot().authority === null) return;
+        changed = true;
+        expect(holder.getSnapshot().room).toBe(WAITING_ROOM);
+        if (action === 'clear') holder.clear();
+        else if (action === 'dispose') reentry.dispose();
+        else holder.installAuthority({ ...RECENT_ROOM, seatIndex: 1 });
+      });
+
+      reentry.check();
+      await flushPromises();
+      expect(session.value.connect).not.toHaveBeenCalled();
+      expect(replacement.value.connect).not.toHaveBeenCalled();
+      expect(sessionCredentialStore.removeRoom).not.toHaveBeenCalled();
+      reentry.dispose();
+      holder.dispose();
+    },
+  );
+
+  test.each(['connecting', 'synchronizing'] as const)(
+    'does not start stale transport work after a %s publication observer stops restore',
+    async (phase) => {
+      const session = createSessionFixture();
+      const holder = createGameSessionHolder({ createSession: () => session.value });
+      const reentry = createStoredRoomReentry({
+        client: createClient(session.value),
+        readiness: readyReadiness(),
+        sessions: holder,
+        sessionCredentialStore: createStore(RECENT_ROOM),
+      });
+      reentry.subscribe(() => {
+        if (reentry.getSnapshot().status === phase) reentry.dispose();
+      });
+      reentry.check();
+      await flushPromises();
+      if (phase === 'connecting') expect(session.value.connect).not.toHaveBeenCalled();
+      else {
+        session.publish({ connection: 'connected', presence: PRESENCE });
+        expect(session.value.synchronize).not.toHaveBeenCalled();
+      }
+      holder.dispose();
+    },
+  );
+
   test.each(['replacement', 'Game'] as const)(
     'does not clear current %s when confirming an old restore failure',
     async (current) => {
@@ -426,7 +521,7 @@ describe('Lobby reentry', () => {
     expect(client.resumeRoom).toHaveBeenCalledOnce();
   });
 
-  test('ignores the HTTP game payload and enters playing only from the current SDK snapshot', async () => {
+  test('ignores the HTTP game payload and hands off to Game only from the current SDK snapshot', async () => {
     const session = createSessionFixture();
     const holder = createGameSessionHolder({ createSession: () => session.value });
     const client = createClient(session.value, {
@@ -454,7 +549,7 @@ describe('Lobby reentry', () => {
     session.resolveConnect({ ok: true });
     await flushPromises();
 
-    expect(reentry.getSnapshot()).toEqual({ status: 'playing' });
+    expect(reentry.getSnapshot()).toEqual({ status: 'gameReady' });
   });
 
   test('re-reads the holder after sync instead of accepting a stale waiting projection', async () => {
@@ -479,7 +574,7 @@ describe('Lobby reentry', () => {
     synchronization.resolve({ ok: true });
     await flushPromises();
 
-    expect(reentry.getSnapshot()).toEqual({ status: 'playing' });
+    expect(reentry.getSnapshot()).toEqual({ status: 'gameReady' });
   });
 
   test('hands a newly finished authoritative SDK snapshot to Game for Result rendering', async () => {
@@ -509,7 +604,7 @@ describe('Lobby reentry', () => {
     session.resolveConnect({ ok: true });
     await flushPromises();
 
-    expect(reentry.getSnapshot()).toEqual({ status: 'playing' });
+    expect(reentry.getSnapshot()).toEqual({ status: 'gameReady' });
   });
 
   test('keeps permanent-failure credentials until the user confirms', async () => {

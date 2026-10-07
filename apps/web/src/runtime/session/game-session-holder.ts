@@ -21,8 +21,8 @@ export type GameSessionHolderSnapshot =
     }>;
 
 export interface GameSessionHolder {
-  installAuthority(authority: RoomAuthority): GameSession;
-  setRoom(room: PublicRoom): void;
+  installAuthority(authority: RoomAuthority, initialRoom?: PublicRoom): GameSession;
+  setProvisionalRoom(room: PublicRoom): void;
   /** Stops the matching finished session while retaining its final view until clear or replacement. */
   detachFinishedSession(expectedSession: GameSession): boolean;
   clear(): void;
@@ -72,11 +72,29 @@ export function createGameSessionHolder(
     return true;
   }
 
+  function applyProvisionalRoom(room: PublicRoom): boolean {
+    if (
+      disposed ||
+      !currentAuthority ||
+      !currentSession ||
+      view.authority === null ||
+      view.sessionSnapshot.room !== null ||
+      room.roomId !== currentAuthority.roomId ||
+      view.room === room ||
+      (room.status === 'waiting' && view.room !== null && view.room.status !== 'waiting')
+    )
+      return false;
+    view = { ...view, room };
+    return true;
+  }
+
   return {
-    installAuthority(authority: RoomAuthority) {
+    installAuthority(authority: RoomAuthority, initialRoom?: PublicRoom) {
       if (disposed) throw new Error('Game session holder is disposed');
       if (currentAuthority && currentSession && isSameAuthority(currentAuthority, authority)) {
-        return currentSession;
+        const session = currentSession;
+        if (initialRoom && applyProvisionalRoom(initialRoom)) publish();
+        return session;
       }
       const session = client.createSession(authority);
       releaseCurrentSession();
@@ -89,6 +107,7 @@ export function createGameSessionHolder(
         session,
         sessionSnapshot: initialSnapshot,
       };
+      if (initialRoom) applyProvisionalRoom(initialRoom);
       unsubscribeSession = session.subscribe(() => {
         if (currentSession !== session) return;
         const sessionSnapshot = session.getSnapshot();
@@ -104,26 +123,8 @@ export function createGameSessionHolder(
       publish();
       return session;
     },
-    setRoom(room: PublicRoom) {
-      if (
-        disposed ||
-        !currentAuthority ||
-        !currentSession ||
-        view.authority === null ||
-        view.sessionSnapshot.room !== null ||
-        room.roomId !== currentAuthority.roomId ||
-        view.room === room ||
-        (room.status === 'waiting' && view.room !== null && view.room.status !== 'waiting')
-      ) {
-        return;
-      }
-      view = {
-        authority: currentAuthority,
-        room,
-        session: currentSession,
-        sessionSnapshot: view.sessionSnapshot,
-      };
-      publish();
+    setProvisionalRoom(room: PublicRoom) {
+      if (applyProvisionalRoom(room)) publish();
     },
     detachFinishedSession(expectedSession: GameSession) {
       if (disposed || view.session !== expectedSession) return false;

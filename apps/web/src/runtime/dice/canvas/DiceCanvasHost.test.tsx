@@ -8,7 +8,7 @@ import {
   createRendererReadiness as createReadiness,
   type RendererReadiness,
 } from '@/runtime/dice/canvas/renderer-readiness';
-import type { DicePresentation } from '@/runtime/dice/dice-presentation';
+import type { DicePresentationView } from '@/runtime/dice/dice-presentation';
 import { PersistentDiceCanvas } from '@/runtime/dice/PersistentDiceCanvas';
 
 const { configure, renderCanvas, unmountCanvas } = vi.hoisted(() => ({
@@ -32,7 +32,8 @@ const hiddenPresentationSnapshot = { phase: 'hidden', resources: null } as const
 const presentation = {
   getSnapshot: () => hiddenPresentationSnapshot,
   subscribe: () => () => {},
-} as unknown as DicePresentation;
+  completePlayback: vi.fn(),
+} satisfies DicePresentationView;
 
 async function readyState() {
   const readiness = createReadiness();

@@ -1,22 +1,64 @@
+import type { ClientError } from '@repo/game-client-sdk/errors';
+
 import type { GameViewModel } from '@/features/game/view/game-view-model';
 import type { DicePresentationSnapshot } from '@/runtime/dice/dice-presentation';
+import type { SessionRecoverySnapshot } from '@/runtime/session/session-recovery';
 
 export type GameLayer = 'board' | 'bonus' | 'scoreboard' | 'settings';
+
+export type GameRecoveryPresentation = Readonly<{
+  recoveryActive: boolean;
+  hasCommandNotice: boolean;
+  recoveryBlocked: boolean;
+  surface:
+    | Readonly<{ kind: 'none' }>
+    | Readonly<{ kind: 'progress'; status: 'reconnecting' | 'synchronizing' }>
+    | (Readonly<{ kind: 'terminal' }> &
+        Extract<SessionRecoverySnapshot, { status: 'permanentFailure' | 'refreshRequired' }>)
+    | Readonly<{ kind: 'rate-limited' }>
+    | Readonly<{ kind: 'retryable'; error: ClientError }>;
+}>;
+
+export function deriveGameRecoveryPresentation({
+  snapshot,
+  rateLimited,
+  commandRetryError,
+}: Readonly<{
+  snapshot: SessionRecoverySnapshot;
+  rateLimited: boolean;
+  commandRetryError: ClientError | null;
+}>): GameRecoveryPresentation {
+  const recoveryActive = snapshot.status !== 'idle';
+  const hasCommandNotice = rateLimited || commandRetryError !== null;
+  const surface: GameRecoveryPresentation['surface'] =
+    snapshot.status === 'permanentFailure' || snapshot.status === 'refreshRequired'
+      ? { kind: 'terminal', ...snapshot }
+      : snapshot.status === 'reconnecting' || snapshot.status === 'synchronizing'
+        ? { kind: 'progress', status: snapshot.status }
+        : rateLimited
+          ? { kind: 'rate-limited' }
+          : commandRetryError !== null
+            ? { kind: 'retryable', error: commandRetryError }
+            : { kind: 'none' };
+  return {
+    recoveryActive,
+    hasCommandNotice,
+    recoveryBlocked: recoveryActive || hasCommandNotice,
+    surface,
+  };
+}
 
 export function deriveGameInputReadiness({
   phase,
   hasPendingCommand,
   connected,
-  recoveryActive,
-  hasCommandNotice,
+  recoveryBlocked,
 }: Readonly<{
   phase: DicePresentationSnapshot['phase'];
   hasPendingCommand: boolean;
   connected: boolean;
-  recoveryActive: boolean;
-  hasCommandNotice: boolean;
+  recoveryBlocked: boolean;
 }>) {
-  const recoveryBlocked = recoveryActive || hasCommandNotice;
   return {
     recoveryBlocked,
     requestReady: connected && !hasPendingCommand && !recoveryBlocked,

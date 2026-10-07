@@ -2,8 +2,9 @@
 import { beforeEach, expect, test, vi } from 'vitest';
 
 import { createProductExecution } from '@/app/product-execution';
+import type { DicePresentationOptions } from '@/runtime/dice/dice-presentation';
 import { createPreferencesStore } from '@/runtime/preferences/preferences-store';
-import { inactiveTelemetry } from '@/runtime/telemetry/telemetry';
+import { inactiveTelemetry, type Telemetry } from '@/runtime/telemetry/telemetry';
 
 const fixture = vi.hoisted(() => ({
   order: [] as string[],
@@ -16,6 +17,8 @@ const fixture = vi.hoisted(() => ({
   sessionsDispose: vi.fn(),
   audioDispose: vi.fn(),
   presentationStart: vi.fn(),
+  presentationOptions: undefined as DicePresentationOptions | undefined,
+  requireRefresh: vi.fn(),
 }));
 
 vi.mock('@repo/game-client-sdk', () => ({ createGameClient: () => ({ clock: {} }) }));
@@ -26,10 +29,10 @@ vi.mock('@/runtime/audio/game-audio-feedback', () => ({
   startGameAudioFeedback: () => ({ dispose: fixture.feedbackDispose }),
 }));
 vi.mock('@/runtime/dice/dice-presentation', () => ({
-  createDicePresentation: () => ({
-    start: fixture.presentationStart,
-    dispose: fixture.presentationDispose,
-  }),
+  createDicePresentation: (options: DicePresentationOptions) => {
+    fixture.presentationOptions = options;
+    return { start: fixture.presentationStart, dispose: fixture.presentationDispose };
+  },
 }));
 vi.mock('@/runtime/network/server-readiness', () => ({ createServerReadiness: () => ({}) }));
 vi.mock('@/runtime/room-access/room-access', () => ({
@@ -48,13 +51,18 @@ vi.mock('@/runtime/session/game-session-holder', () => ({
   createGameSessionHolder: () => ({ dispose: fixture.sessionsDispose }),
 }));
 vi.mock('@/runtime/session/session-recovery', () => ({
-  createSessionRecovery: () => ({ start: vi.fn(), dispose: fixture.recoveryDispose }),
+  createSessionRecovery: () => ({
+    start: vi.fn(),
+    dispose: fixture.recoveryDispose,
+    requireRefreshAfterSynchronization: fixture.requireRefresh,
+  }),
 }));
 
 beforeEach(() => {
   vi.clearAllMocks();
   fixture.order.length = 0;
   fixture.activity = undefined;
+  fixture.presentationOptions = undefined;
   fixture.accessDispose.mockImplementation(() => fixture.order.push('access'));
   fixture.restoreDispose.mockImplementation(() => fixture.order.push('restore'));
   fixture.feedbackDispose.mockImplementation(() => fixture.order.push('feedback'));
@@ -67,12 +75,12 @@ beforeEach(() => {
   fixture.presentationStart.mockImplementation(() => undefined);
 });
 
-function createExecution() {
+function createExecution(telemetry: Telemetry = inactiveTelemetry) {
   return createProductExecution({
     serverUrl: 'https://game.example.com',
     releaseId: 'release',
     preferences: createPreferencesStore({ getItem: () => null, setItem: () => undefined }),
-    telemetry: inactiveTelemetry,
+    telemetry,
   });
 }
 
@@ -111,4 +119,40 @@ test('releases acquired owners when starting presentation fails and preserves th
   expect(fixture.order).toEqual(['feedback', 'recovery', 'presentation', 'sessions', 'audio']);
   expect(fixture.restoreDispose).not.toHaveBeenCalled();
   expect(fixture.accessDispose).not.toHaveBeenCalled();
+});
+
+test.each([new Error('simulation failed'), 'simulation failed', undefined])(
+  'reports simulation fallback cause %s once and requests refresh without raw fields',
+  (cause) => {
+    const reportUnexpected = vi.fn();
+    const execution = createExecution({ ...inactiveTelemetry, reportUnexpected });
+    const failure = {
+      status: 'static-fallback',
+      rollId: 'private-roll',
+      dice: [{ slot: 0, value: 6 }],
+      reason: 'SIMULATION_FAILED',
+      cause,
+    } as const;
+    fixture.presentationOptions?.requireRefreshAfterSynchronization(failure);
+
+    expect(reportUnexpected).toHaveBeenCalledExactlyOnceWith(cause, {
+      stage: 'replay',
+      replay_reason: 'SIMULATION_FAILED',
+    });
+    expect(fixture.requireRefresh).toHaveBeenCalledExactlyOnceWith();
+    execution.stop();
+  },
+);
+
+test('reports an outcome mismatch once with its reason and requests refresh', () => {
+  const reportUnexpected = vi.fn();
+  const execution = createExecution({ ...inactiveTelemetry, reportUnexpected });
+  fixture.presentationOptions?.requireRefreshAfterSynchronization({ reason: 'OUTCOME_MISMATCH' });
+
+  expect(reportUnexpected).toHaveBeenCalledExactlyOnceWith(new Error('OUTCOME_MISMATCH'), {
+    stage: 'replay',
+    replay_reason: 'OUTCOME_MISMATCH',
+  });
+  expect(fixture.requireRefresh).toHaveBeenCalledExactlyOnceWith();
+  execution.stop();
 });

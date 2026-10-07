@@ -11,7 +11,7 @@ import {
 
 import { PRODUCT_CUE, type ProductCue } from '@/runtime/audio/product-cues';
 import { selectFeaturedCombination } from '@/runtime/dice/achievement-selection';
-import type { PlaybackFallbackReason, RollPlayback } from '@/runtime/dice/replay';
+import type { PlaybackFailure, RollPlayback } from '@/runtime/dice/replay';
 import type { ProceduralDiceResources } from '@/runtime/dice/resources';
 import type { GameSessionHolder } from '@/runtime/session/game-session-holder';
 import {
@@ -70,7 +70,7 @@ interface ActiveRoll {
 export type DicePresentationOptions = Readonly<{
   sessions: GameSessionHolder;
   requestSynchronization: () => void;
-  requireRefreshAfterSynchronization: (reason: PlaybackFallbackReason, cause?: unknown) => void;
+  requireRefreshAfterSynchronization: (failure: PlaybackFailure) => void;
   onUnexpected?: (error: unknown) => void;
   playCue: (cue: ProductCue) => void;
   loadResolver?: () => Promise<PlaybackResolver>;
@@ -87,6 +87,11 @@ export interface DicePresentation {
   completePlayback(rollId: string): void;
   dispose(): void;
 }
+
+export type DicePresentationView = Pick<
+  DicePresentation,
+  'getSnapshot' | 'subscribe' | 'completePlayback'
+>;
 
 const defaultLoadResolver = async (): Promise<PlaybackResolver> => {
   const { resolveRollPlayback } = await import('@/runtime/dice/replay');
@@ -259,9 +264,7 @@ export function createDicePresentation(options: DicePresentationOptions): DicePr
     );
     if (playback.status === 'static-fallback') {
       console.warn('dice_replay_static_fallback', playback.reason);
-      if (playback.reason === 'SIMULATION_FAILED')
-        options.requireRefreshAfterSynchronization(playback.reason, playback.cause);
-      else options.requireRefreshAfterSynchronization(playback.reason);
+      options.requireRefreshAfterSynchronization(playback);
     }
   };
 

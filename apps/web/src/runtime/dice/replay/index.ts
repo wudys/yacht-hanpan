@@ -1,4 +1,5 @@
 export {
+  type PlaybackFailure,
   type PlaybackFallbackReason,
   type ResolvedRollPlaybackArtifact,
   resolveRollPlayback,

@@ -1,8 +1,8 @@
+import type { ProfileSelection } from '@repo/game-assets/characters';
 import type { GameClient, GameSession } from '@repo/game-client-sdk';
 import type { ClientError } from '@repo/game-client-sdk/errors';
 
 import type { ServerReadiness } from '@/runtime/network/server-readiness';
-import type { ProfileSelectionStore } from '@/runtime/profile/profile-selection-store';
 import type { StoredRoomReentry } from '@/runtime/room-access/stored-room-reentry';
 import {
   type Cancellation,
@@ -15,7 +15,6 @@ import type { GameSessionHolder } from '@/runtime/session/game-session-holder';
 import type { SessionCredentialStore } from '@/runtime/session/session-credential-store';
 import type { SessionRecovery } from '@/runtime/session/session-recovery';
 
-type Profile = ReturnType<ProfileSelectionStore['getSnapshot']>['selection'];
 export type ReadinessFailure = Extract<Awaited<ReturnType<ServerReadiness['wait']>>, { ok: false }>;
 export type {
   Cancellation,
@@ -105,14 +104,14 @@ export interface RoomAccess {
   getSnapshot(): RoomAccessSnapshot;
   subscribe(listener: () => void): () => void;
   checkStoredRoom(): void;
-  create(profile: Profile, signal: AbortSignal): Promise<AdmissionResult>;
+  create(profile: ProfileSelection, signal: AbortSignal): Promise<AdmissionResult>;
   join(
-    input: { profile: Profile; roomCode: string },
+    input: { profile: ProfileSelection; roomCode: string },
     signal: AbortSignal,
   ): Promise<AdmissionResult>;
   cancelWaiting(
     signal: AbortSignal,
-    onResponse: (error?: ClientError) => void,
+    onHttpResponse: (error?: ClientError) => void,
   ): Promise<Cancellation>;
   checkWaitingExpiry(signal: AbortSignal): Promise<ExpiryCheck>;
   confirmAuthorityFailure(): void;
@@ -155,7 +154,7 @@ export function createRoomAccess({
     if (activity.aborted) return { status: 'replaced' };
     const restored = reentry.getSnapshot();
     const holder = sessions.getSnapshot();
-    if (restored.status === 'playing')
+    if (restored.status === 'gameReady')
       return { status: 'handoff', origin: 'restore', target: 'game' };
     if (
       restored.status === 'checking' ||
@@ -248,7 +247,7 @@ export function createRoomAccess({
     else if (
       restored.status === 'idle' ||
       restored.status === 'waiting' ||
-      restored.status === 'playing'
+      restored.status === 'gameReady'
     )
       restoreSession = null;
     refresh();
@@ -319,7 +318,7 @@ export function createRoomAccess({
 
   async function admit(
     kind: 'create' | 'join',
-    input: { profile: Profile; roomCode?: string },
+    input: { profile: ProfileSelection; roomCode?: string },
     routeSignal: AbortSignal,
   ): Promise<AdmissionResult> {
     if (disposed || activity.aborted || routeSignal.aborted) return { status: 'stale' };
@@ -357,9 +356,7 @@ export function createRoomAccess({
       if (sessions.getSnapshot().authority !== null) return { status: 'stale' };
       sessionCredentialStore.recordRoom(result.data.authority);
       if (!active() || sessions.getSnapshot().authority !== null) return { status: 'stale' };
-      const session = sessions.installAuthority(result.data.authority);
-      if (!active() || !current(revision, session)) return { status: 'stale' };
-      sessions.setRoom(result.data.view.room);
+      const session = sessions.installAuthority(result.data.authority, result.data.view.room);
       if (!active() || !current(revision, session)) return { status: 'stale' };
       const { room } = result.data.view;
       const waitingRoom =
@@ -445,9 +442,9 @@ export function createRoomAccess({
     },
     create: (profile, signal) => admit('create', { profile }, signal),
     join: (input, signal) => admit('join', input, signal),
-    cancelWaiting: (signal, onResponse) =>
+    cancelWaiting: (signal, onHttpResponse) =>
       runWaiting('cancelling', signal, (operationSignal) =>
-        waiting.cancel(operationSignal, onResponse),
+        waiting.cancel(operationSignal, onHttpResponse),
       ),
     checkWaitingExpiry: (signal) =>
       runWaiting('checkingExpiry', signal, (operationSignal) =>
@@ -478,7 +475,7 @@ export function createRoomAccess({
         disposed ||
         activity.aborted ||
         handoffScheduled ||
-        (outcome.status !== 'waiting' && outcome.status !== 'playing')
+        (outcome.status !== 'waiting' && outcome.status !== 'gameReady')
       )
         return;
       handoffScheduled = true;

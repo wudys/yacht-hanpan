@@ -34,13 +34,16 @@ type VerifiedRollPlayback = Readonly<{
   timeline: RollTimeline;
 }>;
 
-type StaticRollFallback = Readonly<{
-  status: 'static-fallback';
-  rollId: string;
-  reason: PlaybackFallbackReason;
-  cause?: unknown;
-  dice: readonly StaticDie[];
-}>;
+export type PlaybackFailure =
+  | Readonly<{ reason: 'SIMULATION_FAILED'; cause: unknown }>
+  | Readonly<{ reason: 'OUTCOME_MISMATCH'; cause?: never }>;
+
+type StaticRollFallback = PlaybackFailure &
+  Readonly<{
+    status: 'static-fallback';
+    rollId: string;
+    dice: readonly StaticDie[];
+  }>;
 
 export type RollPlayback = VerifiedRollPlayback | StaticRollFallback;
 type RollSimulator = (input: SimulationInput) => Promise<SimulationReplay>;

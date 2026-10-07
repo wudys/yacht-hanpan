@@ -215,19 +215,31 @@ export function createGameSessionHarness(
       return true;
     }),
     dispose: vi.fn<GameSessionHolder['dispose']>(),
-    installAuthority: vi.fn<GameSessionHolder['installAuthority']>((nextAuthority) => {
+    installAuthority: vi.fn<GameSessionHolder['installAuthority']>((nextAuthority, initialRoom) => {
       const nextSession = createSessionMock();
+      const sessionSnapshot = nextSession.getSnapshot();
       snapshot = {
         ...snapshot,
         authority: nextAuthority,
+        room:
+          sessionSnapshot.room ??
+          (initialRoom?.roomId === nextAuthority.roomId ? initialRoom : null),
         session: nextSession,
-        sessionSnapshot: nextSession.getSnapshot(),
+        sessionSnapshot,
       };
       publish();
       return nextSession;
     }),
-    setRoom: vi.fn<GameSessionHolder['setRoom']>((nextRoom) => {
-      if (snapshot.sessionSnapshot.room !== null) return;
+    setProvisionalRoom: vi.fn<GameSessionHolder['setProvisionalRoom']>((nextRoom) => {
+      if (
+        snapshot.sessionSnapshot.room !== null ||
+        nextRoom.roomId !== snapshot.authority.roomId ||
+        snapshot.room === nextRoom ||
+        (nextRoom.status === 'waiting' &&
+          snapshot.room !== null &&
+          snapshot.room.status !== 'waiting')
+      )
+        return;
       snapshot = { ...snapshot, room: nextRoom };
       publish();
     }),

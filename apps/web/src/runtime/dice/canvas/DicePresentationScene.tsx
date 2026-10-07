@@ -1,13 +1,16 @@
 import { useThree } from '@react-three/fiber';
 import { useLayoutEffect, useSyncExternalStore } from 'react';
 
-import { DICE_REVEAL_DURATION_MS, type DicePresentation } from '@/runtime/dice/dice-presentation';
+import {
+  DICE_REVEAL_DURATION_MS,
+  type DicePresentationView,
+} from '@/runtime/dice/dice-presentation';
 import { GAME_ROLL_LAYOUT } from '@/runtime/dice/game-dice-layout';
 import { DiceRollScene, DiceSettledScene } from '@/runtime/dice/renderer';
 
 export function DicePresentationScene({
   presentation,
-}: Readonly<{ presentation: DicePresentation }>) {
+}: Readonly<{ presentation: DicePresentationView }>) {
   const snapshot = useSyncExternalStore(presentation.subscribe, presentation.getSnapshot);
   const { invalidate, setFrameloop } = useThree();
   const animating =

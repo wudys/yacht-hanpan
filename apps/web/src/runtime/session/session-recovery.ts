@@ -7,6 +7,7 @@ import type { GameSessionHolder } from '@/runtime/session/game-session-holder';
 import type { RecoveryAttemptEvent } from '@/runtime/session/recovery-attempt';
 
 const SESSION_RECOVERY_BUDGET_MS = 30_000;
+const CONFIRMATION_INTERVAL_MS = 1_000;
 
 export type SessionRecoverySnapshot =
   | Readonly<{ status: 'idle' }>
@@ -57,6 +58,9 @@ export function createSessionRecovery(options: CreateSessionRecoveryOptions): Se
   let incidentDeadline = 0;
   let incidentGeneration = 0;
   let incidentTimer: TimerHandle | null = null;
+  let confirmationTimer: TimerHandle | null = null;
+  let confirmationNotBefore = 0;
+  let rateLimitError: ClientError | null = null;
   let refreshAfterSynchronizationSession = null as typeof incidentSession;
 
   const publish = (next: SessionRecoverySnapshot): void => {
@@ -70,6 +74,11 @@ export function createSessionRecovery(options: CreateSessionRecoveryOptions): Se
     for (const subscriber of subscribers) subscriber();
   };
 
+  const cancelConfirmation = (): void => {
+    if (confirmationTimer !== null) cancel(confirmationTimer);
+    confirmationTimer = null;
+  };
+
   const releaseIncident = (
     outcome: 'success' | 'failure' | 'cancelled' = 'cancelled',
     error?: ClientError | null,
@@ -77,6 +86,9 @@ export function createSessionRecovery(options: CreateSessionRecoveryOptions): Se
     const active = incidentSession !== null;
     const durationMs = Math.max(0, now() - (incidentDeadline - SESSION_RECOVERY_BUDGET_MS));
     incidentGeneration += 1;
+    cancelConfirmation();
+    confirmationNotBefore = 0;
+    rateLimitError = null;
     if (incidentTimer !== null) cancel(incidentTimer);
     incidentTimer = null;
     incidentSession = null;
@@ -150,6 +162,42 @@ export function createSessionRecovery(options: CreateSessionRecoveryOptions): Se
     return false;
   };
 
+  const scheduleConfirmation = (error: ClientError | null): void => {
+    if (error?.kind === 'server' && error.error.code === PUBLIC_ERROR_CODE.RATE_LIMITED) {
+      if (error !== rateLimitError) {
+        rateLimitError = error;
+        confirmationNotBefore = Math.max(
+          confirmationNotBefore,
+          now() + error.error.params.retryAfterMs,
+        );
+        cancelConfirmation();
+      }
+    }
+    if (confirmationTimer !== null) return;
+    const delay = Math.max(CONFIRMATION_INTERVAL_MS, confirmationNotBefore - now());
+    if (delay >= incidentDeadline - now()) return;
+    const generation = incidentGeneration;
+    const session = incidentSession;
+    confirmationTimer = schedule(() => {
+      if (
+        disposed ||
+        generation !== incidentGeneration ||
+        incidentSession !== session ||
+        options.sessions.getSnapshot().session !== session
+      )
+        return;
+      confirmationTimer = null;
+      const current = options.sessions.getSnapshot().sessionSnapshot;
+      if (now() >= incidentDeadline) {
+        expireIncident(generation);
+        return;
+      }
+      if (current?.connection === 'connected' && current.syncStatus === 'idle') {
+        requestSynchronization();
+      }
+    }, delay);
+  };
+
   const observe = (): void => {
     if (disposed) return;
     const { session, sessionSnapshot: current } = options.sessions.getSnapshot();
@@ -187,6 +235,10 @@ export function createSessionRecovery(options: CreateSessionRecoveryOptions): Se
       current.error !== null;
     if (incidentSession === null && needsRecovery) beginIncident(session, current.syncRevision);
     if (incidentSession === null) return;
+    if (now() >= incidentDeadline) {
+      expireIncident(incidentGeneration);
+      return;
+    }
     if (
       current.connection === 'connected' &&
       current.syncStatus === 'idle' &&
@@ -201,36 +253,66 @@ export function createSessionRecovery(options: CreateSessionRecoveryOptions): Se
       publish(IDLE);
       return;
     }
+    if (current.connection === 'connected' && current.syncStatus === 'idle') {
+      scheduleConfirmation(current.error);
+    } else {
+      cancelConfirmation();
+    }
     publish({
       status: current.connection === 'connected' ? 'synchronizing' : 'reconnecting',
     });
   };
 
-  const requestSynchronization = (requireRefresh = false): void => {
+  function requestSynchronization(requireRefresh: boolean = false): void {
     if (disposed) return;
     const { session, sessionSnapshot: current } = options.sessions.getSnapshot();
-    if (session === null || current === null || current.game?.match.status !== 'playing') return;
+    const authenticatedWaiting =
+      current?.game === null &&
+      current.room?.status === 'waiting' &&
+      current.syncRevision > 0 &&
+      incidentSession === session;
+    if (
+      session === null ||
+      current === null ||
+      (current.game?.match.status !== 'playing' && !authenticatedWaiting)
+    )
+      return;
     if (terminalSession === session) return;
     beginIncident(session, current.syncRevision);
+    const generation = incidentGeneration;
+    const isCurrent = (): boolean =>
+      !disposed &&
+      generation === incidentGeneration &&
+      incidentSession === session &&
+      options.sessions.getSnapshot().session === session;
+    if (!isCurrent()) return;
     if (requireRefresh) refreshAfterSynchronizationSession = session;
     if (current.connection !== 'connected') {
       publish({ status: 'reconnecting' });
       return;
     }
     publish({ status: 'synchronizing' });
-    const generation = incidentGeneration;
-    void session.synchronize().then(observe, (error: unknown) => {
-      if (
-        disposed ||
-        generation !== incidentGeneration ||
-        incidentSession !== session ||
-        options.sessions.getSnapshot().session !== session
-      )
-        return;
-      options.onUnexpected?.(error);
-      observe();
-    });
-  };
+    if (!isCurrent()) return;
+    if (now() >= incidentDeadline) {
+      expireIncident(incidentGeneration);
+      return;
+    }
+    if (current.syncStatus === 'idle' && now() < confirmationNotBefore) {
+      scheduleConfirmation(current.error);
+      return;
+    }
+    cancelConfirmation();
+    void session.synchronize().then(
+      () => {
+        if (isCurrent()) observe();
+      },
+      (error: unknown) => {
+        if (!isCurrent()) return;
+        options.onUnexpected?.(error);
+        observe();
+      },
+    );
+  }
 
   return {
     getSnapshot: () => snapshot,

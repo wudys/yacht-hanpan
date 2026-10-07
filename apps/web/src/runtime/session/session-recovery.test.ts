@@ -39,6 +39,285 @@ afterEach(() => {
 });
 
 describe('Game recovery', () => {
+  test.each(['dispose', 'replace'] as const)(
+    'does not start stale synchronization after a publication observer wins with %s',
+    async (action) => {
+      vi.useFakeTimers();
+      vi.setSystemTime(0);
+      const session = createSessionFixture();
+      const replacement = createSessionFixture({ connection: 'disconnected' });
+      const sessions = createInstalledHolder(session.value, (authority) =>
+        authority.roomId === AUTHORITY.roomId ? session.value : replacement.value,
+      );
+      const onUnexpected = vi.fn();
+      const recovery = createSessionRecovery({ sessions, now: Date.now, onUnexpected });
+      const attempts = vi.fn();
+      recovery.subscribeAttempt(attempts);
+      recovery.start();
+      let changed = false;
+      recovery.subscribe(() => {
+        if (changed || recovery.getSnapshot().status !== 'synchronizing') return;
+        changed = true;
+        if (action === 'dispose') recovery.dispose();
+        else sessions.installAuthority(REPLACEMENT_AUTHORITY);
+      });
+
+      recovery.requestSynchronization();
+      await Promise.resolve();
+
+      expect(session.value.synchronize).not.toHaveBeenCalled();
+      expect(replacement.value.synchronize).not.toHaveBeenCalled();
+      expect(onUnexpected).not.toHaveBeenCalled();
+      expect(attempts.mock.calls.slice(0, 2)).toEqual([
+        [{ phase: 'started' }],
+        [{ phase: 'finished', outcome: 'cancelled', durationMs: 0 }],
+      ]);
+      if (action === 'replace') {
+        expect(recovery.getSnapshot()).toEqual({ status: 'reconnecting' });
+        expect(vi.getTimerCount()).toBe(1);
+        await vi.advanceTimersByTimeAsync(29_999);
+        expect(replacement.value.disconnect).not.toHaveBeenCalled();
+        await vi.advanceTimersByTimeAsync(1);
+        expect(recovery.getSnapshot()).toEqual({ status: 'refreshRequired', error: null });
+        expect(replacement.value.disconnect).toHaveBeenCalledOnce();
+      } else expect(vi.getTimerCount()).toBe(0);
+      recovery.dispose();
+      sessions.dispose();
+    },
+  );
+
+  test('confirms a timed-out incident after live state clears the failure without a new revision', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    const session = createSessionFixture({ syncRevision: 1 });
+    const recovery = createSessionRecovery({
+      sessions: createInstalledHolder(session.value),
+      now: Date.now,
+    });
+    const attempts = vi.fn();
+    recovery.subscribeAttempt(attempts);
+    recovery.start();
+    session.publish({ syncStatus: 'synchronizing' });
+    session.publish({
+      syncStatus: 'idle',
+      error: { kind: 'transport', code: CLIENT_ERROR_CODE.ACK_TIMEOUT },
+    });
+    session.publish({
+      error: null,
+      game: { ...PLAYING_GAME, stateVersion: FINISHED_GAME.stateVersion },
+    });
+
+    await vi.advanceTimersByTimeAsync(999);
+    expect(session.value.synchronize).not.toHaveBeenCalled();
+    expect(recovery.getSnapshot().status).toBe('synchronizing');
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(session.value.synchronize).toHaveBeenCalledTimes(1);
+    expect(session.value.getSnapshot().syncRevision).toBe(2);
+    expect(recovery.getSnapshot()).toEqual({ status: 'idle' });
+    expect(attempts.mock.calls).toEqual([
+      [{ phase: 'started' }],
+      [{ phase: 'finished', outcome: 'success', durationMs: 1_000 }],
+    ]);
+    recovery.dispose();
+  });
+
+  test('honors rate-limit backoff after live clears its error and foreground repeats', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    const session = createSessionFixture();
+    const foreground = createForegroundFixture();
+    const recovery = createSessionRecovery({
+      sessions: createInstalledHolder(session.value),
+      now: Date.now,
+      subscribeForeground: foreground.subscribe,
+    });
+    recovery.start();
+    session.publish({
+      error: {
+        kind: 'server',
+        error: { code: PUBLIC_ERROR_CODE.RATE_LIMITED, params: { retryAfterMs: 4_000 } },
+      },
+    });
+    session.publish({ error: null });
+    foreground.publish();
+    foreground.publish();
+    await vi.advanceTimersByTimeAsync(3_999);
+    expect(session.value.synchronize).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(session.value.synchronize).toHaveBeenCalledTimes(1);
+    expect(recovery.getSnapshot().status).toBe('idle');
+    recovery.dispose();
+  });
+
+  test('leaves an active or disconnected SDK sync to its owner', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    const session = createSessionFixture();
+    const recovery = createSessionRecovery({
+      sessions: createInstalledHolder(session.value),
+      now: Date.now,
+    });
+    recovery.start();
+    session.publish({ error: { kind: 'transport', code: CLIENT_ERROR_CODE.ACK_TIMEOUT } });
+    await vi.advanceTimersByTimeAsync(500);
+    session.publish({ syncStatus: 'synchronizing' });
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(session.value.synchronize).not.toHaveBeenCalled();
+    session.publish({ syncStatus: 'idle', connection: 'disconnected' });
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(session.value.synchronize).not.toHaveBeenCalled();
+    session.publish({ connection: 'connected' });
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(session.value.synchronize).toHaveBeenCalledTimes(1);
+    expect(recovery.getSnapshot().status).toBe('idle');
+    recovery.dispose();
+  });
+
+  test('does not start a new foreground incident for healthy authenticated waiting', () => {
+    const session = createSessionFixture({
+      game: null,
+      room: { status: 'waiting' } as NonNullable<GameSessionSnapshot['room']>,
+      syncRevision: 1,
+    });
+    const foreground = createForegroundFixture();
+    const recovery = createSessionRecovery({
+      sessions: createInstalledHolder(session.value),
+      subscribeForeground: foreground.subscribe,
+    });
+    recovery.start();
+    foreground.publish();
+    expect(session.value.synchronize).not.toHaveBeenCalled();
+    expect(recovery.getSnapshot().status).toBe('idle');
+    recovery.dispose();
+  });
+
+  test('reconfirms authenticated waiting after its initial confirmation', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    const session = createSessionFixture({
+      game: null,
+      room: { status: 'waiting' } as NonNullable<GameSessionSnapshot['room']>,
+      syncRevision: 1,
+      error: { kind: 'transport', code: CLIENT_ERROR_CODE.ACK_TIMEOUT },
+    });
+    const recovery = createSessionRecovery({
+      sessions: createInstalledHolder(session.value),
+      now: Date.now,
+    });
+    recovery.start();
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(session.value.synchronize).toHaveBeenCalledTimes(1);
+    expect(recovery.getSnapshot().status).toBe('idle');
+    recovery.dispose();
+  });
+
+  test('keeps ok without a new revision locked and bounded by the original deadline', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    const session = createSessionFixture({ connection: 'disconnected' });
+    vi.mocked(session.value.synchronize).mockResolvedValue({ ok: true });
+    const recovery = createSessionRecovery({
+      sessions: createInstalledHolder(session.value),
+      now: Date.now,
+    });
+    recovery.start();
+    await vi.advanceTimersByTimeAsync(28_000);
+    session.publish({ connection: 'connected' });
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(session.value.synchronize).toHaveBeenCalledTimes(1);
+    expect(recovery.getSnapshot().status).toBe('synchronizing');
+    await vi.advanceTimersByTimeAsync(999);
+    expect(session.value.disconnect).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(session.value.synchronize).toHaveBeenCalledTimes(1);
+    expect(session.value.disconnect).toHaveBeenCalledTimes(1);
+    expect(recovery.getSnapshot().status).toBe('refreshRequired');
+    recovery.dispose();
+  });
+
+  test.each([29_999, 30_000])(
+    'accepts a fresh playing confirmation only before the incident deadline (%s ms)',
+    (confirmedAt) => {
+      vi.useFakeTimers();
+      vi.setSystemTime(0);
+      const session = createSessionFixture({ connection: 'disconnected' });
+      const recovery = createSessionRecovery({
+        sessions: createInstalledHolder(session.value),
+        now: Date.now,
+      });
+      recovery.start();
+      // Delivery can precede a delayed expiry timer; the incident still owns its absolute cutoff.
+      vi.setSystemTime(confirmedAt);
+      session.publish({ connection: 'connected', syncRevision: 1 });
+      expect(recovery.getSnapshot().status).toBe(confirmedAt < 30_000 ? 'idle' : 'refreshRequired');
+      expect(session.value.disconnect).toHaveBeenCalledTimes(confirmedAt < 30_000 ? 0 : 1);
+      recovery.dispose();
+    },
+  );
+
+  test.each(['replaced', 'cleared', 'disposed', 'finished', 'terminal'] as const)(
+    'invalidates cancelled automatic confirmation callbacks after %s',
+    async (state) => {
+      vi.useFakeTimers();
+      vi.setSystemTime(0);
+      const session = createSessionFixture();
+      const replacement = createSessionFixture();
+      const sessions = createInstalledHolder(session.value, (authority) =>
+        authority.roomId === AUTHORITY.roomId ? session.value : replacement.value,
+      );
+      const callbacks: (() => void)[] = [];
+      const recovery = createSessionRecovery({
+        sessions,
+        now: Date.now,
+        setTimeout: (callback, delay) => {
+          callbacks.push(callback);
+          return globalThis.setTimeout(callback, delay);
+        },
+      });
+      const attempts = vi.fn();
+      recovery.subscribeAttempt(attempts);
+      recovery.start();
+      session.publish({ error: { kind: 'transport', code: CLIENT_ERROR_CODE.ACK_TIMEOUT } });
+      expect(callbacks).toHaveLength(2);
+      if (state === 'replaced') sessions.installAuthority(REPLACEMENT_AUTHORITY);
+      if (state === 'cleared') sessions.clear();
+      if (state === 'disposed') recovery.dispose();
+      if (state === 'finished') session.publish({ game: FINISHED_GAME });
+      if (state === 'terminal')
+        session.publish({ error: serverError(PUBLIC_ERROR_CODE.ROOM_NOT_FOUND) });
+      const finalAttempts = attempts.mock.calls.length;
+      callbacks[1]!();
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(session.value.synchronize).not.toHaveBeenCalled();
+      expect(replacement.value.synchronize).not.toHaveBeenCalled();
+      expect(attempts.mock.calls).toHaveLength(finalAttempts);
+      recovery.dispose();
+    },
+  );
+
+  test('retains refresh-only after a failed parity confirmation is automatically retried', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    const session = createSessionFixture();
+    const recovery = createSessionRecovery({
+      sessions: createInstalledHolder(session.value),
+      now: Date.now,
+    });
+    recovery.start();
+    vi.mocked(session.value.synchronize).mockImplementationOnce(async () => {
+      const error: ClientError = { kind: 'transport', code: CLIENT_ERROR_CODE.ACK_TIMEOUT };
+      session.publish({ syncStatus: 'idle', error });
+      return { ok: false, error };
+    });
+    recovery.requireRefreshAfterSynchronization();
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(session.value.synchronize).toHaveBeenCalledTimes(2);
+    expect(session.value.disconnect).toHaveBeenCalledTimes(1);
+    expect(recovery.getSnapshot()).toEqual({ status: 'refreshRequired', error: null });
+    recovery.dispose();
+  });
+
   test.each(['active', 'replaced', 'disposed', 'finished'] as const)(
     'reports an unexpected synchronization rejection only for an active owner (%s)',
     async (state) => {
@@ -633,7 +912,19 @@ function createSessionFixture(initial: Partial<GameSessionSnapshot> = {}) {
     connect: vi.fn(unavailable),
     disconnect: vi.fn(),
     dispose: vi.fn(),
-    synchronize: vi.fn(() => Promise.resolve({ ok: true as const })),
+    synchronize: vi.fn(async () => {
+      snapshot = { ...snapshot, syncStatus: 'synchronizing' };
+      listeners.forEach((listener) => listener());
+      await Promise.resolve();
+      snapshot = {
+        ...snapshot,
+        syncStatus: 'idle',
+        syncRevision: snapshot.syncRevision + 1,
+        error: null,
+      };
+      listeners.forEach((listener) => listener());
+      return { ok: true as const };
+    }),
     getSnapshot: () => snapshot,
     subscribe(listener: () => void) {
       listeners.add(listener);

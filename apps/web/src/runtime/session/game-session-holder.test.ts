@@ -110,6 +110,43 @@ function createSessionFixture(initial: GameSessionSnapshot = sessionSnapshot('id
 }
 
 describe('createGameSessionHolder', () => {
+  test('publishes initial provisional metadata with authority exactly once', () => {
+    const fixture = createSessionFixture();
+    const holder = createGameSessionHolder({ createSession: () => fixture.session });
+    const observed: ReturnType<typeof holder.getSnapshot>[] = [];
+    holder.subscribe(() => observed.push(holder.getSnapshot()));
+    const room = waitingRoom();
+
+    expect(holder.installAuthority(authority, room)).toBe(fixture.session);
+    expect(observed).toEqual([
+      { authority, room, session: fixture.session, sessionSnapshot: fixture.session.getSnapshot() },
+    ]);
+    expect(fixture.connect).not.toHaveBeenCalled();
+    holder.dispose();
+  });
+
+  test('applies matching provisional metadata when reusing authority and preserves its filters', () => {
+    const fixture = createSessionFixture();
+    const createSession = vi.fn(() => fixture.session);
+    const holder = createGameSessionHolder({ createSession });
+    holder.installAuthority(authority, waitingRoom(OTHER_ROOM_ID));
+    expect(holder.getSnapshot().room).toBeNull();
+    const notify = vi.fn();
+    holder.subscribe(notify);
+    const room = playingRoom();
+
+    expect(holder.installAuthority({ ...authority }, room)).toBe(fixture.session);
+    const installed = holder.getSnapshot();
+    expect(installed.room).toBe(room);
+    holder.installAuthority({ ...authority }, room);
+    holder.installAuthority({ ...authority }, waitingRoom());
+    holder.installAuthority({ ...authority }, waitingRoom(OTHER_ROOM_ID));
+    expect(holder.getSnapshot()).toBe(installed);
+    expect(notify).toHaveBeenCalledOnce();
+    expect(createSession).toHaveBeenCalledOnce();
+    holder.dispose();
+  });
+
   test('captures the latest finished state even before the holder subscription receives it', () => {
     const fixture = createSessionFixture();
     const holder = createGameSessionHolder({ createSession: () => fixture.session });
@@ -186,13 +223,13 @@ describe('createGameSessionHolder', () => {
     const fixture = createSessionFixture();
     const holder = createGameSessionHolder({ createSession: () => fixture.session });
     holder.installAuthority(authority);
-    holder.setRoom(waitingRoom());
+    holder.setProvisionalRoom(waitingRoom());
     const room = playingRoom();
     fixture.emit({ ...sessionSnapshot('connected'), room });
     const synchronized = holder.getSnapshot();
     expect(synchronized.room).toBe(room);
-    holder.setRoom(waitingRoom());
-    holder.setRoom(playingRoom());
+    holder.setProvisionalRoom(waitingRoom());
+    holder.setProvisionalRoom(playingRoom());
     expect(holder.getSnapshot()).toBe(synchronized);
     const finished = finishedRoom();
     fixture.emit({ ...sessionSnapshot('connected'), room: finished });
@@ -204,7 +241,7 @@ describe('createGameSessionHolder', () => {
     const room = playingRoom();
     const fixture = createSessionFixture({ ...sessionSnapshot('connected'), room });
     const holder = createGameSessionHolder({ createSession: () => fixture.session });
-    holder.installAuthority(authority);
+    holder.installAuthority(authority, waitingRoom());
     expect(holder.getSnapshot().room).toBe(room);
     holder.dispose();
   });
@@ -251,7 +288,7 @@ describe('createGameSessionHolder', () => {
 
     expect(holder.getSnapshot().sessionSnapshot).toBe(connected);
     expect(notify).toHaveBeenCalledTimes(2);
-    holder.setRoom(waitingRoom());
+    holder.setProvisionalRoom(waitingRoom());
 
     const changedAuthority: RoomAuthority = { ...authority, seatToken: SECOND_SEAT_TOKEN };
     holder.installAuthority(changedAuthority);
@@ -289,7 +326,7 @@ describe('createGameSessionHolder', () => {
     holder.subscribe(notify);
 
     holder.installAuthority(authority);
-    holder.setRoom(waitingRoom());
+    holder.setProvisionalRoom(waitingRoom());
     holder.clear();
     const clearedView = holder.getSnapshot();
 
@@ -309,7 +346,7 @@ describe('createGameSessionHolder', () => {
 
     const changedAuthority: RoomAuthority = { ...authority, seatToken: SECOND_SEAT_TOKEN };
     holder.installAuthority(changedAuthority);
-    holder.setRoom(waitingRoom());
+    holder.setProvisionalRoom(waitingRoom());
     holder.dispose();
     const disposedView = holder.getSnapshot();
 
@@ -342,13 +379,13 @@ describe('createGameSessionHolder', () => {
     holder.subscribe(notify);
     const room = waitingRoom();
 
-    holder.setRoom(room);
+    holder.setProvisionalRoom(room);
     const roomView = holder.getSnapshot();
 
     expect(roomView.room).toBe(room);
     expect(notify).toHaveBeenCalledTimes(1);
 
-    holder.setRoom(room);
+    holder.setProvisionalRoom(room);
     holder.installAuthority({ ...authority });
     expect(holder.getSnapshot()).toBe(roomView);
     expect(notify).toHaveBeenCalledTimes(1);
@@ -362,7 +399,7 @@ describe('createGameSessionHolder', () => {
     holder.subscribe(notify);
     const installedView = holder.getSnapshot();
 
-    holder.setRoom(waitingRoom(OTHER_ROOM_ID));
+    holder.setProvisionalRoom(waitingRoom(OTHER_ROOM_ID));
 
     expect(holder.getSnapshot()).toBe(installedView);
     expect(notify).not.toHaveBeenCalled();
@@ -376,16 +413,16 @@ describe('createGameSessionHolder', () => {
     holder.subscribe(notify);
 
     const playing = playingRoom();
-    holder.setRoom(playing);
+    holder.setProvisionalRoom(playing);
     const playingView = holder.getSnapshot();
-    holder.setRoom(waitingRoom());
+    holder.setProvisionalRoom(waitingRoom());
     expect(holder.getSnapshot()).toBe(playingView);
     expect(notify).toHaveBeenCalledTimes(1);
 
     const finished = finishedRoom();
-    holder.setRoom(finished);
+    holder.setProvisionalRoom(finished);
     const finishedView = holder.getSnapshot();
-    holder.setRoom(waitingRoom());
+    holder.setProvisionalRoom(waitingRoom());
     expect(holder.getSnapshot()).toBe(finishedView);
     expect(notify).toHaveBeenCalledTimes(2);
   });

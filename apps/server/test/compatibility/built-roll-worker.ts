@@ -48,25 +48,27 @@ export async function verifyBuiltWorker(): Promise<void> {
   assert.equal(normalReports.length, 0);
 
   const directory = await mkdtemp(join(tmpdir(), 'built-roll-worker-'));
-  // The wrapper injects only process exit. Boot, WASM, work and replacement all load the built artifact.
-  const wrapper = join(directory, 'crash-worker.mjs');
-  await Bun.write(
-    wrapper,
-    `import { parentPort } from 'node:worker_threads';
+  const crashReports: unknown[] = [];
+  let replacement: RollSimulationWorkerPool | undefined;
+  let completed = false;
+  try {
+    // The wrapper injects only process exit. Boot, WASM, work and replacement all load the built artifact.
+    const wrapper = join(directory, 'crash-worker.mjs');
+    await Bun.write(
+      wrapper,
+      `import { parentPort } from 'node:worker_threads';
 parentPort.on('message', request => {
   if (request.input.seed === 'compatibility-process-exit') process.exit(86);
 });
 await import(${JSON.stringify(builtWorkerUrl.href)});
 `,
-  );
-  const crashReports: unknown[] = [];
-  const replacement = new RollSimulationWorkerPool({
-    size: 1,
-    maxQueued: 1,
-    workerUrl: pathToFileURL(wrapper),
-    reportUnexpected: (error) => crashReports.push(error),
-  });
-  try {
+    );
+    replacement = new RollSimulationWorkerPool({
+      size: 1,
+      maxQueued: 1,
+      workerUrl: pathToFileURL(wrapper),
+      reportUnexpected: (error) => crashReports.push(error),
+    });
     await replacement.start();
     const failed = replacement.execute(
       {
@@ -85,9 +87,9 @@ await import(${JSON.stringify(builtWorkerUrl.href)});
     await rejection;
     await assertGoldenResult(await queued);
     assert.deepEqual(replacement.stats(), { readyWorkers: 1, running: 0, queued: 0, restarts: 1 });
+    completed = true;
   } finally {
-    await replacement.close();
-    await rm(directory, { recursive: true, force: true });
+    await disposeBuiltWorkerWrapper(replacement, directory, completed);
   }
   assert.deepEqual(replacement.stats(), { readyWorkers: 0, running: 0, queued: 0, restarts: 1 });
   assert.equal(crashReports.length, 1);
@@ -239,27 +241,29 @@ async function verifyBuiltWorkerCandidateRejections(): Promise<void> {
   assert.deepEqual(executor.stats(), { readyWorkers: 0, running: 0, queued: 0, restarts: 0 });
 }
 
-async function verifyBuiltWorkerBudgetExpiry(): Promise<void> {
+export async function verifyBuiltWorkerBudgetExpiry(): Promise<void> {
   const directory = await mkdtemp(join(tmpdir(), 'built-worker-budget-'));
-  const wrapper = join(directory, 'budget-worker.mjs');
-  // Block the native worker CPU; only a real termination can release this job.
-  await Bun.write(
-    wrapper,
-    `import { parentPort } from 'node:worker_threads';
+  let executor: RollSimulationWorkerPool | undefined;
+  let completed = false;
+  try {
+    const wrapper = join(directory, 'budget-worker.mjs');
+    // Block the native worker CPU; only a real termination can release this job.
+    await Bun.write(
+      wrapper,
+      `import { parentPort } from 'node:worker_threads';
 parentPort.on('message', request => {
   if (request.input.seed === 'compatibility-budget-hang') { while (true) {} }
 });
 await import(${JSON.stringify(builtWorkerUrl.href)});
 `,
-  );
-  const reports: unknown[] = [];
-  const executor = new RollSimulationWorkerPool({
-    size: 1,
-    maxQueued: 1,
-    workerUrl: pathToFileURL(wrapper),
-    reportUnexpected: (error) => reports.push(error),
-  });
-  try {
+    );
+    const reports: unknown[] = [];
+    executor = new RollSimulationWorkerPool({
+      size: 1,
+      maxQueued: 1,
+      workerUrl: pathToFileURL(wrapper),
+      reportUnexpected: (error) => reports.push(error),
+    });
     await executor.start();
     const failed = executor.execute(
       { ...ROLL_WORKER_GOLDEN_INPUT, seed: 'compatibility-budget-hang' },
@@ -275,9 +279,9 @@ await import(${JSON.stringify(builtWorkerUrl.href)});
     await assertGoldenResult(await queued);
     assert.deepEqual(executor.stats(), { readyWorkers: 1, running: 0, queued: 0, restarts: 1 });
     assert.equal(reports.length, 0);
+    completed = true;
   } finally {
-    await executor.close();
-    await rm(directory, { recursive: true, force: true });
+    await disposeBuiltWorkerWrapper(executor, directory, completed);
   }
   assert.deepEqual(executor.stats(), { readyWorkers: 0, running: 0, queued: 0, restarts: 1 });
 }
@@ -352,5 +356,28 @@ await import(${JSON.stringify(builtWorkerUrl.href)});
     }
   } finally {
     await rm(directory, { recursive: true, force: true });
+  }
+}
+
+async function disposeBuiltWorkerWrapper(
+  executor: RollSimulationWorkerPool | undefined,
+  directory: string,
+  completed: boolean,
+): Promise<void> {
+  let failure: { readonly error: unknown } | undefined;
+  try {
+    await executor?.close();
+  } catch (error) {
+    failure = { error };
+  }
+  try {
+    await rm(directory, { recursive: true, force: true });
+  } catch (error) {
+    if (failure === undefined) failure = { error };
+    else console.error('Built worker wrapper removal failed:', error);
+  }
+  if (failure !== undefined) {
+    if (completed) throw failure.error;
+    console.error('Built worker wrapper cleanup failed:', failure.error);
   }
 }

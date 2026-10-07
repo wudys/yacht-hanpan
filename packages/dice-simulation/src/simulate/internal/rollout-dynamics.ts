@@ -1,7 +1,7 @@
-import type { SimDie } from './physics-environment';
+import type { PhysicsDie } from './physics-environment';
 import { interpolateMotionCap, limitPlanarVelocity } from './rollout-motion';
 
-export function constrainRolloutVelocity(dice: SimDie[], elapsedSeconds: number): void {
+export function constrainRolloutVelocity(dice: PhysicsDie[], elapsedSeconds: number): void {
   if (elapsedSeconds > 3.4) return;
 
   const { maxXSpeed, maxZSpeed } = rolloutSpeedCaps(elapsedSeconds);
@@ -46,7 +46,7 @@ function speedCaps(
   };
 }
 
-export function constrainRolloutAngularVelocity(dice: SimDie[], elapsedSeconds: number): void {
+export function constrainRolloutAngularVelocity(dice: PhysicsDie[], elapsedSeconds: number): void {
   if (elapsedSeconds > 0.9) return;
 
   dice.forEach((die) => {
@@ -69,11 +69,11 @@ export function constrainRolloutAngularVelocity(dice: SimDie[], elapsedSeconds: 
 }
 
 function rolloutAngularSpeedCap(elapsedSeconds: number, planarSpeed: number): number {
-  const styleCeiling = interpolateMotionCap(elapsedSeconds, [
+  const angularSpeedCeiling = interpolateMotionCap(elapsedSeconds, [
     { t: 0, value: 14 },
     { t: 0.16, value: 12.2 },
     { t: 0.45, value: 11.2 },
   ]);
   const coupledCap = 5.8 + planarSpeed * 2.75;
-  return Math.min(styleCeiling, coupledCap);
+  return Math.min(angularSpeedCeiling, coupledCap);
 }

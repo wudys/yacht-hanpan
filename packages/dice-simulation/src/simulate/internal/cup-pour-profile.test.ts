@@ -21,7 +21,7 @@ describe('cup pour profile', () => {
       const profile = createCupPourProfile(seed, area);
       expect(profile).toEqual(createCupPourProfile(seed, area));
       expect(Math.sign(profile.releaseX)).toBe(Math.sign(profile.stageX));
-      expect(Math.sign(profile.tilt)).toBe(Math.sign(profile.stageX));
+      expect(Math.sign(profile.stageX)).toBe(profile.side);
       expect(Math.abs(profile.releaseX)).toBeLessThan(Math.abs(profile.stageX));
       return Math.sign(profile.stageX);
     });

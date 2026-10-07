@@ -1,4 +1,9 @@
-import type { SimulationInput, SimulationOutcome, SimulationResult } from './types';
+import type {
+  RollCandidateEvaluation,
+  SimulationInput,
+  SimulationOutcome,
+  SimulationResult,
+} from './types';
 import { isSimulationInput, parseSimulationInput } from './validation';
 
 /** Checks compact shape and ordered outcome slots; request identity remains with the caller. */
@@ -9,6 +14,25 @@ export function isSimulationOutcome(value: unknown): value is SimulationOutcome 
     isSimulationInput(value.input) &&
     Array.isArray(value.authoritativeValuesBySlot) &&
     isRolledFaces(value.authoritativeValuesBySlot, value.input.rolledSlots)
+  );
+}
+
+/** Checks candidate shape; request identity remains with the authoritative caller. */
+export function isRollCandidateEvaluation(value: unknown): value is RollCandidateEvaluation {
+  if (!isRecord(value)) return false;
+  if (value.status === 'accepted') {
+    return hasExactKeys(value, ['outcome', 'status']) && isSimulationOutcome(value.outcome);
+  }
+  return (
+    value.status === 'rejected' &&
+    hasExactKeys(value, ['input', 'reason', 'simulationMs', 'status']) &&
+    isSimulationInput(value.input) &&
+    (value.reason === 'stable-stack' ||
+      value.reason === 'repeated-assist' ||
+      value.reason === 'unsettled-at-limit') &&
+    isFiniteNumber(value.simulationMs) &&
+    Number.isInteger(value.simulationMs) &&
+    value.simulationMs >= 0
   );
 }
 

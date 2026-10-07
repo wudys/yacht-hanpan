@@ -20,7 +20,7 @@ test.each(['classic', 'burst', 'oblique'] as const)(
     const world = new RAPIER.World({ x: 0, y: 0, z: 0 });
     try {
       const motion = createCupMotion(seed, style);
-      const start = motion.pourAtMs + (style === 'burst' ? 210 : 300);
+      const start = motion.pourAtMs + 300;
       const t = start + 100;
       const pose = cupTransformAt(motion, t);
       const cup = createPhysicsCup(world, pose, DEFAULT_CUP_GEOMETRY);

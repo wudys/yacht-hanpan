@@ -33,7 +33,7 @@ const validInput = {
 describe('dice simulation contract', () => {
   test('keeps independent runtime and artifact versions', () => {
     expect(DICE_SIMULATION_CONTRACT).toEqual({
-      simulationVersion: 'dice-simulation-v35',
+      simulationVersion: 'dice-simulation-v36',
       timelineSchemaVersion: 'dice-timeline-v4',
       replayDigestVersion: 'sha256-q4-v2',
       prngVersion: 'sha256-counter53-v1',

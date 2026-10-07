@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 
-import { simulateRollReplay } from '@repo/dice-simulation';
+import { simulateRollReplay, SimulationRejectedError } from '@repo/dice-simulation';
 import {
   DEFAULT_CUP_GEOMETRY,
   DIE_GEOMETRY,
@@ -20,6 +20,7 @@ import {
   createDieFrameSampler,
   type TimelineSample,
 } from '@/runtime/dice/renderer/parts/timeline-sampling';
+import { resolveRollPlayback } from '@/runtime/dice/replay/resolve-playback';
 import type { CanvasFactory } from '@/runtime/dice/resources/canvas-factory';
 import { createProceduralDiceResources } from '@/runtime/dice/resources/procedural-resources';
 
@@ -86,7 +87,7 @@ function fullyAboveMouth(dieMatrix: Matrix4, cupMatrix: Matrix4): boolean {
   return true;
 }
 
-describe('product replay displayed bottom', () => {
+describe('product replay and displayed bottom', () => {
   beforeAll(async () => {
     // Read the installed dependency asset through its owning package. The real
     // browser loader and simulator run unchanged; only HTTP delivery is local.
@@ -101,6 +102,69 @@ describe('product replay displayed bottom', () => {
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+
+  test('the accepted 900ms policy recipe reproduces its authoritative outcome through the browser runtime', async () => {
+    // Frozen prototype guard-gap regression: these faces and completion times
+    // are independent expectations, not values sampled from this invocation.
+    const artifact = {
+      replay: {
+        rollId: 'accepted-guard-gap',
+        seed: 'ad8a8e1d054b30cb5f30ec3ca4ed8754',
+        rolledSlots: [0, 1, 2, 3],
+        pourStyle: 'burst',
+      } satisfies SimulationInput,
+      outcome: {
+        authoritativeValuesBySlot: [
+          { slot: 0, value: 1 },
+          { slot: 1, value: 5 },
+          { slot: 2, value: 4 },
+          { slot: 3, value: 4 },
+        ] as const,
+      },
+    };
+    const playback = await resolveRollPlayback(artifact);
+    expect(playback.status).toBe('verified');
+    if (playback.status !== 'verified') throw new Error('Accepted recipe did not verify');
+    expect(playback.timeline.durationMs).toBe(3750);
+    expect(playback.timeline.dice.map((die) => ({ slot: die.slot, value: die.value }))).toEqual(
+      artifact.outcome.authoritativeValuesBySlot,
+    );
+    for (const die of playback.timeline.dice) {
+      const physical = die.frames.at(-2)!;
+      const held = die.frames.at(-1)!;
+      expect(physical.t).toBe(3500);
+      expect(held).toEqual({ ...physical, t: 3750 });
+    }
+  });
+
+  test('a real stack rejection returns the authoritative static outcome without a second simulation', async () => {
+    const artifact = {
+      replay: {
+        rollId: 'rejected-stack',
+        seed: '21f806f9d20df7231635b433a1dc99aa',
+        rolledSlots: [0, 1, 2, 3],
+        pourStyle: 'burst',
+      } satisfies SimulationInput,
+      outcome: {
+        authoritativeValuesBySlot: [
+          { slot: 0, value: 2 },
+          { slot: 1, value: 5 },
+          { slot: 2, value: 1 },
+          { slot: 3, value: 6 },
+        ] as const,
+      },
+    };
+    const simulator = vi.fn(simulateRollReplay);
+    const playback = await resolveRollPlayback(artifact, simulator);
+    expect(simulator).toHaveBeenCalledExactlyOnceWith(artifact.replay);
+    expect(playback.status).toBe('static-fallback');
+    if (playback.status !== 'static-fallback') throw new Error('Rejected recipe did not fall back');
+    expect(playback.reason).toBe('SIMULATION_FAILED');
+    expect(playback.cause).toBeInstanceOf(SimulationRejectedError);
+    expect(playback.cause).toMatchObject({ reason: 'stable-stack', simulationMs: 2567 });
+    expect(playback.dice).toEqual(artifact.outcome.authoritativeValuesBySlot);
+    expect(playback).not.toHaveProperty('timeline');
   });
 
   test.each(riskInputs)(

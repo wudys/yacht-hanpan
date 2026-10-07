@@ -6,21 +6,20 @@ import { describe, expect, spyOn, test } from 'bun:test';
 import { createProductionRollRecipeSource } from '@/roll/production-roll-recipe-source';
 
 describe('production roll recipe source', () => {
-  test('uses only selected A/B/D for automatic rolls', () => {
-    expect(AUTOMATIC_POUR_STYLES).toEqual(['classic', 'burst', 'oblique']);
+  test('selects burst and oblique automatically while preserving diagnostic classic', () => {
+    expect(AUTOMATIC_POUR_STYLES).toEqual(['burst', 'oblique']);
     expect(POUR_STYLES).toEqual(['classic', 'burst', 'oblique']);
   });
 
   test.each([
-    [0, 'classic'],
-    [1, 'burst'],
-    [2, 'oblique'],
+    [0, 'burst'],
+    [1, 'oblique'],
   ] as const)('selects automatic style index %i as %s', (index, expected) => {
     const randomInt = spyOn(crypto, 'randomInt').mockImplementation(() => index);
     try {
       expect(createProductionRollRecipeSource().createPourStyle()).toBe(expected);
       expect(randomInt).toHaveBeenCalledTimes(1);
-      expect(randomInt).toHaveBeenCalledWith(3);
+      expect(randomInt).toHaveBeenCalledWith(2);
     } finally {
       randomInt.mockRestore();
     }

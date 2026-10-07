@@ -207,12 +207,13 @@ test.each(cases)(
       observedFloor = true;
       const timeMs = elapsedSeconds * 1000;
       const cup = {
+        geometry: CUP,
         body: cupBody,
         colliders: Array.from({ length: cupBody.numColliders() }, (_, i) => cupBody.collider(i)),
       };
       for (const body of bodies.filter((body) => body.isDynamic())) {
         const die = { body, collider: body.collider(0), id: String(body.handle) };
-        if (haveDiceClearedCup(this, cup, [die])) exited.add(body.handle);
+        if (haveDiceClearedCup(cup, [die])) exited.add(body.handle);
         // Observe floor pinch even after mouth exit, while the remaining dice leave.
         if (
           hasActualSolverContact(this, die.collider, floor) &&

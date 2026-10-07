@@ -1,48 +1,36 @@
 import type { Collider, World } from '@dimforge/rapier3d-deterministic';
 
-import type { DieFrame } from '../../contract';
-import type { TrayWall } from './physics-environment';
-import {
-  areDicePhysicallyStable,
-  areDiceReadablySettled,
-  type GroundEdgeReleaseState,
-  hasPhysicalYStack,
-  releaseRestingGroundEdges,
-  releaseRestingWallLeans,
-  type RestSimulationDie,
-} from './physics-settling';
-import { DIE_SIZE, SAMPLE_FPS, STEP } from './roll-simulation-constants';
+import type { DieFrame, RollCandidateRejectionReason } from '../../contract';
+import type { PhysicsDie } from './physics-environment';
+import type { SettlingAssistance } from './physics-settling';
+import { STEP, timelineSampleEverySteps } from './roll-simulation-constants';
+import type { SettlementPolicy } from './settlement-policy';
 import { round } from './simulation-math';
 
 // The final rest phase requires a longer stable run than the rollout handoff.
 const REST_STABLE_SAMPLES = 10;
 
 interface PhysicsRestContinuation {
-  readonly dice: RestSimulationDie[];
+  readonly dice: PhysicsDie[];
   readonly frames?: DieFrame[][];
   readonly simulationMs: number;
-  readonly wallReleaseTimes: Map<string, number>;
-  readonly groundEdgeReleaseStates: Map<string, GroundEdgeReleaseState>;
+  readonly policy: SettlementPolicy;
+  readonly assistance: SettlingAssistance;
 }
 
 interface PhysicsRestEnvironment {
   readonly world: World;
   readonly floor: Collider;
-  readonly walls: TrayWall[];
 }
 
 export function runPhysicsRest(
-  {
-    dice,
-    frames,
-    simulationMs,
-    wallReleaseTimes,
-    groundEdgeReleaseStates,
-  }: PhysicsRestContinuation,
-  { world, floor, walls }: PhysicsRestEnvironment,
-): number {
-  const maxRestMs = dice.length >= 5 ? 900 : 600;
-  const sampleEvery = Math.max(1, Math.round(1 / STEP / SAMPLE_FPS));
+  { dice, frames, simulationMs, policy, assistance }: PhysicsRestContinuation,
+  { world, floor }: PhysicsRestEnvironment,
+):
+  | { status: 'settled'; simulationMs: number }
+  | { status: 'rejected'; reason: RollCandidateRejectionReason; simulationMs: number } {
+  const maxRestMs = 1500;
+  const sampleEvery = timelineSampleEverySteps();
   let elapsedMs = 0;
   let step = 0;
   let stableSamples = 0;
@@ -51,27 +39,12 @@ export function runPhysicsRest(
     world.step();
     step += 1;
     elapsedMs = Math.round(step * STEP * 1000);
-    releaseRestingWallLeans(world, dice, walls, simulationMs + elapsedMs, wallReleaseTimes);
-    releaseRestingGroundEdges(
-      world,
-      dice,
-      floor,
-      simulationMs + elapsedMs,
-      groundEdgeReleaseStates,
-      walls,
-    );
+    assistance.apply(simulationMs + elapsedMs);
 
-    const resting =
-      areDicePhysicallyStable(dice) && areDiceReadablySettled(dice, DIE_SIZE * 0.22, 0.9);
-    stableSamples = resting ? stableSamples + 1 : 0;
-    if (elapsedMs > 320 && stableSamples >= REST_STABLE_SAMPLES) break;
-    if (
-      elapsedMs > 600 &&
-      areDicePhysicallyStable(dice, 0.065, 0.25) &&
-      areDiceReadablySettled(dice, DIE_SIZE * 0.32, 0.88) &&
-      !hasPhysicalYStack(dice)
-    )
-      break;
+    const observation = policy.observe(world, dice, floor, simulationMs + elapsedMs, true);
+    if (observation.rejection) return { status: 'rejected', ...observation.rejection };
+    stableSamples = observation.readable ? stableSamples + 1 : 0;
+    if (elapsedMs > 100 && stableSamples >= REST_STABLE_SAMPLES) break;
 
     if (!frames || step % sampleEvery !== 0) continue;
 
@@ -88,6 +61,9 @@ export function runPhysicsRest(
   }
 
   const finalT = simulationMs + elapsedMs;
+  if (stableSamples < REST_STABLE_SAMPLES) {
+    return { status: 'rejected', reason: 'unsettled-at-limit', simulationMs: finalT };
+  }
   if (frames)
     dice.forEach((die, index) => {
       if (frames[index].at(-1)?.t === finalT) return;
@@ -100,5 +76,5 @@ export function runPhysicsRest(
       });
     });
 
-  return simulationMs + elapsedMs;
+  return { status: 'settled', simulationMs: finalT };
 }

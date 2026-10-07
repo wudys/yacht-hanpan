@@ -134,21 +134,33 @@ describe('deterministic physics roll', () => {
     }
   });
 
-  test('keeps supplied slot identity instead of sorting authoritative results by final x', () => {
-    const timeline = simulateRollTimeline({
-      rollId: 'roll-slot-order',
+  test.each([
+    {
       seed: 'gesture-explore-20260921-1',
-      rolledSlots: [0, 4],
-      pourStyle: 'classic',
-    });
-    const finalX = timeline.dice.map((die) => die.frames.at(-1)!.p[0]);
-
-    expect(finalX[0]).toBeGreaterThan(finalX[1]);
-    expect(timeline.dice.map(({ slot, value }) => ({ slot, value }))).toEqual([
-      { slot: 0, value: 6 },
-      { slot: 4, value: 2 },
-    ]);
-  });
+      pourStyle: 'classic' as const,
+      crossed: false,
+      values: [6, 6],
+    },
+    { seed: 'slot-crossing-1', pourStyle: 'oblique' as const, crossed: true, values: [6, 1] },
+  ])(
+    'keeps supplied slot identity instead of sorting by final x ($seed)',
+    ({ seed, pourStyle, crossed, values }) => {
+      const timeline = simulateRollTimeline({
+        rollId: 'roll-slot-order',
+        seed,
+        rolledSlots: [0, 4],
+        pourStyle,
+      });
+      const finalX = timeline.dice.map((die) => die.frames.at(-1)!.p[0]);
+      // Keep the historical recipe and also exercise a selected-style crossing
+      // with distinct faces, so sorting by final position cannot pass unnoticed.
+      expect(finalX[0]! > finalX[1]!).toBe(crossed);
+      expect(timeline.dice.map(({ slot, value }) => ({ slot, value }))).toEqual([
+        { slot: 0, value: values[0] },
+        { slot: 4, value: values[1] },
+      ]);
+    },
+  );
 
   test('rejects external outcomes rather than using them as simulation targets', () => {
     const targetedInput = {

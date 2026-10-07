@@ -5,7 +5,7 @@ import { seededNumber } from './seed-expander';
 export type CupPourProfile = {
   stageX: number;
   releaseX: number;
-  tilt: number;
+  side: -1 | 1;
 };
 
 export function createCupPourProfile(
@@ -30,7 +30,7 @@ export function createCupPourProfile(
   return {
     stageX: round(stageX),
     releaseX: round(releaseX),
-    tilt: round(side * 2.68),
+    side,
   };
 }
 

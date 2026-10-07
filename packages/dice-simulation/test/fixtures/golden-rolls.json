@@ -12,13 +12,13 @@
         "authoritativeValuesBySlot": [
           {
             "slot": 0,
-            "value": 2
+            "value": 3
           }
         ],
-        "replayDigest": "sha256-q4-v2:4111ba2aff379dc6a3e8175c91cf873bba6078cf3b48fff0302d6bfe97a0404c",
-        "durationMs": 3550,
-        "dieFrameCounts": [123],
-        "cupFrameCount": 112
+        "replayDigest": "sha256-q4-v2:030a09732a22707dd698f7b27ec2de975130f3817bdfccf414b6cf8c0d47ef59",
+        "durationMs": 3250,
+        "dieFrameCounts": [114],
+        "cupFrameCount": 108
       }
     },
     {
@@ -32,21 +32,21 @@
         "authoritativeValuesBySlot": [
           {
             "slot": 0,
-            "value": 6
+            "value": 3
           },
           {
             "slot": 2,
-            "value": 4
+            "value": 1
           },
           {
             "slot": 4,
-            "value": 2
+            "value": 1
           }
         ],
-        "replayDigest": "sha256-q4-v2:dcded9ca2a2e46609ce0bda15b00bab5716bec6efff6d1d25e094a8181871f58",
-        "durationMs": 3583,
-        "dieFrameCounts": [124, 124, 124],
-        "cupFrameCount": 113
+        "replayDigest": "sha256-q4-v2:96df9b5707861538a26f5c6313cfa55374c0df4d974aceafacd7b7cae035e3cc",
+        "durationMs": 3317,
+        "dieFrameCounts": [117, 117, 117],
+        "cupFrameCount": 111
       }
     },
     {
@@ -60,29 +60,29 @@
         "authoritativeValuesBySlot": [
           {
             "slot": 0,
-            "value": 5
+            "value": 2
           },
           {
             "slot": 1,
-            "value": 3
+            "value": 5
           },
           {
             "slot": 2,
-            "value": 1
+            "value": 5
           },
           {
             "slot": 3,
-            "value": 4
+            "value": 3
           },
           {
             "slot": 4,
-            "value": 2
+            "value": 5
           }
         ],
-        "replayDigest": "sha256-q4-v2:e9e0715fc1608390ac5ffd3cf8856fb974417f0f7f6e1f1c04a72e5cfa45e9f9",
-        "durationMs": 3916,
-        "dieFrameCounts": [131, 131, 131, 131, 131],
-        "cupFrameCount": 120
+        "replayDigest": "sha256-q4-v2:1523b0c1d007e7f6c8be9bdfc4b6aeb0c4d9c399dd63f4bcbdeb02744a16d116",
+        "durationMs": 3384,
+        "dieFrameCounts": [116, 116, 116, 116, 116],
+        "cupFrameCount": 110
       }
     },
     {
@@ -96,17 +96,17 @@
         "authoritativeValuesBySlot": [
           {
             "slot": 1,
-            "value": 5
+            "value": 4
           },
           {
             "slot": 3,
-            "value": 5
+            "value": 2
           }
         ],
-        "replayDigest": "sha256-q4-v2:99b2eb2dbde0b4fbb84e9650c4ed449e2a9b4bd50ccaa7271cea42b8e4e78d9f",
-        "durationMs": 3616,
-        "dieFrameCounts": [125, 125],
-        "cupFrameCount": 114
+        "replayDigest": "sha256-q4-v2:c48f8b10ff8cdc6826abc9d419638cca76115d235f88c945b8550b1e2ca5678c",
+        "durationMs": 3284,
+        "dieFrameCounts": [116, 116],
+        "cupFrameCount": 110
       }
     }
   ]

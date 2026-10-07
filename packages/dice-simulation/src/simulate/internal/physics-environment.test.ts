@@ -60,7 +60,7 @@ test('aims the oblique physical mouth with the same rotation as its replay', () 
     world.step();
     const q = cup.body.rotation();
     const mouth = rotateVectorByQuat([0, 1, 0], q);
-    expect(Math.abs(mouth[2])).toBeGreaterThan(0.04);
+    expect(mouth[2]).toBeCloseTo(0, 8);
     expect(Math.abs(mouth[0])).toBeGreaterThan(0.4);
     const frame = createCupFrame(motion, time);
     [q.x, q.y, q.z, q.w].forEach((value, index) => {
@@ -123,7 +123,7 @@ test('distinguishes finite cup clearance from crossing the mouth or only its cen
     const check = (x: number, y: number) => {
       die.body.setTranslation({ x: pose.x + x, y: pose.y + y, z: pose.z }, true);
       world.propagateModifiedBodyPositionsToColliders();
-      return [haveDiceClearedCup(world, cup, [die]), areDiceOutsideCup(world, cup, [die])];
+      return [haveDiceClearedCup(cup, [die]), areDiceOutsideCup(cup, [die])];
     };
     expect(check(0, 0)).toEqual([false, false]);
     expect(check(0, 1.1)).toEqual([false, false]); // Centre past the rim, body still inside.
@@ -171,8 +171,8 @@ test.each([0.003, 0.012])(
       }
       expect(distances.length).toBeGreaterThan(0);
       expect(Math.min(...distances)).toBeGreaterThan(0);
-      expect(haveDiceClearedCup(world, cup, [die])).toBe(gap > 0.005);
-      expect(areDiceOutsideCup(world, cup, [die])).toBe(gap > 0.005);
+      expect(haveDiceClearedCup(cup, [die])).toBe(gap > 0.005);
+      expect(areDiceOutsideCup(cup, [die])).toBe(gap > 0.005);
     } finally {
       world.free();
     }

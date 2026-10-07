@@ -8,11 +8,12 @@ import {
 } from '../../contract/cup-geometry';
 import type { CupTransform, SimulatedCupMotion } from './cup-motion';
 import { quatFromEuler } from './cup-motion';
-import type { SimDie } from './physics-environment';
+import type { PhysicsDie } from './physics-environment';
 import { rotateVectorByQuat } from './result-recognition';
 import { DIE_COLLIDER_RADIUS, DIE_SIZE, STEP } from './roll-simulation-constants';
 
 export interface PhysicsCup {
+  readonly geometry: CupGeometry;
   body: RigidBody;
   colliders: Collider[];
 }
@@ -26,6 +27,7 @@ export function createPhysicsCup(
   initialTransform: CupTransform,
   spec: CupGeometry,
 ): PhysicsCup {
+  const geometry = spec === DEFAULT_CUP_GEOMETRY ? spec : Object.freeze({ ...spec });
   const body = world.createRigidBody(
     RAPIER.RigidBodyDesc.kinematicPositionBased()
       .setTranslation(initialTransform.x, initialTransform.y, initialTransform.z)
@@ -33,19 +35,22 @@ export function createPhysicsCup(
   );
   const colliders = [
     world.createCollider(
-      RAPIER.ColliderDesc.cylinder(spec.baseThickness / 2, spec.bottomRadius + spec.wallThickness)
-        .setTranslation(0, -spec.innerHeight / 2 - spec.baseThickness / 2, 0)
+      RAPIER.ColliderDesc.cylinder(
+        geometry.baseThickness / 2,
+        geometry.bottomRadius + geometry.wallThickness,
+      )
+        .setTranslation(0, -geometry.innerHeight / 2 - geometry.baseThickness / 2, 0)
         .setRestitution(0.03)
         .setFriction(0.3),
       body,
     ),
   ];
-  for (let segment = 0; segment < spec.segments; segment += 1) {
-    const shape = RAPIER.ColliderDesc.convexHull(wallVerticesForPhysics(segment, spec));
+  for (let segment = 0; segment < geometry.segments; segment += 1) {
+    const shape = RAPIER.ColliderDesc.convexHull(wallVerticesForPhysics(segment, geometry));
     if (!shape) throw new Error('Invalid cup wall geometry');
     colliders.push(world.createCollider(shape.setRestitution(0.03).setFriction(0.3), body));
   }
-  return { body, colliders };
+  return { body, colliders, geometry };
 }
 
 function wallVerticesForPhysics(segment: number, spec: CupGeometry): Float32Array {
@@ -57,7 +62,8 @@ function wallVerticesForPhysics(segment: number, spec: CupGeometry): Float32Arra
 }
 
 /** Invisible mouth constraint attached to the cup during shaking and gathering. */
-export function createCupShakeLid(world: World, cup: PhysicsCup, spec: CupGeometry): Collider {
+export function createCupShakeLid(world: World, cup: PhysicsCup): Collider {
+  const spec = cup.geometry;
   const lid = world.createCollider(
     RAPIER.ColliderDesc.cylinder(SHAKE_LID_THICKNESS / 2, spec.innerRadius + spec.wallThickness)
       .setTranslation(0, spec.innerHeight / 2 + SHAKE_LID_THICKNESS / 2, 0)
@@ -131,7 +137,7 @@ export function removePhysicsCup(world: World, cupBody: PhysicsCup): void {
 /** Brief, face-independent assistance inside the tilted cup, never a rollout drive. */
 export function applyCupPourAssist(
   cup: PhysicsCup,
-  dice: readonly SimDie[],
+  dice: readonly PhysicsDie[],
   motion: SimulatedCupMotion,
   timeMs: number,
   exitedDice: ReadonlySet<string>,
@@ -149,8 +155,8 @@ export function applyCupPourAssist(
     const dz = p.z - center.z;
     const along = dx * axis[0] + dy * axis[1] + dz * axis[2];
     if (
-      Math.abs(along) >= DEFAULT_CUP_GEOMETRY.innerHeight / 2 ||
-      dx * dx + dy * dy + dz * dz - along * along >= DEFAULT_CUP_GEOMETRY.innerRadius ** 2
+      Math.abs(along) >= cup.geometry.innerHeight / 2 ||
+      dx * dx + dy * dy + dz * dz - along * along >= cup.geometry.innerRadius ** 2
     )
       continue;
     // Equal acceleration regardless of count, mass, orientation or face value.
@@ -164,20 +170,18 @@ export function applyCupPourAssist(
 }
 
 /** Full rounded shape outside the mouth, with no remaining cup contact. */
-export function haveDiceClearedCup(_world: World, cup: PhysicsCup, dice: SimDie[]): boolean {
+export function haveDiceClearedCup(cup: PhysicsCup, dice: PhysicsDie[]): boolean {
   return dice.every(
     (die) =>
-      dieBoundsAlongCupAxis(cup, die, [0, 1, 0]).min >
-        DEFAULT_CUP_GEOMETRY.innerHeight / 2 + 0.005 &&
+      dieBoundsAlongCupAxis(cup, die, [0, 1, 0]).min > cup.geometry.innerHeight / 2 + 0.005 &&
       !cup.colliders.some((collider) => die.collider.contactCollider(collider, 0.005)),
   );
 }
 
 /** Conservative finite-volume clearance, used only after every die crossed the mouth. */
-export function areDiceOutsideCup(_world: World, cup: PhysicsCup, dice: SimDie[]): boolean {
+export function areDiceOutsideCup(cup: PhysicsCup, dice: PhysicsDie[]): boolean {
   const radius =
-    Math.max(DEFAULT_CUP_GEOMETRY.innerRadius, DEFAULT_CUP_GEOMETRY.bottomRadius) +
-    DEFAULT_CUP_GEOMETRY.wallThickness;
+    Math.max(cup.geometry.innerRadius, cup.geometry.bottomRadius) + cup.geometry.wallThickness;
   return dice.every((die) => {
     const x = dieBoundsAlongCupAxis(cup, die, [1, 0, 0]);
     const y = dieBoundsAlongCupAxis(cup, die, [0, 1, 0]);
@@ -187,8 +191,8 @@ export function areDiceOutsideCup(_world: World, cup: PhysicsCup, dice: SimDie[]
       x.max < -radius - 0.005 ||
       z.min > radius + 0.005 ||
       z.max < -radius - 0.005 ||
-      y.min > DEFAULT_CUP_GEOMETRY.innerHeight / 2 + 0.005 ||
-      y.max < -DEFAULT_CUP_GEOMETRY.innerHeight / 2 - DEFAULT_CUP_GEOMETRY.baseThickness - 0.005;
+      y.min > cup.geometry.innerHeight / 2 + 0.005 ||
+      y.max < -cup.geometry.innerHeight / 2 - cup.geometry.baseThickness - 0.005;
     // Solver manifolds also contain predictive contacts with a positive gap.
     // Only current shape separation within the clearance tolerance blocks exit.
     return (
@@ -197,7 +201,7 @@ export function areDiceOutsideCup(_world: World, cup: PhysicsCup, dice: SimDie[]
   });
 }
 
-function dieBoundsAlongCupAxis(cup: PhysicsCup, die: SimDie, axis: [number, number, number]) {
+function dieBoundsAlongCupAxis(cup: PhysicsCup, die: PhysicsDie, axis: [number, number, number]) {
   const center = cup.body.translation();
   const normal = rotateVectorByQuat(axis, cup.body.rotation());
   const dot = (v: number[]) => v[0] * normal[0] + v[1] * normal[1] + v[2] * normal[2];

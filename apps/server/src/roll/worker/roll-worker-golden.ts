@@ -5,16 +5,18 @@ import {
 } from '@repo/dice-simulation/contract';
 
 export const ROLL_WORKER_GOLDEN_INPUT: SimulationInput = {
-  rollId: 'golden-classic-1',
-  seed: 'golden-classic-1',
-  rolledSlots: [0],
-  pourStyle: POUR_STYLE.CLASSIC,
+  rollId: 'golden-oblique-3',
+  seed: 'golden-oblique-3',
+  rolledSlots: [0, 2, 4],
+  pourStyle: POUR_STYLE.OBLIQUE,
 };
 
 // Reviewed compatibility expectation; never derive this value from the current simulation.
 export const ROLL_WORKER_GOLDEN_DIGEST =
-  'sha256-q4-v2:4111ba2aff379dc6a3e8175c91cf873bba6078cf3b48fff0302d6bfe97a0404c';
+  'sha256-q4-v2:96df9b5707861538a26f5c6313cfa55374c0df4d974aceafacd7b7cae035e3cc';
 
 export const ROLL_WORKER_GOLDEN_OUTCOME: SimulationOutcome['authoritativeValuesBySlot'] = [
-  { slot: 0, value: 2 },
+  { slot: 0, value: 3 },
+  { slot: 2, value: 1 },
+  { slot: 4, value: 1 },
 ];

@@ -40,7 +40,7 @@ export type SimulatedCupMotion = {
 
 export function createCupMotion(seed: string, style: PourStyle): SimulatedCupMotion {
   const profile = createCupPourProfile(seed, rollAreaMeta());
-  const side = Math.sign(profile.tilt);
+  const { side } = profile;
   // All three gestures share the selected shake, then gather for 80ms.
   const pourAtMs =
     Math.round(700 + 150 * seededNumber(`${seed}:shake-duration`, 0)) + CUP_GATHER_MS;
@@ -49,29 +49,26 @@ export function createCupMotion(seed: string, style: PourStyle): SimulatedCupMot
   return {
     style,
     shakeAmplitude: 1,
-    shakeFrequency: 24,
+    shakeFrequency: 20,
     pourAtMs,
     pourDurationMs: 400,
     // Assistance timing is independent of the selected tilt duration.
-    pourAssistDelayMs: style === 'burst' ? 210 : 300,
+    pourAssistDelayMs: 300,
     pourTravelDurationMs: 500,
     pourTravelDelayMs: 0,
     pourFloorClearance: 1.85,
-    // Retain the reviewed seed channel so the selected trajectories reproduce.
-    pourYaw:
-      style === 'burst'
-        ? 0
-        : ([-6, 0, 6][Math.floor(seededNumber(`${seed}:prototype-pour-yaw`, 0) * 3)]! * Math.PI) /
-          180,
-    // Full-shell sweep clearance: classic ≈2.28, burst ≈2.85, oblique ≈2.87 die edges.
-    heightOffset: style === 'classic' ? 0 : style === 'burst' ? 0.443053 : 0.369182,
+    pourYaw: 0,
+    // Burst retains its raised clearance so dice can separate during release.
+    heightOffset:
+      (style === 'burst' ? 0.25 : 0) +
+      (style === 'classic' ? 0 : style === 'burst' ? 0.443053 : 0.369182),
     releaseAtMs,
     exitAtMs: releaseAtMs + CUP_EXIT_HOLD_MS + CUP_EXIT_TAIL_MS,
     stageX: profile.stageX,
     stageZ: trayGeometry.centerZ,
     releaseX: profile.releaseX,
     releaseZ: trayGeometry.centerZ,
-    tilt: side * (((style === 'classic' ? 155 : 145) * Math.PI) / 180),
+    tilt: side * (((style === 'classic' ? 155 : 135) * Math.PI) / 180),
   };
 }
 
@@ -105,7 +102,7 @@ export function cupTransformAt(cup: SimulatedCupMotion, timeMs: number): CupTran
   const z =
     cup.stageZ +
     (cup.releaseZ - cup.stageZ) * pourProgress +
-    Math.sin(seconds * 19) * 0.13 * envelope;
+    Math.sin(seconds * 15.833333333333334) * 0.13 * envelope;
   if (timeMs < cup.pourAtMs) {
     const baseTilt =
       cup.tilt * pourProgress + ((Math.sign(cup.tilt) * Math.PI) / 2 - cup.tilt) * withdrawProgress;
@@ -122,20 +119,23 @@ export function cupTransformAt(cup: SimulatedCupMotion, timeMs: number): CupTran
         Math.sin(seconds * cup.shakeFrequency) * 0.14 * envelope +
         cup.heightOffset,
       z,
-      tilt: baseTilt + Math.sin(seconds * 21) * 0.22 * envelope,
+      tilt: baseTilt + Math.sin(seconds * 17.5) * 0.22 * envelope,
       yaw: 0,
     };
   }
   const elapsed = timeMs - cup.pourAtMs;
   const withdraw = smoothstep((timeMs - cup.releaseAtMs) / CUP_EXIT_HOLD_MS);
   const exit = smoothstep((timeMs - cup.releaseAtMs) / (cup.exitAtMs - cup.releaseAtMs));
-  // Burst opens to 120° then gently finishes the remaining 25°. Both joins
+  // Burst opens to 120° then gently finishes the remaining 15°. Both joins
   // have zero angular velocity; classic and oblique use one smooth tilt.
   const angle =
     cup.style === 'burst'
       ? elapsed < 260
         ? ((120 * Math.PI) / 180) * smoothstep(elapsed / 260)
-        : ((120 + 25 * smoothstep((elapsed - 260) / 140)) * Math.PI) / 180
+        : ((120 +
+            ((Math.abs(cup.tilt) * 180) / Math.PI - 120) * smoothstep((elapsed - 260) / 140)) *
+            Math.PI) /
+          180
       : Math.abs(cup.tilt) * smoothstep(elapsed / cup.pourDurationMs);
   const tilt =
     Math.sign(cup.tilt) * angle + ((Math.sign(cup.tilt) * Math.PI) / 2 - cup.tilt) * withdraw;

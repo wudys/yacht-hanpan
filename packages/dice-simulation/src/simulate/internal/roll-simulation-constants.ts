@@ -18,3 +18,8 @@ export const trayGeometry = TRAY_GEOMETRY;
 export function rollAreaMeta() {
   return { ...ROLL_AREA };
 }
+
+/** Display recording interval; physical handoff keeps its own cadence. */
+export function timelineSampleEverySteps(): number {
+  return Math.max(1, Math.round(1 / STEP / SAMPLE_FPS));
+}

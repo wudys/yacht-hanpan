@@ -15,16 +15,16 @@ import { CUP_GATHER_MS } from './cup-motion-progress';
 import { rotateVectorByQuat } from './result-recognition';
 import { rollAreaMeta } from './roll-simulation-constants';
 
-// Six side/yaw combinations plus both preparation-time boundaries; count is not a motion input.
+// Both sides and preparation-time boundaries; count is not a motion input.
 const motionCases = [
-  { seed: 'motion-coverage-0', side: 1, yawDegrees: 6 },
-  { seed: 'motion-coverage-1', side: -1, yawDegrees: -6 },
-  { seed: 'motion-coverage-2', side: 1, yawDegrees: -6 },
+  { seed: 'motion-coverage-0', side: 1, yawDegrees: 0 },
+  { seed: 'motion-coverage-1', side: -1, yawDegrees: 0 },
+  { seed: 'motion-coverage-2', side: 1, yawDegrees: 0 },
   { seed: 'motion-coverage-4', side: 1, yawDegrees: 0 },
-  { seed: 'motion-coverage-7', side: -1, yawDegrees: 6 },
+  { seed: 'motion-coverage-7', side: -1, yawDegrees: 0 },
   { seed: 'motion-coverage-13', side: -1, yawDegrees: 0 },
-  { seed: 'motion-coverage-58', side: 1, yawDegrees: -6, preparationMs: 930 },
-  { seed: 'motion-coverage-102', side: 1, yawDegrees: -6, preparationMs: 780 },
+  { seed: 'motion-coverage-58', side: 1, yawDegrees: 0, preparationMs: 930 },
+  { seed: 'motion-coverage-102', side: 1, yawDegrees: 0, preparationMs: 780 },
 ];
 const seeds = motionCases.map(({ seed }) => seed);
 
@@ -38,7 +38,7 @@ describe('cup motion', () => {
         expect(motion.pourAtMs).toBeGreaterThanOrEqual(780);
         expect(motion.pourAtMs).toBeLessThanOrEqual(930);
         expect(motion.shakeAmplitude).toBe(1);
-        expect(motion.shakeFrequency).toBe(24);
+        expect(motion.shakeFrequency).toBe(20);
         expect(createCupFrame(motion, motion.pourAtMs - 1).mode).toBe('shake');
         expect(createCupFrame(motion, motion.pourAtMs).mode).toBe('pour');
         return motion.pourAtMs;
@@ -61,7 +61,7 @@ describe('cup motion', () => {
       const motion = createCupMotion(seed, style);
       expect(Math.sign(motion.stageX)).toBe(side);
       expect(Math.sign(motion.tilt)).toBe(side);
-      // Burst uses the same side selection but its pour always has zero yaw.
+      // All supported gestures keep the selected side and pour without yaw.
       expect(motion.pourYaw).toBeCloseTo(
         ((style === 'burst' ? 0 : yawDegrees) * Math.PI) / 180,
         10,
@@ -131,7 +131,7 @@ describe('cup motion', () => {
       minimumGap = Math.min(minimumGap, pose.y - cupLowerSupport(pose.tilt) - TRAY_FLOOR_TOP_Y);
     }
     expect(minimumGap / DIE_GEOMETRY.size).toBeCloseTo(
-      style === 'classic' ? 2.28 : style === 'burst' ? 2.848 : 2.865,
+      style === 'classic' ? 2.28 : style === 'burst' ? 3.232 : 2.886,
       2,
     );
     const lifted = cupTransformAt(motion, motion.pourAtMs + 280);
@@ -139,20 +139,20 @@ describe('cup motion', () => {
     expect(cupTransformAt(motion, motion.pourAtMs + 400).y).toBeCloseTo(lifted.y, 10);
     expect(
       (Math.abs(cupTransformAt(motion, motion.pourAtMs + 400).tilt) * 180) / Math.PI,
-    ).toBeCloseTo(style === 'classic' ? 155 : 145, 8);
+    ).toBeCloseTo(style === 'classic' ? 155 : 135, 8);
   });
 
   it('finishes burst in two gentle stages without speeding up the final tip', () => {
     const motion = createCupMotion('browser-parity-v1', 'burst');
     const angle = (ms: number) => Math.abs(cupTransformAt(motion, motion.pourAtMs + ms).tilt);
     expect((angle(260) * 180) / Math.PI).toBeCloseTo(120, 8);
-    expect((angle(400) * 180) / Math.PI).toBeCloseTo(145, 8);
+    expect((angle(400) * 180) / Math.PI).toBeCloseTo(135, 8);
     expect(Math.abs((angle(260.01) - angle(259.99)) / 0.02)).toBeLessThan(0.00001);
   });
 
   describe('selected pour gestures', () => {
-    test('supports the selected classic, burst and oblique styles', () => {
-      expect(AUTOMATIC_POUR_STYLES).toEqual(['classic', 'burst', 'oblique']);
+    test('automatically selects burst and oblique while explicit classic remains supported', () => {
+      expect(AUTOMATIC_POUR_STYLES).toEqual(['burst', 'oblique']);
     });
 
     test('keeps classic shaking separate from the later pour', () => {
@@ -167,7 +167,7 @@ describe('cup motion', () => {
       // At 500ms the selected shake still moves independently of the later pour.
       const pose = cupTransformAt(motion, 500);
       expect(Math.abs(pose.x - motion.stageX)).toBeGreaterThan(0.12);
-      expect(Math.abs(pose.tilt)).toBeGreaterThan(0.18);
+      expect(Math.abs(cupTransformAt(motion, 300).tilt)).toBeGreaterThan(0.18);
       expect(cupTransformAt(motion, motion.pourAtMs - 80)).toEqual(
         cupTransformAt(motion, motion.pourAtMs),
       );

@@ -1,19 +1,31 @@
 import {
   createReplayDigest,
   parseSimulationInput,
+  type RollCandidateEvaluation,
   type SimulationInput,
   type SimulationOutcome,
   type SimulationReplay,
   type SimulationResult,
 } from '../contract';
 import { simulateRollPhysics } from './simulate-timeline';
+import { SimulationRejectedError } from './simulation-rejected-error';
 
-export async function simulateRollOutcome(input: SimulationInput): Promise<SimulationOutcome> {
+export async function evaluateRollCandidate(
+  input: SimulationInput,
+): Promise<RollCandidateEvaluation> {
   return simulateRollPhysics(parseSimulationInput(input), false);
 }
 
+export async function simulateRollOutcome(input: SimulationInput): Promise<SimulationOutcome> {
+  const result = await evaluateRollCandidate(input);
+  if (result.status === 'rejected') throw new SimulationRejectedError(result);
+  return result.outcome;
+}
+
 export async function simulateRollReplay(input: SimulationInput): Promise<SimulationReplay> {
-  return simulateRollPhysics(parseSimulationInput(input), true);
+  const result = simulateRollPhysics(parseSimulationInput(input), true);
+  if (result.status === 'rejected') throw new SimulationRejectedError(result);
+  return result.replay;
 }
 
 export async function simulateRoll(input: SimulationInput): Promise<SimulationResult> {

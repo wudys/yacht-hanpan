@@ -1,24 +1,16 @@
-import type {
-  Collider,
-  RigidBody,
-  Rotation,
-  Vector,
-  World,
-} from '@dimforge/rapier3d-deterministic';
+import type { Collider, Rotation, Vector, World } from '@dimforge/rapier3d-deterministic';
 
-import { hasSolverContact } from './contact-query';
-import type { TrayWall } from './physics-environment';
+import { hasLowerSupportContact, hasTouchingWallContact } from './contact-query';
+import type { PhysicsDie, TrayWall } from './physics-environment';
 import { rotateVectorByQuat, topFaceAlignment } from './result-recognition';
 import { DIE_SIZE, FLOOR_TOP_Y } from './roll-simulation-constants';
+import {
+  POSE_POSITION_TOLERANCE,
+  POSE_ROTATION_TOLERANCE,
+  SLOW_ANGULAR_SPEED,
+  SLOW_LINEAR_SPEED,
+} from './settling-criteria';
 import { quatDistance, type QuaternionTuple, type VectorTuple } from './simulation-math';
-
-export const REST_LINEAR_SPEED = 0.045;
-export const REST_ANGULAR_SPEED = 0.18;
-export interface RestSimulationDie {
-  id: string;
-  body: RigidBody;
-  collider: Collider;
-}
 
 export interface GroundEdgeReleaseState {
   stationarySinceMs: number | null;
@@ -28,13 +20,49 @@ export interface GroundEdgeReleaseState {
   targetFaceNormal: VectorTuple | null;
 }
 
+export interface AppliedSettlingAssist {
+  readonly dieId: string;
+  readonly simulationMs: number;
+  readonly kind: 'wall' | 'side' | 'torque';
+  readonly actualDelta: number;
+}
+
+export interface SettlingAssistState {
+  readonly sharedReleaseTimes: Map<string, number>;
+  readonly onApplied: (event: AppliedSettlingAssist) => void;
+}
+
+export interface SettlingAssistance {
+  apply(simulationMs: number): void;
+}
+
+/** One candidate owns both phases' observations and local/shared reservations. */
+export function createSettlingAssistance(
+  world: World,
+  dice: PhysicsDie[],
+  floor: Collider,
+  walls: TrayWall[],
+  onApplied: (event: AppliedSettlingAssist) => void,
+): SettlingAssistance {
+  const wallReleaseTimes = new Map<string, number>();
+  const groundStates = new Map<string, GroundEdgeReleaseState>();
+  const assists: SettlingAssistState = { sharedReleaseTimes: new Map(), onApplied };
+  return {
+    apply(simulationMs) {
+      releaseRestingWallLeans(world, dice, walls, simulationMs, wallReleaseTimes, assists);
+      releaseRestingGroundEdges(world, dice, floor, simulationMs, groundStates, walls, assists);
+    },
+  };
+}
+
 export function releaseRestingGroundEdges(
   world: World,
-  dice: RestSimulationDie[],
+  dice: PhysicsDie[],
   floor: Collider,
   clockMs: number,
   states: Map<string, GroundEdgeReleaseState>,
   walls: TrayWall[],
+  assistState: SettlingAssistState,
 ): void {
   const settleDelayMs = 50;
   const cooldownMs = 220;
@@ -81,14 +109,14 @@ export function releaseRestingGroundEdges(
     // Another contact or the wall helper may have just added momentum before
     // the next world step. An unchanged pose alone does not mean the die rests.
     const visiblyStationary =
-      Math.hypot(linear.x, linear.y, linear.z) < 0.2 &&
-      Math.hypot(angular.x, angular.y, angular.z) < 0.6 &&
+      Math.hypot(linear.x, linear.y, linear.z) < SLOW_LINEAR_SPEED &&
+      Math.hypot(angular.x, angular.y, angular.z) < SLOW_ANGULAR_SPEED &&
       Math.hypot(
         position.x - state.anchorPosition[0],
         position.y - state.anchorPosition[1],
         position.z - state.anchorPosition[2],
-      ) < 0.004 &&
-      quatDistance(state.anchorRotation, rotationTuple) < 0.012;
+      ) < POSE_POSITION_TOLERANCE &&
+      quatDistance(state.anchorRotation, rotationTuple) < POSE_ROTATION_TOLERANCE;
     if (!visiblyStationary) {
       state.stationarySinceMs = clockMs;
       state.anchorPosition = positionTuple;
@@ -120,14 +148,19 @@ export function releaseRestingGroundEdges(
     const nearbyWalls = walls.filter((wall) =>
       die.collider.contactCollider(wall.collider, DIE_SIZE / 2),
     );
+    const touchingWalls = nearbyWalls.filter((wall) =>
+      hasTouchingWallContact(world, die.collider, wall.collider),
+    );
     const blockers = dice.filter(
       (other) =>
         other !== die &&
         ((elevated &&
           other.body.translation().y < position.y - DIE_SIZE * 0.32 &&
           hasLowerSupportContact(world, die.collider, [other.collider])) ||
-          (nearbyWalls.length > 0 && die.collider.contactCollider(other.collider, 0.005))),
+          (touchingWalls.length > 0 && die.collider.contactCollider(other.collider, 0.005))),
     );
+    // Elevated stacks are rejected by settlement policy rather than pushed sideways.
+    if (blockers.length > 0 && elevated) return;
     if (blockers.length > 0) {
       const centerX =
         blockers.reduce((sum, other) => sum + other.body.translation().x, 0) / blockers.length;
@@ -137,35 +170,20 @@ export function releaseRestingGroundEdges(
       let dz = position.z - centerZ;
       // A lower support or side neighbour can pin a tilted die against a wall.
       // Escape tangentially rather than rotating or pushing back into the wedge.
-      for (const wall of nearbyWalls) {
+      for (const wall of touchingWalls) {
         const outward = Math.min(0, dx * wall.inwardX + dz * wall.inwardZ);
         dx -= outward * wall.inwardX;
         dz -= outward * wall.inwardZ;
       }
       if (Math.hypot(dx, dz) < 0.001) {
-        dx = nearbyWalls.reduce((sum, wall) => sum + wall.inwardX, 0);
-        dz = nearbyWalls.reduce((sum, wall) => sum + wall.inwardZ, 0);
-        if (nearbyWalls.length === 0) dx = 1;
+        dx = touchingWalls.reduce((sum, wall) => sum + wall.inwardX, 0);
+        dz = touchingWalls.reduce((sum, wall) => sum + wall.inwardZ, 0);
       }
       const length = Math.hypot(dx, dz);
-      // A single support needs a half-edge slide. Bridging multiple supports
-      // can require a full edge before gravity pulls the die off the bridge.
-      // A low wedge rests on felt, while an elevated stack rests on another die.
-      // Contacts select the direction and energy, never a face value.
-      const friction = elevated
-        ? die.collider.friction()
-        : Math.max(die.collider.friction(), floor.friction());
-      const escapeSpeed = Math.sqrt(
-        friction * Math.abs(world.gravity.y) * DIE_SIZE * (elevated && blockers.length > 1 ? 2 : 1),
-      );
-      die.body.applyImpulse(
-        {
-          x: (dx / length) * die.body.mass() * escapeSpeed,
-          y: 0,
-          z: (dz / length) * die.body.mass() * escapeSpeed,
-        },
-        true,
-      );
+      // A low wall-and-die wedge receives only the missing speed along its contact direction.
+      // Elevated blockers already returned; each remaining blocker is a direct
+      // neighbour contact and touchingWalls is non-empty. No pose changed since observation.
+      applySettlingImpulse(die, clockMs, 'side', dx / length, dz / length, 3.6, assistState);
     } else {
       const torqueAxis = faceSettleTorqueAxis(
         state.targetFaceNormal ?? nearestFaceNormal(rotation),
@@ -174,32 +192,34 @@ export function releaseRestingGroundEdges(
       if (!torqueAxis) return;
       // Rolling about this axis travels along (-axis.z, axis.x). Do not tip
       // toward an almost-touching wall and then undo it with a wall nudge.
-      const blockingWalls = nearbyWalls.filter(
-        (wall) =>
-          die.collider.contactCollider(wall.collider, 0.02) &&
-          -torqueAxis.z * wall.inwardX + torqueAxis.x * wall.inwardZ < -0.000001,
+      const blockingWalls = touchingWalls.filter(
+        (wall) => -torqueAxis.z * wall.inwardX + torqueAxis.x * wall.inwardZ < -0.000001,
       );
       const inwardX = blockingWalls.reduce((sum, wall) => sum + wall.inwardX, 0);
       const inwardZ = blockingWalls.reduce((sum, wall) => sum + wall.inwardZ, 0);
       const inwardLength = Math.hypot(inwardX, inwardZ);
       if (inwardLength > 0) {
-        // Replace the torque with the existing wall-escape energy, never both.
-        die.body.applyImpulse(
-          {
-            x: (inwardX / inwardLength) * die.body.mass() * 0.8,
-            y: 0,
-            z: (inwardZ / inwardLength) * die.body.mass() * 0.8,
-          },
-          true,
+        // Replace blocked torque with a wall escape using the same touching predicate.
+        applySettlingImpulse(
+          die,
+          clockMs,
+          'wall',
+          inwardX / inwardLength,
+          inwardZ / inwardLength,
+          0.65,
+          assistState,
         );
-      } else {
-        const torque = 0.011 * (DIE_SIZE / 0.52) ** 5;
+      } else if (reserveSharedAssist(die, clockMs, assistState)) {
+        const before = die.body.angvel();
+        const torque = 0.011 * (DIE_SIZE / 0.52) ** 5 * 4;
         die.body.applyTorqueImpulse(
           { x: torqueAxis.x * torque, y: 0, z: torqueAxis.z * torque },
           true,
         );
+        notifyAppliedAssist(die, clockMs, 'torque', before, die.body.angvel(), assistState);
       }
     }
+    // Reserve the local window even when the shared gate denied this attempt.
     state.stationarySinceMs = null;
     state.anchorPosition = null;
     state.anchorRotation = null;
@@ -210,10 +230,11 @@ export function releaseRestingGroundEdges(
 
 export function releaseRestingWallLeans(
   world: World,
-  dice: RestSimulationDie[],
+  dice: PhysicsDie[],
   walls: TrayWall[],
   clockMs: number,
   releaseTimes: Map<string, number>,
+  assistState: SettlingAssistState,
 ): void {
   const floorContactY = FLOOR_TOP_Y + DIE_SIZE / 2;
   const wallLeanLiftThreshold = DIE_SIZE * 0.08;
@@ -223,21 +244,19 @@ export function releaseRestingWallLeans(
     const position = die.body.translation();
     const lift = position.y - floorContactY;
     if (lift < wallLeanLiftThreshold) return;
-    // Elevated support contacts are handled by support escape. Competing
-    // wall nudges would keep restarting its stationary window.
+    // Elevated support stacks are left for policy rejection. Competing wall
+    // nudges would keep restarting the ground observation window.
     if (lift > DIE_SIZE * 0.32) return;
     if (topFaceAlignment(die.body.rotation()) > 0.9) return;
     const linear = die.body.linvel();
     const angular = die.body.angvel();
-    if (Math.hypot(linear.x, linear.y, linear.z) >= 0.2) return;
-    if (Math.hypot(angular.x, angular.y, angular.z) >= 0.6) return;
+    if (Math.hypot(linear.x, linear.y, linear.z) >= SLOW_LINEAR_SPEED) return;
+    if (Math.hypot(angular.x, angular.y, angular.z) >= SLOW_ANGULAR_SPEED) return;
 
     // Predictive solver contacts persist after separation. Only a touching wall
     // can support a lean; do not keep nudging a die that has already left it.
-    const contacts = walls.filter(
-      (candidate) =>
-        hasSolverContact(world, die.collider, candidate.collider) &&
-        die.collider.contactCollider(candidate.collider, 0.005),
+    const contacts = walls.filter((candidate) =>
+      hasTouchingWallContact(world, die.collider, candidate.collider),
     );
     if (contacts.length === 0) return;
     // Ground-edge escape owns a wall-and-die wedge, including low side contacts.
@@ -253,34 +272,75 @@ export function releaseRestingWallLeans(
     if (clockMs - (releaseTimes.get(releaseKey) ?? Number.NEGATIVE_INFINITY) < cooldownMs) return;
     releaseTimes.set(releaseKey, clockMs);
 
-    die.body.applyImpulse(
-      {
-        x: (inwardX / inwardLength) * die.body.mass() * 0.8,
-        y: 0,
-        z: (inwardZ / inwardLength) * die.body.mass() * 0.8,
-      },
-      true,
+    applySettlingImpulse(
+      die,
+      clockMs,
+      'wall',
+      inwardX / inwardLength,
+      inwardZ / inwardLength,
+      0.65,
+      assistState,
     );
   });
 }
 
-export function areDicePhysicallyStable(
-  dice: RestSimulationDie[],
-  maxLinearSpeed = REST_LINEAR_SPEED,
-  maxAngularSpeed = REST_ANGULAR_SPEED,
+function reserveSharedAssist(
+  die: PhysicsDie,
+  clockMs: number,
+  state: SettlingAssistState,
 ): boolean {
-  return maxDieLinearSpeed(dice) < maxLinearSpeed && maxDieAngularSpeed(dice) < maxAngularSpeed;
+  if (clockMs - (state.sharedReleaseTimes.get(die.id) ?? Number.NEGATIVE_INFINITY) < 300)
+    return false;
+  state.sharedReleaseTimes.set(die.id, clockMs);
+  return true;
+}
+
+function applySettlingImpulse(
+  die: PhysicsDie,
+  clockMs: number,
+  kind: 'wall' | 'side',
+  directionX: number,
+  directionZ: number,
+  targetSpeed: number,
+  state: SettlingAssistState,
+): void {
+  if (!reserveSharedAssist(die, clockMs, state)) return;
+  const before = die.body.linvel();
+  const projectedSpeed = before.x * directionX + before.z * directionZ;
+  const delta = Math.max(0, targetSpeed - projectedSpeed);
+  // Keep zero-impulse wake and cooldown reservation; policy counts only actual changes.
+  die.body.applyImpulse(
+    { x: directionX * die.body.mass() * delta, y: 0, z: directionZ * die.body.mass() * delta },
+    true,
+  );
+  notifyAppliedAssist(die, clockMs, kind, before, die.body.linvel(), state);
+}
+
+function notifyAppliedAssist(
+  die: PhysicsDie,
+  simulationMs: number,
+  kind: AppliedSettlingAssist['kind'],
+  before: Vector,
+  after: Vector,
+  state: SettlingAssistState,
+): void {
+  state.onApplied({
+    dieId: die.id,
+    simulationMs,
+    kind,
+    actualDelta: Math.hypot(after.x - before.x, after.y - before.y, after.z - before.z),
+  });
 }
 
 export function areDiceReadablySettled(
-  dice: RestSimulationDie[],
+  dice: PhysicsDie[],
   maxLift: number,
   minAlignment: number,
 ): boolean {
   return maxDieLift(dice) < maxLift && minTopFaceAlignment(dice) > minAlignment;
 }
 
-export function hasPhysicalYStack(dice: RestSimulationDie[]): boolean {
+export function hasPhysicalYStack(dice: PhysicsDie[]): boolean {
   for (let a = 0; a < dice.length; a += 1) {
     const positionA = dice[a].body.translation();
     for (let b = a + 1; b < dice.length; b += 1) {
@@ -291,25 +351,6 @@ export function hasPhysicalYStack(dice: RestSimulationDie[]): boolean {
     }
   }
   return false;
-}
-
-function hasLowerSupportContact(world: World, die: Collider, supports: Collider[]): boolean {
-  let hasLowerContact = false;
-
-  supports.forEach((support) => {
-    world.contactPair(die, support, (manifold, flipped) => {
-      // A rounded edge can carry weight at or above the centre of the supported
-      // die. The contact normal, not contact-point height, identifies support.
-      const upwardNormal = manifold.normal().y * (flipped ? 1 : -1);
-      if (upwardNormal <= 0.15) return;
-      // Solver contacts also include separated, predicted collisions. Those
-      // neighbours must not act as current supports or steer the escape push.
-      for (let index = 0; index < manifold.numSolverContacts(); index += 1) {
-        if (manifold.solverContactDist(index) <= 0.005) hasLowerContact = true;
-      }
-    });
-  });
-  return hasLowerContact;
 }
 
 function nearestFaceNormal(rotation: Rotation): VectorTuple {
@@ -341,28 +382,10 @@ function faceSettleTorqueAxis(
   };
 }
 
-function maxDieLift(dice: RestSimulationDie[]): number {
+function maxDieLift(dice: PhysicsDie[]): number {
   return Math.max(...dice.map((die) => die.body.translation().y - (FLOOR_TOP_Y + DIE_SIZE / 2)));
 }
 
-function maxDieLinearSpeed(dice: RestSimulationDie[]): number {
-  return Math.max(
-    ...dice.map((die) => {
-      const linear = die.body.linvel();
-      return Math.hypot(linear.x, linear.y, linear.z);
-    }),
-  );
-}
-
-function maxDieAngularSpeed(dice: RestSimulationDie[]): number {
-  return Math.max(
-    ...dice.map((die) => {
-      const angular = die.body.angvel();
-      return Math.hypot(angular.x, angular.y, angular.z);
-    }),
-  );
-}
-
-function minTopFaceAlignment(dice: RestSimulationDie[]): number {
+function minTopFaceAlignment(dice: PhysicsDie[]): number {
   return Math.min(...dice.map((die) => topFaceAlignment(die.body.rotation())));
 }

@@ -1,6 +1,12 @@
 import { describe, expect, test } from 'bun:test';
 
-import { isSimulationOutcome, isSimulationResult, type SimulationResult } from './index';
+import {
+  isRollCandidateEvaluation,
+  isSimulationOutcome,
+  isSimulationResult,
+  type RollCandidateEvaluation,
+  type SimulationResult,
+} from './index';
 
 const result: SimulationResult = {
   input: { rollId: 'roll', seed: 'seed', rolledSlots: [2], pourStyle: 'classic' },
@@ -146,5 +152,72 @@ describe('compact simulation outcome shape', () => {
           isSimulationOutcome({ input, authoritativeValuesBySlot: [...faces].reverse() }),
         ).toBe(false);
     }
+  });
+});
+
+describe('roll candidate evaluation shape', () => {
+  const outcome = {
+    input: result.input,
+    authoritativeValuesBySlot: result.authoritativeValuesBySlot,
+  };
+  const rejected = {
+    status: 'rejected',
+    input: result.input,
+    reason: 'stable-stack',
+    simulationMs: 200,
+  } as const;
+
+  test('accepts both branches without copying or mutating their data', () => {
+    const accepted: RollCandidateEvaluation = { status: 'accepted', outcome };
+    const original = structuredClone(accepted);
+    expect(isRollCandidateEvaluation(accepted)).toBe(true);
+    expect(accepted).toEqual(original);
+    for (const reason of ['stable-stack', 'repeated-assist', 'unsettled-at-limit']) {
+      expect(isRollCandidateEvaluation({ ...rejected, reason, simulationMs: 0 })).toBe(true);
+    }
+    const rejectionCopy = structuredClone(rejected);
+    expect(isRollCandidateEvaluation(rejected)).toBe(true);
+    expect(rejected).toEqual(rejectionCopy);
+  });
+
+  test.each([
+    null,
+    outcome,
+    { outcome },
+    { status: 'unknown', outcome },
+    { status: 'accepted', outcome: result },
+    { status: 'accepted', outcome: { ...outcome, input: { ...outcome.input, extra: true } } },
+    { status: 'accepted', outcome: { ...outcome, authoritativeValuesBySlot: [] } },
+    { status: 'accepted', outcome, input: result.input },
+    { status: 'accepted', outcome, reason: 'stable-stack' },
+    { ...rejected, outcome },
+    { ...rejected, authoritativeValuesBySlot: result.authoritativeValuesBySlot },
+    { ...rejected, timeline: result.timeline },
+    { ...rejected, input: { ...result.input, rolledSlots: [2, 1] } },
+    { ...rejected, input: { ...result.input, rolledSlots: Array(1) } },
+    { ...rejected, input: { ...result.input, extra: true } },
+    { ...rejected, reason: 'cup-release' },
+    { ...rejected, reason: undefined },
+    ...[-1, 0.5, NaN, Infinity, '200', undefined].map((simulationMs) => ({
+      ...rejected,
+      simulationMs,
+    })),
+    { status: 'rejected', reason: 'stable-stack', simulationMs: 200 },
+    { status: 'rejected', input: result.input, simulationMs: 200 },
+    { status: 'rejected', input: result.input, reason: 'stable-stack' },
+  ])('rejects malformed candidate evaluations: %p', (value) => {
+    expect(isRollCandidateEvaluation(value)).toBe(false);
+  });
+
+  test('rejects arrays instead of candidate records', () => {
+    expect(isRollCandidateEvaluation([])).toBe(false);
+  });
+
+  test('leaves candidate request identity verification with the caller', () => {
+    const input = { ...result.input, rollId: 'different-roll', seed: 'different-seed' };
+    expect(isRollCandidateEvaluation({ status: 'accepted', outcome: { ...outcome, input } })).toBe(
+      true,
+    );
+    expect(isRollCandidateEvaluation({ ...rejected, input })).toBe(true);
   });
 });

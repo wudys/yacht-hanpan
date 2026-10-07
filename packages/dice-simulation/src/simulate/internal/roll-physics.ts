@@ -13,7 +13,7 @@ const BASE_PHYSICS = {
   floorRestitution: 0.16,
   floorFriction: 0.25,
   wallRestitution: 0.5,
-  wallFriction: 0.1,
+  wallFriction: 0.06,
   linearDamping: 0.025,
   angularDamping: 0.032,
 };

@@ -75,6 +75,19 @@ export type SimulationOutcome = Readonly<{
   authoritativeValuesBySlot: readonly RolledFace[];
 }>;
 
+export type RollCandidateRejectionReason =
+  'stable-stack' | 'repeated-assist' | 'unsettled-at-limit';
+
+export type RollCandidateRejection = Readonly<{
+  status: 'rejected';
+  input: SimulationInput;
+  reason: RollCandidateRejectionReason;
+  simulationMs: number;
+}>;
+
+export type RollCandidateEvaluation =
+  Readonly<{ status: 'accepted'; outcome: SimulationOutcome }> | RollCandidateRejection;
+
 export type SimulationReplay = SimulationOutcome &
   Readonly<{
     timeline: RollTimeline;

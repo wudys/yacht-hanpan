@@ -6,15 +6,11 @@ export const POUR_STYLE = {
 
 export const POUR_STYLES = Object.values(POUR_STYLE);
 
-/** Selected A/B/D cup gestures share one physical environment and rollout policy. */
-export const AUTOMATIC_POUR_STYLES = [
-  POUR_STYLE.CLASSIC,
-  POUR_STYLE.BURST,
-  POUR_STYLE.OBLIQUE,
-] as const;
+/** Automatic rolls use the two adopted gestures; classic remains an explicit diagnostic input. */
+export const AUTOMATIC_POUR_STYLES = [POUR_STYLE.BURST, POUR_STYLE.OBLIQUE] as const;
 
 export const DICE_SIMULATION_CONTRACT = Object.freeze({
-  simulationVersion: 'dice-simulation-v35',
+  simulationVersion: 'dice-simulation-v36',
   timelineSchemaVersion: 'dice-timeline-v4',
   replayDigestVersion: 'sha256-q4-v2',
   prngVersion: 'sha256-counter53-v1',

@@ -4,6 +4,8 @@ import {
   DEFAULT_CUP_GEOMETRY,
   type DieFrame,
   parseSimulationInput,
+  type RollCandidateEvaluation,
+  type RollCandidateRejection,
   type RollTimeline,
   type SimulationInput,
   type SimulationOutcome,
@@ -27,29 +29,35 @@ import {
 import { createDieInCup, createRollWorld, createTray } from './internal/physics-environment';
 import { runPhysicsRest } from './internal/physics-rest';
 import {
-  areDicePhysicallyStable,
   areDiceReadablySettled,
-  type GroundEdgeReleaseState,
+  createSettlingAssistance,
   hasPhysicalYStack,
-  releaseRestingGroundEdges,
-  releaseRestingWallLeans,
 } from './internal/physics-settling';
 import { recognizeTopFace } from './internal/result-recognition';
 import { createRollPhysicsConfig } from './internal/roll-physics';
-import { DIE_SIZE, rollAreaMeta, SAMPLE_FPS, STEP } from './internal/roll-simulation-constants';
+import {
+  DIE_SIZE,
+  rollAreaMeta,
+  STEP,
+  timelineSampleEverySteps,
+} from './internal/roll-simulation-constants';
 import {
   constrainRolloutAngularVelocity,
   constrainRolloutVelocity,
 } from './internal/rollout-dynamics';
 import { seededNumber } from './internal/seed-expander';
+import { createSettlementPolicy } from './internal/settlement-policy';
 import { round } from './internal/simulation-math';
+import { SimulationRejectedError } from './simulation-rejected-error';
 
 // Rollout hands off to the separate final rest phase after this stable run.
 const ROLLOUT_STABLE_SAMPLES = 8;
+const ROLLOUT_HANDOFF_EVERY_STEPS = 2;
 
 /** Internal, opt-in audit data. Never part of the wire recipe or replay timeline. */
 export type PhysicsCompletionSnapshot = Readonly<{
   simulationMs: number;
+  rejection?: Readonly<{ reason: RollCandidateRejection['reason'] }>;
   dice: readonly Readonly<{
     slot: SimulationInput['rolledSlots'][number];
     frameIndex: number;
@@ -74,7 +82,9 @@ export function simulateRollTimeline(
   input: SimulationInput,
   inspectPhysics?: (snapshot: PhysicsCompletionSnapshot) => void,
 ): RollTimeline {
-  return simulateRollPhysics(parseSimulationInput(input), true, inspectPhysics).timeline;
+  const result = simulateRollPhysics(parseSimulationInput(input), true, inspectPhysics);
+  if (result.status === 'rejected') throw new SimulationRejectedError(result);
+  return result.replay.timeline;
 }
 
 /** Internal core. Callers own input validation; recording never changes physics cadence. */
@@ -82,16 +92,16 @@ export function simulateRollPhysics(
   input: SimulationInput,
   recordTimeline: true,
   inspectPhysics?: (snapshot: PhysicsCompletionSnapshot) => void,
-): SimulationReplay;
+): { status: 'accepted'; replay: SimulationReplay } | RollCandidateRejection;
 export function simulateRollPhysics(
   input: SimulationInput,
   recordTimeline: false,
-): SimulationOutcome;
+): RollCandidateEvaluation;
 export function simulateRollPhysics(
   input: SimulationInput,
   recordTimeline: boolean,
   inspectPhysics?: (snapshot: PhysicsCompletionSnapshot) => void,
-): SimulationReplay | SimulationOutcome {
+): RollCandidateEvaluation | { status: 'accepted'; replay: SimulationReplay } {
   const { rollId, seed, rolledSlots, pourStyle } = input;
   assertRapierReady();
   const diceCount = rolledSlots.length;
@@ -102,7 +112,7 @@ export function simulateRollPhysics(
 
     const cup = createCupMotion(seed, pourStyle);
     const physicsCup = createPhysicsCup(world, cupTransformAt(cup, 0), DEFAULT_CUP_GEOMETRY);
-    const shakeLid = createCupShakeLid(world, physicsCup, DEFAULT_CUP_GEOMETRY);
+    const shakeLid = createCupShakeLid(world, physicsCup);
     const dice = Array.from({ length: diceCount }, (_, index) =>
       createDieInCup(world, seed, index, diceCount, cup, physics),
     );
@@ -115,14 +125,44 @@ export function simulateRollPhysics(
     );
     let simulationMs = cup.releaseAtMs + rollSimulationMs;
     const steps = Math.ceil(simulationMs / 1000 / STEP);
-    const sampleEvery = Math.max(1, Math.round(1 / STEP / SAMPLE_FPS));
+    const sampleEvery = timelineSampleEverySteps();
     let released = false;
     const exitedDice = new Set<string>();
     let cupRemoved = false;
     let shakeLidRemoved = false;
     let rolloutStableSamples = 0;
-    const wallReleaseTimes = new Map<string, number>();
-    const groundedEdgeReleaseStates = new Map<string, GroundEdgeReleaseState>();
+    const policy = createSettlementPolicy();
+    const assistance = createSettlingAssistance(world, dice, tray.floor, tray.walls, (event) =>
+      policy.recordAssist(event),
+    );
+    const reject = (
+      rejection: Omit<RollCandidateRejection, 'status' | 'input'>,
+    ): RollCandidateRejection => {
+      inspectPhysics?.({
+        simulationMs: rejection.simulationMs,
+        rejection: { reason: rejection.reason },
+        dice: dice.map((die, index) => {
+          const p = die.body.translation();
+          const q = die.body.rotation();
+          const linear = die.body.linvel();
+          const angular = die.body.angvel();
+          return {
+            slot: rolledSlots[index],
+            frameIndex: (frames?.[index].length ?? 0) - 1,
+            p: [p.x, p.y, p.z],
+            q: [q.x, q.y, q.z, q.w],
+            linearSpeed: Math.hypot(linear.x, linear.y, linear.z),
+            angularSpeed: Math.hypot(angular.x, angular.y, angular.z),
+          };
+        }),
+      });
+      return Object.freeze({
+        status: 'rejected',
+        input,
+        reason: rejection.reason,
+        simulationMs: rejection.simulationMs,
+      });
+    };
     for (let step = 0; step <= steps; step += 1) {
       const t = Math.round(step * STEP * 1000);
       // Before observation, releaseAtMs is only the waiting deadline. Do not
@@ -156,7 +196,7 @@ export function simulateRollPhysics(
       if (!released) applyCupPourAssist(physicsCup, dice, cup, t, exitedDice);
       if (!released) {
         for (const die of dice) {
-          if (!exitedDice.has(die.id) && haveDiceClearedCup(world, physicsCup, [die])) {
+          if (!exitedDice.has(die.id) && haveDiceClearedCup(physicsCup, [die])) {
             exitedDice.add(die.id);
           }
         }
@@ -165,7 +205,7 @@ export function simulateRollPhysics(
         !released &&
         t >= cup.pourAtMs &&
         exitedDice.size === diceCount &&
-        areDiceOutsideCup(world, physicsCup, dice)
+        areDiceOutsideCup(physicsCup, dice)
       ) {
         released = true;
         // Each die must have crossed the mouth, but an earlier die may now be
@@ -174,26 +214,14 @@ export function simulateRollPhysics(
         cup.releaseAtMs = t + Math.round(STEP * 1000);
         cup.exitAtMs = cup.releaseAtMs + CUP_EXIT_HOLD_MS + CUP_EXIT_TAIL_MS;
       }
-      if (cupRemoved) {
-        releaseRestingWallLeans(world, dice, tray.walls, t, wallReleaseTimes);
-        releaseRestingGroundEdges(
-          world,
-          dice,
-          tray.floor,
-          t,
-          groundedEdgeReleaseStates,
-          tray.walls,
-        );
-      }
-      if (released) {
-        const rolloutSettled =
-          areDicePhysicallyStable(dice) && areDiceReadablySettled(dice, DIE_SIZE * 0.22, 0.9);
-        rolloutStableSamples = rolloutSettled ? rolloutStableSamples + 1 : 0;
-      }
+      if (cupRemoved) assistance.apply(t);
+      const observation = policy.observe(world, dice, tray.floor, t, cupRemoved);
+      if (observation.rejection) return reject(observation.rejection);
+      rolloutStableSamples = observation.readable ? rolloutStableSamples + 1 : 0;
 
       const samplesEveryPourStep = t >= cup.pourAtMs && t < cup.releaseAtMs;
-      if (!samplesEveryPourStep && step % sampleEvery !== 0 && step !== steps) continue;
-      if (frames && cupFrames) {
+      const recordsStep = samplesEveryPourStep || step % sampleEvery === 0 || step === steps;
+      if (frames && cupFrames && recordsStep) {
         dice.forEach((die, index) => {
           const p = die.body.translation();
           const q = die.body.rotation();
@@ -206,12 +234,16 @@ export function simulateRollPhysics(
         cupFrames.push(createCupFrame(cup, t));
       }
 
+      if (!samplesEveryPourStep && step % ROLLOUT_HANDOFF_EVERY_STEPS !== 0 && step !== steps)
+        continue;
+
       const minRolloutMs = diceCount >= 5 ? 1800 : 1400;
       const maxVisualRolloutMs = 2400;
       if (
         released &&
         t > cup.exitAtMs - CUP_EXIT_HOLD_MS + 420 &&
-        ((t - cup.releaseAtMs > minRolloutMs && rolloutStableSamples >= ROLLOUT_STABLE_SAMPLES) ||
+        ((cupRemoved && t - cup.releaseAtMs > (diceCount >= 5 ? 1400 : 1100) && observation.flat) ||
+          (t - cup.releaseAtMs > minRolloutMs && rolloutStableSamples >= ROLLOUT_STABLE_SAMPLES) ||
           (t - cup.releaseAtMs > maxVisualRolloutMs &&
             areDiceReadablySettled(dice, DIE_SIZE * 0.3, 0.88) &&
             !hasPhysicalYStack(dice)))
@@ -223,16 +255,18 @@ export function simulateRollPhysics(
     if (!released) {
       throw new CupReleaseError(Math.round(steps * STEP * 1000), exitedDice.size, diceCount);
     }
-    simulationMs = runPhysicsRest(
+    const rest = runPhysicsRest(
       {
         dice,
         frames,
         simulationMs,
-        wallReleaseTimes,
-        groundEdgeReleaseStates: groundedEdgeReleaseStates,
+        policy,
+        assistance,
       },
-      { world, floor: tray.floor, walls: tray.walls },
+      { world, floor: tray.floor },
     );
+    if (rest.status === 'rejected') return reject(rest);
+    simulationMs = rest.simulationMs;
     const recognizedOutcomeValues = dice.map((die) => recognizeTopFace(die.body.rotation()));
     const outcome: SimulationOutcome = Object.freeze({
       input,
@@ -242,7 +276,7 @@ export function simulateRollPhysics(
         ),
       ),
     });
-    if (!frames || !cupFrames) return outcome;
+    if (!frames || !cupFrames) return Object.freeze({ status: 'accepted', outcome });
     if (inspectPhysics) {
       inspectPhysics({
         simulationMs,
@@ -290,7 +324,7 @@ export function simulateRollPhysics(
         frames: frames[index],
       })),
     };
-    return { ...outcome, timeline };
+    return { status: 'accepted', replay: { ...outcome, timeline } };
   } finally {
     world.free();
   }

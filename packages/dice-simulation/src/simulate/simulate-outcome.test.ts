@@ -5,10 +5,12 @@ import { type DieSlot, POUR_STYLES, type SimulationInput, SimulationInputError }
 import { DEFAULT_CUP_GEOMETRY } from '../contract/cup-geometry';
 import { initializeDeterministicRapierForBun } from '../rapier/bun';
 import * as cupMotion from './internal/cup-motion';
+import * as recording from './internal/roll-simulation-constants';
 import { simulateRoll, simulateRollOutcome, simulateRollReplay } from './simulate-roll';
 import {
   CupReleaseError,
   type PhysicsCompletionSnapshot,
+  simulateRollPhysics,
   simulateRollTimeline,
 } from './simulate-timeline';
 
@@ -94,6 +96,87 @@ describe('optional replay recording', () => {
       }
     });
   }
+
+  test('recording density changes frames without changing physical completion', () => {
+    const cadence = spyOn(recording, 'timelineSampleEverySteps');
+    const originalFree = RAPIER.World.prototype.free;
+    const originalStep = RAPIER.World.prototype.step;
+    const originalRemove = RAPIER.World.prototype.removeRigidBody;
+    let steps = 0;
+    const cupRemovals: number[] = [];
+    const traces: ReturnType<typeof captureTrace>[] = [];
+    const stepSpy = spyOn(RAPIER.World.prototype, 'step').mockImplementation(function (
+      this: RAPIER.World,
+      ...args: Parameters<RAPIER.World['step']>
+    ) {
+      steps += 1;
+      return originalStep.apply(this, args);
+    });
+    const removeSpy = spyOn(RAPIER.World.prototype, 'removeRigidBody').mockImplementation(function (
+      this: RAPIER.World,
+      body: RAPIER.RigidBody,
+    ) {
+      if (body.isKinematic()) cupRemovals.push(steps);
+      return originalRemove.call(this, body);
+    });
+    const freeSpy = spyOn(RAPIER.World.prototype, 'free').mockImplementation(function (
+      this: RAPIER.World,
+    ) {
+      traces.push(captureTrace(this, steps, cupRemovals));
+      steps = 0;
+      cupRemovals.length = 0;
+      return originalFree.call(this);
+    });
+    const cadenceInputs: SimulationInput[] = [...inputs];
+    for (const pourStyle of ['burst', 'oblique'] as const) {
+      for (let count = 1; count <= 5; count += 1) {
+        for (let sequence = 0; sequence < 10; sequence += 1) {
+          const seed = `cadence-audit-${pourStyle}-${count}-${sequence}`;
+          cadenceInputs.push({
+            rollId: seed,
+            seed,
+            pourStyle,
+            rolledSlots: Array.from({ length: count }, (_, slot) => slot as DieSlot),
+          });
+        }
+      }
+    }
+    cadenceInputs.push({
+      rollId: 'cadence-rejected-candidate',
+      seed: '33c68b4b286444fed0f281a79f85f714',
+      pourStyle: 'burst',
+      rolledSlots: [0, 1, 2, 3],
+    });
+    let changedFrameCount = false;
+    try {
+      for (const input of cadenceInputs) {
+        cadence.mockReturnValue(2);
+        const sparse = simulateRollPhysics(input, true);
+        cadence.mockReturnValue(1);
+        const dense = simulateRollPhysics(input, true);
+        expect(traces.at(-1)).toEqual(traces.at(-2));
+        expect(dense.status).toBe(sparse.status);
+        if (sparse.status === 'rejected' || dense.status === 'rejected') {
+          expect(dense).toEqual(sparse);
+          continue;
+        }
+        expect(dense.replay.authoritativeValuesBySlot).toEqual(
+          sparse.replay.authoritativeValuesBySlot,
+        );
+        expect(dense.replay.timeline.durationMs).toBe(sparse.replay.timeline.durationMs);
+        expect(dense.replay.timeline.cup.releaseAtMs).toBe(sparse.replay.timeline.cup.releaseAtMs);
+        changedFrameCount ||=
+          dense.replay.timeline.dice[0].frames.length >
+          sparse.replay.timeline.dice[0].frames.length;
+      }
+      expect(changedFrameCount).toBe(true);
+    } finally {
+      cadence.mockRestore();
+      stepSpy.mockRestore();
+      removeSpy.mockRestore();
+      freeSpy.mockRestore();
+    }
+  });
 
   test('does not construct cup display frames without recording', async () => {
     const frameSpy = spyOn(cupMotion, 'createCupFrame');

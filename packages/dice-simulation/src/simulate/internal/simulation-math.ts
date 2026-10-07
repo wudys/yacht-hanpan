@@ -6,6 +6,13 @@ export function quatDistance(a: QuaternionTuple, b: QuaternionTuple): number {
   return 2 * Math.acos(dot);
 }
 
+export function normalizedQuatDistance(a: QuaternionTuple, b: QuaternionTuple): number {
+  const dot =
+    Math.abs(a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3]) /
+    (Math.hypot(...a) * Math.hypot(...b));
+  return 2 * Math.acos(Math.min(1, dot));
+}
+
 export function round(value: number): number {
   return Math.round(value * 10000) / 10000;
 }

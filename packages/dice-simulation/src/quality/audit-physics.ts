@@ -1,9 +1,9 @@
-import { type DieSlot, POUR_STYLES, type SimulationInput } from '../contract';
+import { type DieSlot, parseSimulationInput, POUR_STYLES, type SimulationInput } from '../contract';
 import { initializeDeterministicRapierForBun } from '../rapier/bun';
 import {
   CupReleaseError,
   type PhysicsCompletionSnapshot,
-  simulateRollTimeline,
+  simulateRollPhysics,
 } from '../simulate/simulate-timeline';
 import { measurePhysicsCompletion, physicsCompletionIssues } from './physical-roll-audit';
 
@@ -18,16 +18,30 @@ const REGRESSIONS: readonly SimulationInput[] = [
   pourStyle: style as SimulationInput['pourStyle'],
 }));
 
-function audit(input: SimulationInput) {
+export function auditPhysics(input: SimulationInput) {
   let raw: PhysicsCompletionSnapshot | undefined;
   const startedAt = performance.now();
-  const timeline = simulateRollTimeline(input, (snapshot) => {
+  const result = simulateRollPhysics(parseSimulationInput(input), true, (snapshot) => {
     raw = snapshot;
   });
   const simulationWallMs = performance.now() - startedAt;
   if (!raw) throw new Error('Physics audit snapshot was not collected');
+  if (result.status === 'rejected') {
+    if (raw.rejection?.reason !== result.reason || raw.simulationMs !== result.simulationMs) {
+      throw new Error('Rejected physics audit snapshot did not match candidate evaluation');
+    }
+    return {
+      status: 'rejected' as const,
+      reason: result.reason,
+      simulationMs: result.simulationMs,
+      simulationWallMs,
+      raw,
+    };
+  }
+  const { timeline } = result.replay;
   const measurements = measurePhysicsCompletion(raw, timeline.dice);
   return {
+    status: 'accepted' as const,
     ...measurements,
     qualityIssues: physicsCompletionIssues(measurements),
     durationMs: timeline.durationMs,
@@ -44,7 +58,7 @@ async function main() {
   await initializeDeterministicRapierForBun();
   const regressions = REGRESSIONS.map((input) => {
     try {
-      return { input, report: audit(input) };
+      return { input, report: auditPhysics(input) };
     } catch (error) {
       return {
         input,
@@ -56,7 +70,10 @@ async function main() {
   const groups = [];
   for (const pourStyle of POUR_STYLES) {
     for (let count = 1; count <= 5; count += 1) {
-      const reports: ReturnType<typeof audit>[] = [];
+      const reports: Extract<ReturnType<typeof auditPhysics>, { status: 'accepted' }>[] = [];
+      const rejections: (Extract<ReturnType<typeof auditPhysics>, { status: 'rejected' }> & {
+        seed: string;
+      })[] = [];
       const failures: {
         seed: string;
         error: string;
@@ -69,7 +86,11 @@ async function main() {
       for (let sequence = 0; sequence < 50; sequence += 1) {
         const seed = `dice-quality-${partition}-${pourStyle}-${count}-${sequence}`;
         try {
-          const report = audit({ rollId: seed, seed, rolledSlots, pourStyle });
+          const report = auditPhysics({ rollId: seed, seed, rolledSlots, pourStyle });
+          if (report.status === 'rejected') {
+            rejections.push({ seed, ...report });
+            continue;
+          }
           reports.push(report);
           if (report.rawStackedPairs > 0) rawStackSeeds.push(seed);
           if (report.rawOutsideTrayDice > 0) rawOutsideTraySeeds.push(seed);
@@ -91,7 +112,9 @@ async function main() {
         pourStyle,
         count,
         attempted: 50,
-        completed: reports.length,
+        accepted: reports.length,
+        rejected: rejections.length,
+        rejections,
         failures,
         qualityFailures,
         rawStackSeeds,
@@ -115,7 +138,7 @@ async function main() {
           0.95,
         ),
         simulationWallP95Ms: percentile(
-          reports.map((r) => r.simulationWallMs),
+          [...reports, ...rejections].map((r) => r.simulationWallMs),
           0.95,
         ),
         faceCountsBySlot: rolledSlots.map((slot) =>
@@ -130,7 +153,9 @@ async function main() {
   console.log(JSON.stringify({ partition, regressions, groups }, null, 2));
   if (
     regressions.some(
-      (regression) => !regression.report || regression.report.qualityIssues.length > 0,
+      (regression) =>
+        !regression.report ||
+        (regression.report.status === 'accepted' && regression.report.qualityIssues.length > 0),
     ) ||
     groups.some((group) => group.failures.length > 0 || group.qualityFailures.length > 0)
   ) {

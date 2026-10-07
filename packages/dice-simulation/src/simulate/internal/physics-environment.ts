@@ -32,7 +32,7 @@ export interface PhysicsTray {
   walls: TrayWall[];
 }
 
-export interface SimDie {
+export interface PhysicsDie {
   id: string;
   body: RigidBody;
   collider: Collider;
@@ -178,7 +178,7 @@ export function createDieInCup(
   diceCount: number,
   cup: SimulatedCupMotion,
   physics: RollPhysicsConfig,
-): SimDie {
+): PhysicsDie {
   const r0 = seededNumber(`${seed}:cup-die-x`, index);
   const r1 = seededNumber(`${seed}:cup-die-z`, index);
   const r2 = seededNumber(`${seed}:cup-die-y`, index);
@@ -237,7 +237,7 @@ export function createDieInCup(
     .setRestitution(0.175)
     // Max preserves the higher felt/wall grip while die-die contacts use this lower friction.
     .setFrictionCombineRule(RAPIER.CoefficientCombineRule.Max)
-    .setFriction(0.1);
+    .setFriction(0.06);
   const collider = world.createCollider(colliderDesc, body);
   return { id: `die-${index}`, body, collider };
 }

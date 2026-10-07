@@ -1,13 +1,12 @@
 import { describe, expect, test } from 'bun:test';
 
 import { type RollTimeline, TRAY_GEOMETRY } from '../contract';
-import { REST_ANGULAR_SPEED, REST_LINEAR_SPEED } from '../simulate/internal/physics-settling';
 import { DIE_SIZE, FLOOR_TOP_Y } from '../simulate/internal/roll-simulation-constants';
 import type { PhysicsCompletionSnapshot } from '../simulate/simulate-timeline';
 import { measurePhysicsCompletion, physicsCompletionIssues } from './physical-roll-audit';
 
 describe('physical completion audit', () => {
-  test('reports a raw stack even when final display correction has separated the dice', () => {
+  test('reports a raw stack even when final timeline poses has separated the dice', () => {
     const floor = FLOOR_TOP_Y + DIE_SIZE / 2;
     const raw: PhysicsCompletionSnapshot = {
       simulationMs: 1000,
@@ -44,7 +43,6 @@ describe('physical completion audit', () => {
     expect(report.rawLiftedDice).toBe(1);
     expect(report.translatedDice).toBe(1);
     expect(report.maxPlanarCorrectionDieWidths).toBeCloseTo(1.2);
-    expect(report.displayCorrectionMs).toBe(200);
     expect(report.facesPreserved).toBe(true);
     expect(report.rawMaxLinearSpeed).toBe(0);
     expect(physicsCompletionIssues(report)).toEqual(['stacked', 'lifted']);
@@ -107,7 +105,7 @@ describe('physical completion audit', () => {
       issues: ['low-readability'],
     },
   ])(
-    'classifies $name independently of preserved faces and display correction',
+    'classifies $name independently of preserved faces and final timeline pose drift',
     ({ height, tilt, issues }) => {
       const p: [number, number, number] = [0, FLOOR_TOP_Y + DIE_SIZE / 2 + height, 1];
       const q: [number, number, number, number] = [0, 0, Math.sin(tilt / 2), Math.cos(tilt / 2)];
@@ -127,20 +125,20 @@ describe('physical completion audit', () => {
   test.each([
     {
       name: 'both speeds below normal rest',
-      linearSpeed: REST_LINEAR_SPEED - 1e-8,
-      angularSpeed: REST_ANGULAR_SPEED - 1e-8,
+      linearSpeed: 0.045 - 1e-8,
+      angularSpeed: 0.18 - 1e-8,
       issues: [],
     },
     {
       name: 'linear speed at normal rest boundary',
-      linearSpeed: REST_LINEAR_SPEED,
+      linearSpeed: 0.045,
       angularSpeed: 0,
       issues: ['linear-speed'],
     },
     {
       name: 'angular speed at normal rest boundary',
       linearSpeed: 0,
-      angularSpeed: REST_ANGULAR_SPEED,
+      angularSpeed: 0.18,
       issues: ['angular-speed'],
     },
     {

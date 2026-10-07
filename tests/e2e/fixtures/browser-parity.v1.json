@@ -2,8 +2,8 @@
   "schemaVersion": 1,
   "playwrightVersion": "1.63.0",
   "seed": "1279b7ffdcc9abd2ee896d26ca76e958",
-  "replayDigest": "sha256-q4-v2:bc9539eee3f73073ab220581ff344ee5e7943b34fc826fc5500bc0258529f289",
-  "authoritativeValues": "6,6,2,2,6",
+  "replayDigest": "sha256-q4-v2:515ecee647da196292b4212192b40a55df752fed434d614d28be01b2cc227094",
+  "authoritativeValues": "4,2,2,1,1",
   "browsers": {
     "chromium": "153.0.8010.12",
     "firefox": "155.0",
@@ -12,13 +12,13 @@
   "additionalStyles": [
     {
       "pourStyle": "burst",
-      "replayDigest": "sha256-q4-v2:ab1ed16c92c7dabd7a82074a143e55991e34318345b431abc258491022c869c1",
-      "authoritativeValues": "1,3,2,5,5"
+      "replayDigest": "sha256-q4-v2:626c3fd874d7e38de28ac81385c17a828e4067737481ebdee665e2a69144a205",
+      "authoritativeValues": "2,1,6,2,3"
     },
     {
       "pourStyle": "oblique",
-      "replayDigest": "sha256-q4-v2:42c883755479f0fd1a2d512f8957f719867fc4a042034f7258d264d0dcd7734f",
-      "authoritativeValues": "3,6,6,1,2"
+      "replayDigest": "sha256-q4-v2:d508e17450f26272acde58b650e7d1acbbefec253c654c6ed2bbaa37aa51b8f4",
+      "authoritativeValues": "6,5,3,2,3"
     }
   ]
 }

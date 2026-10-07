@@ -2,6 +2,7 @@ import RAPIER from '@dimforge/rapier3d-deterministic';
 import { beforeAll, expect, spyOn, test } from 'bun:test';
 
 import {
+  AUTOMATIC_POUR_STYLES,
   CUP_EXIT_HOLD_MS,
   type DieSlot,
   type QuaternionTuple,
@@ -228,13 +229,13 @@ test.each(['classic', 'burst'] as const)(
         const body = bodies.find((body) => body.isKinematic());
         if (!body || t < motion.pourAtMs) return;
         const cup = {
+          geometry: DEFAULT_CUP_GEOMETRY,
           body,
           colliders: Array.from({ length: body.numColliders() }, (_, i) => body.collider(i)),
         };
         for (const body of bodies.filter((body) => body.isDynamic())) {
           const die = { id: String(body.handle), body, collider: body.collider(0) };
-          if (!exits.has(body.handle) && haveDiceClearedCup(this, cup, [die]))
-            exits.set(body.handle, t);
+          if (!exits.has(body.handle) && haveDiceClearedCup(cup, [die])) exits.set(body.handle, t);
         }
       });
       try {
@@ -258,32 +259,35 @@ test.each(['classic', 'burst'] as const)(
   },
 );
 
-test('exposes the classic die beyond the opaque cup before its exit fade', () => {
-  const timeline = simulateRollTimeline({
-    rollId: 'classic-opaque-cup-occlusion',
-    seed: 't7-tuning-1-1',
-    rolledSlots: [0],
-    pourStyle: 'classic',
-  });
-  // Observe the last opaque sample, not an arbitrary point during clearance.
-  const time = timeline.cup.releaseAtMs + CUP_EXIT_HOLD_MS - 1;
-  const cup = timeline.cup.frames.filter((frame) => frame.t <= time).at(-1)!;
-  const die = timeline.dice[0]!.frames.filter((frame) => frame.t <= time).at(-1)!;
-  const q = { x: cup.q[0], y: cup.q[1], z: cup.q[2], w: cup.q[3] };
-  const axis = rotateVectorByQuat([0, 1, 0], q);
-  const spec = DEFAULT_CUP_GEOMETRY;
-  // Screen-x bounds for the complete shell and the die's observed orientation.
-  const cupHalfWidth =
-    (spec.innerRadius + spec.wallThickness) * Math.sqrt(1 - axis[0] ** 2) +
-    (spec.innerHeight / 2 + spec.baseThickness) * Math.abs(axis[0]);
-  const dieQ = { x: die.q[0], y: die.q[1], z: die.q[2], w: die.q[3] };
-  const dieHalfWidth =
-    (DIE_GEOMETRY.size / 2) *
-    (Math.abs(rotateVectorByQuat([1, 0, 0], dieQ)[0]) +
-      Math.abs(rotateVectorByQuat([0, 1, 0], dieQ)[0]) +
-      Math.abs(rotateVectorByQuat([0, 0, 1], dieQ)[0]));
-  expect(Math.abs(die.p[0] - cup.p[0]) - cupHalfWidth - dieHalfWidth).toBeGreaterThan(0);
-});
+test.each([...AUTOMATIC_POUR_STYLES])(
+  'exposes the %s die beyond the opaque cup before its exit fade',
+  (pourStyle) => {
+    const timeline = simulateRollTimeline({
+      rollId: 'selected-style-opaque-cup-occlusion',
+      seed: 't7-tuning-1-1',
+      rolledSlots: [0],
+      pourStyle,
+    });
+    // Observe the last opaque sample, not an arbitrary point during clearance.
+    const time = timeline.cup.releaseAtMs + CUP_EXIT_HOLD_MS - 1;
+    const cup = timeline.cup.frames.filter((frame) => frame.t <= time).at(-1)!;
+    const die = timeline.dice[0]!.frames.filter((frame) => frame.t <= time).at(-1)!;
+    const q = { x: cup.q[0], y: cup.q[1], z: cup.q[2], w: cup.q[3] };
+    const axis = rotateVectorByQuat([0, 1, 0], q);
+    const spec = DEFAULT_CUP_GEOMETRY;
+    // Screen-x bounds for the complete shell and the die's observed orientation.
+    const cupHalfWidth =
+      (spec.innerRadius + spec.wallThickness) * Math.sqrt(1 - axis[0] ** 2) +
+      (spec.innerHeight / 2 + spec.baseThickness) * Math.abs(axis[0]);
+    const dieQ = { x: die.q[0], y: die.q[1], z: die.q[2], w: die.q[3] };
+    const dieHalfWidth =
+      (DIE_GEOMETRY.size / 2) *
+      (Math.abs(rotateVectorByQuat([1, 0, 0], dieQ)[0]) +
+        Math.abs(rotateVectorByQuat([0, 1, 0], dieQ)[0]) +
+        Math.abs(rotateVectorByQuat([0, 0, 1], dieQ)[0]));
+    expect(Math.abs(die.p[0] - cup.p[0]) - cupHalfWidth - dieHalfWidth).toBeGreaterThan(0);
+  },
+);
 
 test('fails a physically blocked cup without starting a timed exit', () => {
   const seed = 'blocked-cup-exit';
@@ -341,10 +345,16 @@ test('allows a released die to bounce below the cup while the remaining dice lea
   expect(timeline.cup.frames.some((frame) => frame.mode === 'exit')).toBe(true);
 });
 
-test.each([1, 5])('empties %i dice through the mouth before the cup starts exiting', (count) => {
+test.each([
+  { count: 1, seed: 't5-final-classic-1' },
+  { count: 5, seed: 't5-final-classic-5' },
+  // Explicit classic remains physically supported; the product visibility guarantee
+  // now belongs to the selected automatic styles above. Keep its historical input.
+  { count: 1, seed: 't7-tuning-1-1' },
+])('empties $count classic dice through the mouth before exit ($seed)', ({ count, seed }) => {
   const timeline = simulateRollTimeline({
     rollId: `natural-cup-release-${count}`,
-    seed: `t5-final-classic-${count}`,
+    seed,
     rolledSlots: Array.from({ length: count }, (_, i) => i as DieSlot),
     pourStyle: 'classic',
   });

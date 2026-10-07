@@ -117,7 +117,7 @@ test('both players replay one through five dice while preserving held slots', as
         .click();
     }
     // The production server chooses a gesture for each new roll.
-    for (const roll of rolls) expect(['classic', 'burst', 'oblique']).toContain(roll.style);
+    for (const roll of rolls) expect(['burst', 'oblique']).toContain(roll.style);
     console.log(
       JSON.stringify({
         diceCoverage: rolls.map(({ style, slots }) => ({ style, count: slots.length })),

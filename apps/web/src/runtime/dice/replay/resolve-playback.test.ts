@@ -4,6 +4,7 @@ import {
   type SimulationInput,
   type SimulationReplay,
 } from '@repo/dice-simulation/contract';
+import { SimulationRejectedError } from '@repo/dice-simulation/simulate';
 import { describe, expect, test, vi } from 'vitest';
 
 import {
@@ -166,5 +167,24 @@ describe('resolveRollPlayback', () => {
       cause,
     });
     if (playback.status === 'static-fallback') expect(playback.cause).toBe(cause);
+  });
+
+  test('a locally rejected candidate preserves authority without retrying or replacing the seed', async () => {
+    const cause = new SimulationRejectedError({ reason: 'repeated-assist', simulationMs: 3300 });
+    const simulator = vi.fn(() => Promise.reject(cause));
+    const original = structuredClone(artifact);
+
+    const playback = await resolveRollPlayback(artifact, simulator);
+
+    expect(simulator).toHaveBeenCalledExactlyOnceWith(artifact.replay);
+    expect(artifact).toEqual(original);
+    expect(playback).toEqual({
+      status: 'static-fallback',
+      rollId: artifact.replay.rollId,
+      reason: 'SIMULATION_FAILED',
+      cause,
+      dice: artifact.outcome.authoritativeValuesBySlot,
+    });
+    expect(playback).not.toHaveProperty('timeline');
   });
 });

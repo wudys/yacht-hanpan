@@ -124,27 +124,28 @@ async function executeSerialized(
   if (found === undefined) {
     return failure(PUBLIC_ERROR_CODE.MATCH_FINISHED);
   }
-  const stored = found;
+  const recordBeforeCommand = found;
 
-  const compacted = compactActionLedger(stored.actionLedger, checkedAt);
+  const compacted = compactActionLedger(recordBeforeCommand.actionLedger, checkedAt);
   const existing = findAction(compacted, input.seatIndex, input.command.actionId);
   if (existing !== undefined) {
     if (existing.fingerprint !== fingerprint) return failure(PUBLIC_ERROR_CODE.ACTION_ID_REUSED);
     if (existing.status === 'completed')
       return {
-        result: logicalToApplication(existing.result, projectRoomView(stored)),
+        result: logicalToApplication(existing.result, projectRoomView(recordBeforeCommand)),
         committedStateVersion: null,
       };
     if (existing.status === 'tombstone') {
-      if (stored.match === null) return failure(PUBLIC_ERROR_CODE.MATCH_FINISHED);
+      if (recordBeforeCommand.match === null) return failure(PUBLIC_ERROR_CODE.MATCH_FINISHED);
       const result: CommandApplicationResult = {
         ok: false,
         error: createPublicError(PUBLIC_ERROR_CODE.ACTION_RESULT_EXPIRED, {}),
-        recovery: projectRoomView(stored),
+        recovery: projectRoomView(recordBeforeCommand),
       };
-      if (compacted === stored.actionLedger) return { result, committedStateVersion: null };
+      if (compacted === recordBeforeCommand.actionLedger)
+        return { result, committedStateVersion: null };
       const committed = dependencies.commits.commitLedger({
-        current: stored,
+        current: recordBeforeCommand,
         actionLedger: compacted,
       });
       return committed.ok
@@ -153,28 +154,32 @@ async function executeSerialized(
     }
   }
 
-  if (!isPlayingRoomState(stored)) {
+  if (!isPlayingRoomState(recordBeforeCommand)) {
     return failure(PUBLIC_ERROR_CODE.MATCH_FINISHED);
   }
 
-  const playing = stored;
+  const playingRecordBeforeCommand = recordBeforeCommand;
   const commitAt = dependencies.clock.now();
-  const automatic = reconcileRoomDeadlines(stored, {
+  const deadlineResolution = reconcileRoomDeadlines(recordBeforeCommand, {
     time: commandTime,
     committedAt: commitAt,
     identity: dependencies.identity,
   });
-  if (!isPlayingRoomState(automatic.state)) {
-    return commitState(automatic.state, true, failure(PUBLIC_ERROR_CODE.MATCH_FINISHED).result);
+  if (!isPlayingRoomState(deadlineResolution.state)) {
+    return commitStateWithoutReceipt(
+      deadlineResolution.state,
+      true,
+      failure(PUBLIC_ERROR_CODE.MATCH_FINISHED).result,
+    );
   }
-  const current = automatic.state;
+  const stateAfterDeadlines = deadlineResolution.state;
 
   if (input.command.type === GAME_COMMAND_TYPE.ROLL_DICE) {
     return executeRollCommand(input.command);
   }
 
   const transition = transitionForCommand(
-    current,
+    stateAfterDeadlines,
     input.command,
     input.seatIndex,
     input.receivedAt,
@@ -186,21 +191,25 @@ async function executeSerialized(
       ok: false,
       error: createPublicError(mapMatchRejection(transition.code), {}),
     };
-    return completeCommand(current, logical, automatic.changed);
+    return commitCompletedAction(stateAfterDeadlines, logical, deadlineResolution.changed);
   }
 
   const commandState = transition.changed
-    ? stateAfterTransition(current, transition, commitAt)
-    : current;
+    ? stateAfterTransition(stateAfterDeadlines, transition, commitAt)
+    : stateAfterDeadlines;
   if (commandState === null) return failure(PUBLIC_ERROR_CODE.INTERNAL_ERROR);
   // Equality remains open for a same-time score or forfeit. The deadline scheduler closes
   // that millisecond; earlier connection deadlines were already applied above.
-  return completeCommand(commandState, { ok: true }, automatic.changed || transition.changed);
+  return commitCompletedAction(
+    commandState,
+    { ok: true },
+    deadlineResolution.changed || transition.changed,
+  );
 
   async function executeRollCommand(
     command: Extract<GameCommand, { readonly type: 'rollDice' }>,
   ): Promise<ExecuteGameCommandResult> {
-    const planned = planRoll(current.match, {
+    const planned = planRoll(stateAfterDeadlines.match, {
       seatIndex: input.seatIndex,
       turnId: turnId(command.turnId),
       receivedAt: epochMilliseconds(input.receivedAt),
@@ -210,7 +219,7 @@ async function executeSerialized(
         ok: false,
         error: createPublicError(mapMatchRejection(planned.code), {}),
       };
-      return completeCommand(current, logical, automatic.changed);
+      return commitCompletedAction(stateAfterDeadlines, logical, deadlineResolution.changed);
     }
 
     const ledger = reserveRetryableAction(compacted, {
@@ -218,24 +227,27 @@ async function executeSerialized(
       actionId: input.command.actionId,
       fingerprint,
     });
-    if (ledger === null) return refuseCapacity();
+    if (ledger === null) return refuseActionCapacityAfterDeadlines();
 
     const roll = await dependencies.rolls.execute({ rolledSlots: planned.value.rollingSlots });
     if (roll.ok) {
-      const transition = applyRollResult(current.match, {
+      const transition = applyRollResult(stateAfterDeadlines.match, {
         plan: planned.value,
         facesBySlot: roll.artifact.outcome.authoritativeValuesBySlot,
       });
       if (!transition.ok) {
         return failure(PUBLIC_ERROR_CODE.INTERNAL_ERROR);
       }
-      const commandState: PlayingRoomState = { room: current.room, match: transition.match };
-      return completeCommand(commandState, { ok: true, roll: roll.artifact }, true);
+      const commandState: PlayingRoomState = {
+        room: stateAfterDeadlines.room,
+        match: transition.match,
+      };
+      return commitCompletedAction(commandState, { ok: true, roll: roll.artifact }, true);
     }
 
-    return commitState(
-      current,
-      automatic.changed,
+    return commitStateWithoutReceipt(
+      stateAfterDeadlines,
+      deadlineResolution.changed,
       {
         ok: false,
         error: mapRollFailure(roll.reason),
@@ -244,7 +256,7 @@ async function executeSerialized(
     );
   }
 
-  function completeCommand(
+  function commitCompletedAction(
     state: PlayingRoomState | FinishedRoomState,
     logical: LogicalActionDecision,
     changed: boolean,
@@ -257,13 +269,13 @@ async function executeSerialized(
     };
     const committed = changed
       ? dependencies.commits.commitGame({
-          current: playing,
+          current: playingRecordBeforeCommand,
           state,
           actionLedger: compacted,
           completedAction,
         })
       : dependencies.commits.commitLedger({
-          current: stored,
+          current: recordBeforeCommand,
           actionLedger: compacted,
           completedAction,
         });
@@ -276,23 +288,30 @@ async function executeSerialized(
           committedStateVersion: committed.committedStateVersion,
         }
       : committed.reason === 'ledgerCapacity'
-        ? refuseCapacity()
+        ? refuseActionCapacityAfterDeadlines()
         : failureForCommit(committed.reason);
   }
 
-  function refuseCapacity(): ExecuteGameCommandResult {
-    return automatic.changed ? commitState(current, true, rateLimited().result) : rateLimited();
+  function refuseActionCapacityAfterDeadlines(): ExecuteGameCommandResult {
+    return deadlineResolution.changed
+      ? commitStateWithoutReceipt(stateAfterDeadlines, true, rateLimited().result)
+      : rateLimited();
   }
 
-  function commitState(
+  // Store deadline changes or a retryable ledger without completing the user action.
+  function commitStateWithoutReceipt(
     state: PlayingRoomState | FinishedRoomState,
     changed: boolean,
     result: CommandApplicationResult,
     actionLedger: readonly ActionLedgerEntry[] = compacted,
   ): ExecuteGameCommandResult {
     const committed = changed
-      ? dependencies.commits.commitGame({ current: playing, state, actionLedger })
-      : dependencies.commits.commitLedger({ current: playing, actionLedger });
+      ? dependencies.commits.commitGame({
+          current: playingRecordBeforeCommand,
+          state,
+          actionLedger,
+        })
+      : dependencies.commits.commitLedger({ current: playingRecordBeforeCommand, actionLedger });
     return committed.ok
       ? { result, committedStateVersion: committed.committedStateVersion }
       : failureForCommit(committed.reason);

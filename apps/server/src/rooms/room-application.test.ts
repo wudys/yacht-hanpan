@@ -26,6 +26,7 @@ import {
   type RoomStatePublication,
 } from '@/rooms/application/room-state-committer';
 import { InMemoryRoomTaskQueue } from '@/rooms/application/scheduling/room-task-queue';
+import { createRoom } from '@/rooms/domain/create-room';
 import { roomId } from '@/rooms/domain/room-model';
 import { isPlayingRoomState } from '@/rooms/domain/room-state';
 import { epochMilliseconds } from '@/rooms/domain/time';
@@ -710,5 +711,58 @@ test.each(['cancel', 'cleanup'] as const)(
     });
     await pending;
     state.service.close();
+  },
+);
+
+test.each([false, true])(
+  'maintenance failure waits for all rooms before rescheduling (closed: %s)',
+  async (closeWhileWaiting) => {
+    const state = await fixture();
+    const firstRecord = state.repository.getById(ROOM_ID);
+    if (firstRecord === undefined || firstRecord.match !== null)
+      throw new Error('fixture waiting room missing');
+    const secondId = roomId('018f47f2-c2d8-7f4a-8bf4-3f559c39844a');
+    const second = createRoom({
+      roomId: secondId,
+      code: '001205',
+      characterId: 'navy-bob',
+      variant: false,
+      createdAt: 1_000,
+    });
+    if (!second.ok) throw new Error('fixture create failed');
+    state.repository.createExclusive({ ...firstRecord, room: second.room });
+    const gate = Promise.withResolvers<void>();
+    const prior = state.queue.run(secondId, () => gate.promise);
+    const failure = new Error('maintenance removal failed');
+    const failed = Promise.withResolvers<void>();
+    const remove = spyOn(state.repository, 'remove').mockImplementationOnce(() => {
+      failed.resolve();
+      throw failure;
+    });
+    state.setNow(301_000);
+    state.service.startMaintenance();
+    const wake = state.scheduled.get('maintenance:rooms');
+    if (wake === undefined) throw new Error('maintenance task missing');
+    state.scheduled.delete('maintenance:rooms');
+    const sweep = Promise.resolve(wake.task());
+    const observed = sweep.catch((error: unknown) => error);
+    try {
+      await failed.promise;
+      await Bun.sleep(0);
+      expect(state.scheduled.has('maintenance:rooms')).toBeFalse();
+      if (closeWhileWaiting) state.service.close();
+      state.setNow(345_000);
+      gate.resolve();
+      await prior;
+      expect(await observed).toBe(failure);
+      expect(state.scheduled.get('maintenance:rooms')?.runAt).toBe(
+        closeWhileWaiting ? undefined : 375_000,
+      );
+    } finally {
+      gate.resolve();
+      await Promise.allSettled([prior, sweep]);
+      remove.mockRestore();
+      state.service.close();
+    }
   },
 );

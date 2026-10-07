@@ -1,5 +1,5 @@
 import { parseCancelRoomRequest, parseJoinRoomRequest } from '@repo/game-protocol/http';
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, spyOn, test } from 'bun:test';
 
 import { executeCancelRoom } from '@/rooms/application/admission/cancel-room';
 import { executeJoinRoom } from '@/rooms/application/admission/join-room';
@@ -178,6 +178,185 @@ describe('RoomMaintenance', () => {
     expect(second).toBe(first);
     await first;
     expect(repository.counts()).toEqual({ rooms: 0, codes: 0 });
+  });
+
+  test('keeps a failed sweep in flight until every candidate finishes', async () => {
+    const repository = new InMemoryRoomRepository();
+    const queue = new InMemoryRoomTaskQueue();
+    const secondId = roomId('018f47f2-c2d8-7f4a-8bf4-3f559c39844a');
+    const firstRecord = waitingRecord();
+    const secondRecord = createRoom({
+      roomId: secondId,
+      code: '001205',
+      characterId: 'navy-bob',
+      variant: false,
+      createdAt: 1_000,
+    });
+    if (!secondRecord.ok) throw new Error('fixture create failed');
+    repository.createExclusive(firstRecord);
+    repository.createExclusive({
+      ...firstRecord,
+      room: { ...firstRecord.room, id: secondId, code: secondRecord.room.code },
+    });
+    const gate = Promise.withResolvers<void>();
+    const prior = queue.run(secondId, () => gate.promise);
+    const failure = new Error('cleanup failed');
+    const failed = Promise.withResolvers<void>();
+    const commits = new RoomStateCommitter({
+      repository,
+      clock: { now: () => 301_000 },
+      publishRoomState: () => undefined,
+    });
+    const originalRemove = commits.remove.bind(commits);
+    const remove = spyOn(commits, 'remove').mockImplementation((record) => {
+      if (record.room.id !== ROOM_ID) return originalRemove(record);
+      failed.resolve();
+      throw failure;
+    });
+    const useCase = new RoomMaintenance({
+      clock: { now: () => 301_000 },
+      queue,
+      repository,
+      commits,
+    });
+    const first = useCase.execute();
+    let settled = false;
+    const observed = first.then(
+      () => {
+        settled = true;
+        return null;
+      },
+      (error: unknown) => {
+        settled = true;
+        return error;
+      },
+    );
+    try {
+      await failed.promise;
+      await Bun.sleep(0);
+      expect(settled).toBeFalse();
+      expect(useCase.execute()).toBe(first);
+      gate.resolve();
+      await prior;
+      expect(await observed).toBe(failure);
+      expect(repository.getById(secondId)).toBeUndefined();
+      remove.mockRestore();
+      const next = useCase.execute();
+      expect(next).not.toBe(first);
+      await next;
+      expect(repository.counts()).toEqual({ rooms: 0, codes: 0 });
+    } finally {
+      gate.resolve();
+      await Promise.allSettled([prior, first]);
+      remove.mockRestore();
+      queue.close();
+    }
+  });
+
+  test('preserves the first observed rejection when the first candidate fails later', async () => {
+    const repository = new InMemoryRoomRepository();
+    const firstRecord = waitingRecord();
+    const secondId = roomId('018f47f2-c2d8-7f4a-8bf4-3f559c39844a');
+    const second = createRoom({
+      roomId: secondId,
+      code: '001205',
+      characterId: 'navy-bob',
+      variant: false,
+      createdAt: 1_000,
+    });
+    if (!second.ok) throw new Error('fixture create failed');
+    repository.createExclusive(firstRecord);
+    repository.createExclusive({ ...firstRecord, room: second.room });
+    const queue = new InMemoryRoomTaskQueue();
+    const gate = Promise.withResolvers<void>();
+    const prior = queue.run(ROOM_ID, () => gate.promise);
+    const earlierFailure = new Error('second candidate failed first');
+    const laterFailure = new Error('first candidate failed later');
+    const failed = Promise.withResolvers<void>();
+    const useCase = new RoomMaintenance({
+      clock: { now: () => 301_000 },
+      queue,
+      repository,
+      commits: {
+        commitLedger: () => {
+          throw new Error('unexpected ledger commit');
+        },
+        remove: (record) => {
+          if (record.room.id === ROOM_ID) throw laterFailure;
+          failed.resolve();
+          throw earlierFailure;
+        },
+      },
+    });
+    const sweep = useCase.execute();
+    const observed = sweep.catch((error: unknown) => error);
+    try {
+      await failed.promise;
+      await Bun.sleep(0);
+      expect(useCase.execute()).toBe(sweep);
+      gate.resolve();
+      await prior;
+      expect(await observed).toBe(earlierFailure);
+    } finally {
+      gate.resolve();
+      await Promise.allSettled([prior, sweep]);
+      queue.close();
+    }
+  });
+
+  test('waits for later queue registrations after a synchronous undefined rejection', async () => {
+    const queue = new InMemoryRoomTaskQueue();
+    const secondId = roomId('018f47f2-c2d8-7f4a-8bf4-3f559c39844a');
+    const gate = Promise.withResolvers<void>();
+    const prior = queue.run(secondId, () => gate.promise);
+    const run = queue.run.bind(queue);
+    const registered: RoomId[] = [];
+    const failure: unknown = undefined;
+    const registration = spyOn(queue, 'run').mockImplementation((id, operation) => {
+      registered.push(id);
+      if (id === ROOM_ID) throw failure;
+      return run(id, operation);
+    });
+    const repository = new InMemoryRoomRepository();
+    const candidates = spyOn(repository, 'listMaintenanceCandidateRoomIds').mockReturnValue([
+      ROOM_ID,
+      secondId,
+    ]);
+    const useCase = new RoomMaintenance({
+      clock: { now: () => 301_000 },
+      queue,
+      repository,
+      commits: new RoomStateCommitter({
+        repository,
+        clock: { now: () => 301_000 },
+        publishRoomState: () => undefined,
+      }),
+    });
+    const sweep = useCase.execute();
+    let settled = false;
+    const observed = sweep
+      .then(
+        () => ({ rejected: false }),
+        (error: unknown) => ({ rejected: true, error }),
+      )
+      .finally(() => {
+        settled = true;
+      });
+    try {
+      expect(registered).toEqual([ROOM_ID, secondId]);
+      await Bun.sleep(0);
+      expect(settled).toBeFalse();
+      expect(useCase.execute()).toBe(sweep);
+      gate.resolve();
+      await prior;
+      expect(await observed).toEqual({ rejected: true, error: undefined });
+    } finally {
+      gate.resolve();
+      await Promise.allSettled([prior, sweep]);
+      registration.mockRestore();
+      candidates.mockRestore();
+      queue.close();
+    }
   });
 
   test('skips a candidate already removed by cancellation ahead in the room queue', async () => {

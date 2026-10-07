@@ -21,8 +21,7 @@ export function startRoomMatch(room: PlayingRoom, initialTurn: NextTurnInput): P
 
 export type FinishRoomMatchResult =
   | { readonly ok: true; readonly state: FinishedRoomState }
-  | { readonly ok: false; readonly reason: 'roomRejected'; readonly code: RoomRejectionCode }
-  | { readonly ok: false; readonly reason: 'roomUnchanged' };
+  | { readonly ok: false; readonly reason: 'roomRejected'; readonly code: RoomRejectionCode };
 
 export function finishRoomMatch(
   current: PlayingRoomState,
@@ -31,10 +30,20 @@ export function finishRoomMatch(
 ): FinishRoomMatchResult {
   const finished = markGameFinished(current.room, { finishedAt: committedAt });
   if (!finished.ok) return { ok: false, reason: 'roomRejected', code: finished.code };
-  if (!finished.changed) return { ok: false, reason: 'roomUnchanged' };
   return { ok: true, state: { room: finished.room, match } };
 }
 
+export function markGameFinished(
+  room: PlayingRoom,
+  input: MarkGameFinishedInput,
+): Exclude<
+  RoomTransition<FinishedRoom, PlayingRoom>,
+  { readonly ok: true; readonly changed: false }
+>;
+export function markGameFinished(
+  room: Room,
+  input: MarkGameFinishedInput,
+): RoomTransition<FinishedRoom, Room>;
 export function markGameFinished(
   room: Room,
   input: MarkGameFinishedInput,

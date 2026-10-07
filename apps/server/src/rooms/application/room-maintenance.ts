@@ -32,11 +32,25 @@ export class RoomMaintenance {
   async #cleanupCandidates(): Promise<void> {
     const checkedAt: number = this.#dependencies.clock.now();
     const roomIds = this.#dependencies.repository.listMaintenanceCandidateRoomIds(checkedAt);
-    await Promise.all(
-      roomIds.map((roomId: RoomId) =>
-        this.#dependencies.queue.run(roomId, () => this.#cleanupOne(roomId, checkedAt)),
-      ),
-    );
+    let failed = false;
+    let firstFailure: unknown;
+    const recordFailure = (error: unknown): void => {
+      if (failed) return;
+      failed = true;
+      firstFailure = error;
+    };
+    const candidates = roomIds.map((roomId: RoomId) => {
+      try {
+        return this.#dependencies.queue
+          .run(roomId, () => this.#cleanupOne(roomId, checkedAt))
+          .catch(recordFailure);
+      } catch (error) {
+        recordFailure(error);
+        return Promise.resolve();
+      }
+    });
+    await Promise.all(candidates);
+    if (failed) throw firstFailure;
   }
 
   #cleanupOne(roomId: RoomId, checkedAt: number): void {

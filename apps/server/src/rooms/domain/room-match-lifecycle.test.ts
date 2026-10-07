@@ -115,6 +115,29 @@ describe('markGameFinished', () => {
     expect(result.room.startedAt).toBe(room.startedAt);
   });
 
+  it('rejects waiting rooms and keeps a finished room unchanged only for valid timestamps', () => {
+    const waiting = waitingRoom();
+    expect(markGameFinished(waiting, { finishedAt: 3_000 })).toEqual({
+      ok: false,
+      changed: false,
+      room: waiting,
+      code: ROOM_REJECTION_CODE.ROOM_NOT_PLAYING,
+    });
+    const finished = markGameFinished(playingRoom(), { finishedAt: 10_000 });
+    if (!finished.ok) throw new Error('fixture finish failed');
+    expect(markGameFinished(finished.room, { finishedAt: 20_000 })).toEqual({
+      ok: true,
+      changed: false,
+      room: finished.room,
+    });
+    expect(markGameFinished(finished.room, { finishedAt: -1 })).toEqual({
+      ok: false,
+      changed: false,
+      room: finished.room,
+      code: ROOM_REJECTION_CODE.INVALID_TIMESTAMP,
+    });
+  });
+
   it('finishes a both-disconnected playing room when the Yacht match terminates', () => {
     const creatorConnected = resumeSeat(playingRoom(), {
       seatIndex: creatorIndex,

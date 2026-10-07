@@ -8,10 +8,11 @@
     "dev": "bun --watch src/main.ts",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "load:server": "bun run test/compatibility/server-load.ts",
+    "sample:roll-outcomes": "bun run test/quality/sample-roll-outcomes.ts",
     "smoke:build": "bun run test/compatibility/built-server-smoke.ts",
     "soak:compatibility": "bun run test/compatibility/roll-worker-soak.ts",
     "start": "bun dist/main.js",
-    "test": "bun test src",
+    "test": "bun test src test/quality",
     "test:compatibility": "bun test test/compatibility",
     "typecheck": "tsc --noEmit"
   },

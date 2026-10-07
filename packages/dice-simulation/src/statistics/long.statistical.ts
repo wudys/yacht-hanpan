@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { sampleCorrelations } from './sample-correlations';
+import { projectAcceptedFaces, sampleCorrelations } from './sample-correlations';
 import { sampleRolls } from './sample-rolls';
 
 const ROLLS_PER_GROUP = 400;
@@ -34,13 +34,11 @@ describe('extended dice distribution', () => {
     for (const group of groups.filter(({ count }) => count === 5)) {
       // This axis measures adjacent accepted candidates, not neighbours in the
       // raw attempted stream. The original coordinates/rejections remain above.
-      const sequences = [...new Set(group.samples.map((sample) => sample.sequence))];
-      const acceptedIndex = new Map(sequences.map((sequence, index) => [sequence, index]));
-      const acceptedSamples = group.samples.map((sample) => ({
-        ...sample,
-        sequence: acceptedIndex.get(sample.sequence)!,
-      }));
-      const { temporal, withinRoll } = sampleCorrelations(acceptedSamples, group.accepted);
+      const { temporal, withinRoll } = sampleCorrelations(
+        projectAcceptedFaces(group.samples),
+        group.accepted,
+        group.rolledSlots,
+      );
       // At about400 accepted pairs,0.2 is a broad coupling alarm, not certification.
       for (const { slot, pairCount, correlation } of temporal) {
         expect(

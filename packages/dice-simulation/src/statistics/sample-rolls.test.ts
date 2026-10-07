@@ -20,9 +20,11 @@ test('raw sampling retains rejected attempts and reason/time without fabricating
   expect(report).toHaveLength(1);
   expect(report[0].attempted).toBe(2);
   expect(report[0].accepted).toBe(1);
-  expect(report[0].rejected).toEqual([{ sequence: 0, reason: 'stable-stack', simulationMs: 2567 }]);
+  expect(report[0].rejected).toEqual([
+    { attemptSequence: 0, reason: 'stable-stack', simulationMs: 2567 },
+  ]);
   expect(report[0].samples).toHaveLength(4);
-  expect(report[0].samples.every(({ sequence }) => sequence === 1)).toBe(true);
+  expect(report[0].samples.every(({ attemptSequence }) => attemptSequence === 1)).toBe(true);
 });
 
 test('automaticstyle/count groups keep the fixed attempted denominator', async () => {

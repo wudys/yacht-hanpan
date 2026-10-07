@@ -11,7 +11,7 @@ import { initializeDeterministicRapierForBun } from '../rapier/bun';
 import { simulateRollPhysics } from '../simulate/simulate-timeline';
 
 export type RollSample = Readonly<{
-  sequence: number;
+  attemptSequence: number;
   slot: DieSlot;
   face: DieFace;
   finalX: number;
@@ -20,10 +20,11 @@ export type RollSample = Readonly<{
 export interface RollSampleGroup {
   readonly pourStyle: PourStyle;
   readonly count: number;
+  readonly rolledSlots: readonly DieSlot[];
   attempted: number;
   accepted: number;
   readonly rejected: {
-    readonly sequence: number;
+    readonly attemptSequence: number;
     readonly reason: RollCandidateRejectionReason;
     readonly simulationMs: number;
   }[];
@@ -39,8 +40,8 @@ export async function sampleRolls(
   for (const pourStyle of AUTOMATIC_POUR_STYLES) {
     for (let count = 1; count <= 5; count += 1) {
       const rolledSlots = Array.from({ length: count }, (_, index) => index as DieSlot);
-      for (let sequence = 0; sequence < samplesPerGroup; sequence += 1) {
-        const seed = `${seedPrefix}-${pourStyle}-${count}-${sequence}`;
+      for (let attemptSequence = 0; attemptSequence < samplesPerGroup; attemptSequence += 1) {
+        const seed = `${seedPrefix}-${pourStyle}-${count}-${attemptSequence}`;
         inputs.push({ rollId: seed, seed, rolledSlots, pourStyle });
       }
     }
@@ -48,20 +49,21 @@ export async function sampleRolls(
   return sampleRollInputs(inputs);
 }
 
-/** Arbitrary regression inputs retain their original sequence and ordered slots. */
+/** Arbitrary regression inputs retain their original attemptSequence and ordered slots. */
 export async function sampleRollInputs(
   inputs: readonly SimulationInput[],
 ): Promise<RollSampleGroup[]> {
   await initializeDeterministicRapierForBun();
   const groups = new Map<string, RollSampleGroup>();
-  for (const [sequence, unparsed] of inputs.entries()) {
+  for (const [attemptSequence, unparsed] of inputs.entries()) {
     const input = parseSimulationInput(unparsed);
-    const key = `${input.pourStyle}:${input.rolledSlots.length}`;
+    const key = `${input.pourStyle}:${input.rolledSlots.join(',')}`;
     let group = groups.get(key);
     if (!group) {
       group = {
         pourStyle: input.pourStyle,
         count: input.rolledSlots.length,
+        rolledSlots: input.rolledSlots,
         attempted: 0,
         accepted: 0,
         rejected: [],
@@ -72,13 +74,17 @@ export async function sampleRollInputs(
     group.attempted += 1;
     const result = simulateRollPhysics(input, true);
     if (result.status === 'rejected') {
-      group.rejected.push({ sequence, reason: result.reason, simulationMs: result.simulationMs });
+      group.rejected.push({
+        attemptSequence,
+        reason: result.reason,
+        simulationMs: result.simulationMs,
+      });
       continue;
     }
     group.accepted += 1;
     for (const die of result.replay.timeline.dice) {
       group.samples.push({
-        sequence,
+        attemptSequence,
         slot: die.slot,
         face: die.value,
         finalX: die.frames.at(-1)!.p[0],

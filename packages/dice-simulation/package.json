@@ -32,7 +32,8 @@
     "sync:browser-rapier": "bun ./scripts/sync-browser-rapier.mjs",
     "test": "bun test",
     "test:statistical": "bun test ./src/statistics/long.statistical.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "analyze:roll-outcomes": "bun ./src/statistics/analyze-roll-outcomes.ts"
   },
   "dependencies": {
     "@dimforge/rapier3d-deterministic": "0.19.3",

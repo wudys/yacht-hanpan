@@ -120,6 +120,123 @@ function replace(socket: ConnectionSocket): void {
 }
 
 describe('connection publication', () => {
+  test('fulfills connect without an event and ignores a later duplicate connected event', async () => {
+    const socket = new ConnectionSocket();
+    socket.connect = async () => {
+      socket.connectCount += 1;
+      socket.connected = true;
+    };
+    const session = sessionFor(socket);
+    try {
+      expect(await session.connect()).toEqual({ ok: true });
+      expect(session.getSnapshot()).toMatchObject({
+        connection: 'connected',
+        syncStatus: 'idle',
+        syncRevision: 1,
+        room: view.room,
+      });
+      const confirmed = session.getSnapshot();
+      for (const listener of socket.listeners.connected) listener();
+      expect(session.getSnapshot()).toBe(confirmed);
+      expect(socket.syncCount).toBe(1);
+      expect(await session.connect()).toEqual({ ok: true });
+      expect(socket.syncCount).toBe(2);
+    } finally {
+      session.dispose();
+    }
+  });
+
+  test.each([false, true])(
+    'disconnect closes local state with adapter callback %s',
+    async (callback) => {
+      const socket = new ConnectionSocket();
+      if (!callback)
+        socket.disconnect = () => {
+          socket.connected = false;
+        };
+      const session = sessionFor(socket);
+      try {
+        expect(await session.connect()).toEqual({ ok: true });
+        let publications = 0;
+        session.subscribe(() => {
+          publications += 1;
+        });
+        session.disconnect();
+        expect(session.getSnapshot()).toMatchObject({
+          connection: 'disconnected',
+          syncStatus: 'idle',
+        });
+        expect(await session.setDieHeld(0, true)).toMatchObject({
+          ok: false,
+          error: { code: 'SOCKET_DISCONNECTED' },
+        });
+        session.disconnect();
+        expect(publications).toBe(1);
+      } finally {
+        session.dispose();
+      }
+    },
+  );
+
+  test('disconnect publication can reconnect before the old transport continuation finishes', async () => {
+    const { socket, transport, acknowledgements, session } = pendingConnection();
+    const reconnects: ReturnType<typeof session.connect>[] = [];
+    session.subscribe(() => {
+      if (session.getSnapshot().connection === 'disconnected' && reconnects.length === 0) {
+        reconnects.push(session.connect());
+      }
+    });
+    try {
+      const first = session.connect();
+      session.disconnect();
+      expect(socket.connectCount).toBe(2);
+      transport.resolve();
+      acknowledgements[1]!({ ok: true, data: view, meta: RESPONSE.meta });
+      expect(await first).toMatchObject({ ok: false, error: { code: 'SOCKET_DISCONNECTED' } });
+      expect(await Promise.all(reconnects)).toEqual([{ ok: true }]);
+      expect(session.getSnapshot()).toMatchObject({ connection: 'connected', syncRevision: 1 });
+    } finally {
+      session.dispose();
+    }
+  });
+
+  test('a raw transport disconnect followed by automatic reconnect confirms a new full sync', async () => {
+    const socket = new ConnectionSocket();
+    const session = sessionFor(socket);
+    try {
+      expect(await session.connect()).toEqual({ ok: true });
+      socket.disconnect();
+      socket.connected = true;
+      for (const listener of socket.listeners.connected) listener();
+      await Bun.sleep(0);
+      expect(socket.connectCount).toBe(1);
+      expect(socket.syncCount).toBe(2);
+      expect(session.getSnapshot()).toMatchObject({
+        connection: 'connected',
+        syncStatus: 'idle',
+        syncRevision: 2,
+      });
+    } finally {
+      session.dispose();
+    }
+  });
+
+  test('explicit disconnect ignores a late connected event from the completed transport', async () => {
+    const socket = new ConnectionSocket();
+    const session = sessionFor(socket);
+    try {
+      expect(await session.connect()).toEqual({ ok: true });
+      session.disconnect();
+      const disconnected = session.getSnapshot();
+      for (const listener of socket.listeners.connected) listener();
+      await Bun.sleep(0);
+      expect(session.getSnapshot()).toBe(disconnected);
+      expect(socket.syncCount).toBe(1);
+    } finally {
+      session.dispose();
+    }
+  });
+
   test('coalesces a connect made reentrantly by a connecting subscriber', async () => {
     const socket = new ConnectionSocket();
     const session = sessionFor(socket);

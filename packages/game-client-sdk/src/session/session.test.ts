@@ -710,6 +710,7 @@ describe('game session', () => {
     });
 
     socket.syncVersion = 2;
+    for (const listener of socket.listeners.disconnected) listener();
     for (const listener of socket.listeners.connected) listener();
     await Bun.sleep(0);
     expect(socket.syncCount).toBe(2);

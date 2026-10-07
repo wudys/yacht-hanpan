@@ -142,7 +142,7 @@ export function createCommandRunner(options: CreateCommandRunnerOptions): Comman
         };
       }
       let synchronized: Readonly<{ ok: boolean }> | null = null;
-      if ('recovery' in ack) {
+      if (ack.recovery !== undefined) {
         const application = options.applyRecovery(ack.recovery);
         if (options.signal?.aborted) return disposedResult();
         if (application === 'invalid') {

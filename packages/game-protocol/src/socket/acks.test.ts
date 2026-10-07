@@ -117,17 +117,18 @@ describe('socket acknowledgements', () => {
     expect(JSON.stringify(parseCommandAck(ack))).not.toMatch(/message|stack|token/iu);
   });
 
-  test('represents malformed commands without inventing an action identifier', () => {
+  test.each([null, ACTION_ID])('represents malformed commands with actionId %s', (actionId) => {
     const ack = {
       ok: false,
       error: { code: PUBLIC_ERROR_CODE.INVALID_REQUEST, params: {} },
-      meta: { ...meta, actionId: null },
+      meta: { ...meta, actionId },
     };
     expect(plain(parseCommandAck(ack))).toEqual(ack);
     expect(() =>
       parseCommandAck({
         ...ack,
         error: { code: PUBLIC_ERROR_CODE.STALE_TURN, params: {} },
+        meta: { ...meta, actionId: null },
       }),
     ).toThrow(GameApiParseError);
   });
@@ -424,6 +425,9 @@ describe('acknowledgement room views and recovery', () => {
 
     expect(JSON.parse(JSON.stringify(parseCommandAck(expired)))).toEqual(expired);
     expect(() => parseCommandAck({ ...expired, recovery: undefined })).toThrow(GameApiParseError);
+    expect(() =>
+      parseCommandAck({ ...expired, meta: { ...expired.meta, actionId: null } }),
+    ).toThrow(GameApiParseError);
     expect(() =>
       parseCommandAck({
         ...expired,

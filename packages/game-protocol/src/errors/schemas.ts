@@ -3,8 +3,9 @@ import * as v from 'valibot';
 import { PUBLIC_ERROR_CODE, type PublicErrorCode } from './constants';
 
 const emptyParamsSchema = v.strictObject({});
-const emptyError = (code: Exclude<PublicErrorCode, typeof PUBLIC_ERROR_CODE.RATE_LIMITED>) =>
-  v.strictObject({ code: v.literal(code), params: emptyParamsSchema });
+const emptyError = <Code extends Exclude<PublicErrorCode, typeof PUBLIC_ERROR_CODE.RATE_LIMITED>>(
+  code: Code,
+) => v.strictObject({ code: v.literal(code), params: emptyParamsSchema });
 
 export const publicErrorSchema = v.union([
   emptyError(PUBLIC_ERROR_CODE.INVALID_REQUEST),

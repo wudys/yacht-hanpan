@@ -88,7 +88,13 @@ export function createGameSession(options: CreateGameSessionOptions): GameSessio
   } | null = null;
   let connectionSync: Promise<SessionOperationResult> | null = null;
   let connectPromise: Promise<SessionOperationResult> | null = null;
-  let connectionAttempt: AbortController | null = null;
+  let connectionAttempt: {
+    readonly controller: AbortController;
+    error: ClientError | null;
+  } | null = null;
+  let connectionRevision = 0;
+  let disconnecting = false;
+  let connectionEventsEnabled = false;
   const lifecycle = new AbortController();
   let snapshot = createSnapshot();
   const subscribers = new Set<() => void>();
@@ -186,6 +192,38 @@ export function createGameSession(options: CreateGameSessionOptions): GameSessio
     syncStatus = 'idle';
   };
 
+  const cancelConnectionAttempt = (error: ClientError): void => {
+    const attempt = connectionAttempt;
+    connectionAttempt = null;
+    connectPromise = null;
+    if (attempt === null) return;
+    attempt.error = error;
+    attempt.controller.abort();
+  };
+
+  const acceptConnected = (): Promise<SessionOperationResult> => {
+    if (connection === 'connected') return connectionSync ?? synchronize();
+    connection = 'connected';
+    lastError = null;
+    const revision = ++connectionRevision;
+    const synchronization = synchronize();
+    // Synchronization publishes synchronously; subscribers may close or replace this connection.
+    if (revision === connectionRevision && !lifecycle.signal.aborted) {
+      connectionSync = synchronization;
+    }
+    return synchronization;
+  };
+
+  const acceptDisconnected = (): boolean => {
+    const changed = connection !== 'disconnected' || syncStatus !== 'idle';
+    cancelConnectionAttempt(createTransportError(CLIENT_ERROR_CODE.SOCKET_DISCONNECTED));
+    connectionRevision += 1;
+    connectionSync = null;
+    cancelSynchronization();
+    connection = 'disconnected';
+    return changed;
+  };
+
   const synchronizeIfConnected = (): void => {
     if (connection === 'connected') void synchronize();
   };
@@ -194,7 +232,8 @@ export function createGameSession(options: CreateGameSessionOptions): GameSessio
     connection = 'replaced';
     lastError = null;
     lifecycle.abort();
-    connectionAttempt?.abort();
+    cancelConnectionAttempt(createProtocolError(CLIENT_ERROR_CODE.SESSION_DISPOSED));
+    connectionRevision += 1;
     connectionSync = null;
     cancelSynchronization();
     socket.dispose();
@@ -204,18 +243,18 @@ export function createGameSession(options: CreateGameSessionOptions): GameSessio
   const unsubscriptions = [
     socket.onReplaced(handleSessionReplaced),
     socket.onConnected(() => {
-      if (lifecycle.signal.aborted) return;
-      connection = 'connected';
-      lastError = null;
-      connectionSync = synchronize();
+      if (
+        lifecycle.signal.aborted ||
+        connection === 'connected' ||
+        disconnecting ||
+        !connectionEventsEnabled
+      )
+        return;
+      void acceptConnected();
     }),
     socket.onDisconnected(() => {
-      if (lifecycle.signal.aborted) return;
-      connectionAttempt?.abort();
-      connectionSync = null;
-      cancelSynchronization();
-      connection = 'disconnected';
-      publish();
+      if (lifecycle.signal.aborted || disconnecting) return;
+      if (acceptDisconnected()) publish();
     }),
     socket.onConnectionError((value) => {
       if (lifecycle.signal.aborted) return;
@@ -225,6 +264,8 @@ export function createGameSession(options: CreateGameSessionOptions): GameSessio
         return;
       }
       connectionSync = null;
+      cancelConnectionAttempt(error);
+      connectionRevision += 1;
       cancelSynchronization();
       connection = 'disconnected';
       lastError = error;
@@ -307,17 +348,18 @@ export function createGameSession(options: CreateGameSessionOptions): GameSessio
   };
 
   const executeConnect = async (): Promise<SessionOperationResult> => {
-    const attempt = new AbortController();
+    const attempt = { controller: new AbortController(), error: null as ClientError | null };
     connectionAttempt = attempt;
+    connectionEventsEnabled = true;
     connection = 'connecting';
     publish();
     try {
-      attempt.signal.throwIfAborted();
-      await connectUntilAborted(socket.connect(), attempt.signal);
-      attempt.signal.throwIfAborted();
-      connectionSync ??= synchronize();
-      return await connectionSync;
+      attempt.controller.signal.throwIfAborted();
+      await connectUntilAborted(socket.connect(), attempt.controller.signal);
+      attempt.controller.signal.throwIfAborted();
+      return await acceptConnected();
     } catch (value) {
+      if (attempt.error !== null) return { ok: false, error: attempt.error };
       if (lifecycle.signal.aborted) {
         return { ok: false, error: createProtocolError(CLIENT_ERROR_CODE.SESSION_DISPOSED) };
       }
@@ -326,9 +368,14 @@ export function createGameSession(options: CreateGameSessionOptions): GameSessio
         handleSessionReplaced();
         return { ok: false, error };
       }
-      connection = 'disconnected';
-      lastError = error;
-      publish();
+      if (connectionAttempt === attempt) {
+        connectionRevision += 1;
+        connectionSync = null;
+        cancelSynchronization();
+        connection = 'disconnected';
+        lastError = error;
+        publish();
+      }
       return { ok: false, error };
     } finally {
       if (connectionAttempt === attempt) connectionAttempt = null;
@@ -345,25 +392,33 @@ export function createGameSession(options: CreateGameSessionOptions): GameSessio
       }
       if (connectPromise !== null) return connectPromise;
       let beginConnection: () => void = () => {};
-      connectPromise = new Promise<SessionOperationResult>((resolve, reject) => {
+      const pending = new Promise<SessionOperationResult>((resolve, reject) => {
         beginConnection = () => void executeConnect().then(resolve, reject);
       }).finally(() => {
-        connectPromise = null;
+        if (connectPromise === pending) connectPromise = null;
       });
+      connectPromise = pending;
       beginConnection();
-      return connectPromise;
+      return pending;
     },
     disconnect: () => {
       if (lifecycle.signal.aborted) return;
-      connectionAttempt?.abort();
-      connectionSync = null;
-      cancelSynchronization();
-      socket.disconnect();
+      connectionEventsEnabled = false;
+      const changed = acceptDisconnected();
+      const revision = connectionRevision;
+      disconnecting = true;
+      try {
+        socket.disconnect();
+      } finally {
+        disconnecting = false;
+      }
+      if (changed && revision === connectionRevision && !lifecycle.signal.aborted) publish();
     },
     dispose: () => {
       if (disposed) return;
       disposed = true;
-      connectionAttempt?.abort();
+      cancelConnectionAttempt(createProtocolError(CLIENT_ERROR_CODE.SESSION_DISPOSED));
+      connectionRevision += 1;
       connectionSync = null;
       cancelSynchronization();
       lifecycle.abort();

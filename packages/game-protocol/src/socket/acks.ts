@@ -73,7 +73,40 @@ const syncAckSchema = v.union([
   v.strictObject({ ok: v.literal(false), error: publicErrorSchema, meta: responseMetaSchema }),
 ]);
 
-export type CommandAck = v.InferOutput<typeof commandAckSchema>;
+type ParsedCommandAck = v.InferOutput<typeof commandAckSchema>;
+type CommandMeta = v.InferOutput<typeof commandMetaSchema>;
+type CommandError = v.InferOutput<typeof publicErrorSchema>;
+
+export type CommandAck =
+  | Extract<ParsedCommandAck, { ok: true }>
+  | {
+      readonly ok: false;
+      readonly error: Extract<CommandError, { code: typeof PUBLIC_ERROR_CODE.INVALID_REQUEST }>;
+      readonly meta: v.InferOutput<typeof commandFailureMetaSchema>;
+      readonly recovery?: never;
+    }
+  | {
+      readonly ok: false;
+      readonly error: Extract<
+        CommandError,
+        { code: typeof PUBLIC_ERROR_CODE.ACTION_RESULT_EXPIRED }
+      >;
+      readonly meta: CommandMeta;
+      readonly recovery: v.InferOutput<typeof roomViewSchema>;
+    }
+  | {
+      readonly ok: false;
+      readonly error: Exclude<
+        CommandError,
+        {
+          code:
+            | typeof PUBLIC_ERROR_CODE.INVALID_REQUEST
+            | typeof PUBLIC_ERROR_CODE.ACTION_RESULT_EXPIRED;
+        }
+      >;
+      readonly meta: CommandMeta;
+      readonly recovery?: never;
+    };
 export type CommandReceipt = DeepReadonly<v.InferOutput<typeof commandReceiptSchema>>;
 export type SyncAck = v.InferOutput<typeof syncAckSchema>;
 
@@ -82,13 +115,18 @@ export function parseCommandAck(value: unknown): CommandAck {
   if (parsed.ok) return parsed;
   const hasRecovery = 'recovery' in parsed;
   if (parsed.error.code === PUBLIC_ERROR_CODE.ACTION_RESULT_EXPIRED) {
-    if (!hasRecovery) throw new GameApiParseError();
-    return parsed;
+    if (!hasRecovery || parsed.meta.actionId === null) throw new GameApiParseError();
+    return { ok: false, error: parsed.error, meta: parsed.meta, recovery: parsed.recovery };
   }
   if (hasRecovery) throw new GameApiParseError();
-  if (parsed.meta.actionId === null && parsed.error.code !== PUBLIC_ERROR_CODE.INVALID_REQUEST) {
-    throw new GameApiParseError();
+  if (parsed.error.code === PUBLIC_ERROR_CODE.INVALID_REQUEST) {
+    return { ok: false, error: parsed.error, meta: parsed.meta };
   }
-  return parsed;
+  if (parsed.meta.actionId === null) throw new GameApiParseError();
+  return {
+    ok: false,
+    error: parsed.error,
+    meta: { ...parsed.meta, actionId: parsed.meta.actionId },
+  };
 }
 export const parseSyncAck = (value: unknown): SyncAck => parseWith(syncAckSchema, value);

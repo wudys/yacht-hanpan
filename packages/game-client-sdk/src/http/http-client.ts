@@ -100,7 +100,7 @@ export interface CreateRoomHttpClientOptions {
 type WireResponse = CancelRoomResponse | CreateRoomResponse | JoinRoomResponse | ResumeRoomResponse;
 
 const DEFAULT_HTTP_TIMEOUT_MS = 10_000;
-const HTTP_MUTATION_MAX_ATTEMPTS = 2;
+const HTTP_MAX_ATTEMPTS = 2;
 
 export function createRoomHttpClient(options: CreateRoomHttpClientOptions): RoomHttpClient {
   const fetchImpl: FetchLike = options.fetch ?? globalThis.fetch.bind(globalThis);
@@ -115,7 +115,7 @@ export function createRoomHttpClient(options: CreateRoomHttpClientOptions): Room
     callOptions?: HttpCallOptions,
   ): Promise<ClientResult<SuccessData<Response>, SuccessMeta<Response>>> {
     const envelope = { contract: options.contract, body };
-    for (let attempt = 0; attempt < HTTP_MUTATION_MAX_ATTEMPTS; attempt += 1) {
+    for (let attempt = 0; attempt < HTTP_MAX_ATTEMPTS; attempt += 1) {
       const result = await requestOnce(path, envelope, parseResponse, callOptions);
       if (result.ok || result.error.kind !== 'transport' || callOptions?.signal?.aborted) {
         return result;

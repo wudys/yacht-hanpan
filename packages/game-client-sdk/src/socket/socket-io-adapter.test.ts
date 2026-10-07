@@ -53,6 +53,19 @@ function unresponsiveAuthenticationServer() {
 }
 
 describe('Socket.IO authentication boundary', () => {
+  test('an error subscriber reconnect keeps its cancellation and cannot time out a later connection', async () => {
+    // Module substitution stays in a separate process so other adapter tests use real Socket.IO.
+    const subprocess = Bun.spawn(
+      [process.execPath, new URL('./socket-io-reentry.test-fixtures.ts', import.meta.url).pathname],
+      { stdout: 'pipe', stderr: 'pipe' },
+    );
+    const [exitCode, stderr] = await Promise.all([
+      subprocess.exited,
+      new Response(subprocess.stderr).text(),
+    ]);
+    expect({ exitCode, stderr }).toEqual({ exitCode: 0, stderr: '' });
+  });
+
   test('delivers one complete room-state event and removes its listener on unsubscribe', async () => {
     const update = parseCommittedRoomUpdate({
       type: 'state:committed',

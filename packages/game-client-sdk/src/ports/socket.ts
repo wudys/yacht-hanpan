@@ -1,7 +1,9 @@
 import type { GameCommand, SocketAuth } from '@repo/game-protocol/socket';
 
 export interface RawGameSocket {
+  // Fulfillment confirms transport authentication; callbacks may occur before or after it.
   readonly connect: () => Promise<void>;
+  // Explicit shutdown need not emit onDisconnected; the session owns its local postcondition.
   readonly disconnect: () => void;
   readonly dispose: () => void;
   readonly emitCommand: (command: GameCommand, acknowledge: (value: unknown) => void) => void;

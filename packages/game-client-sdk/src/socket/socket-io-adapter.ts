@@ -41,6 +41,7 @@ export function createSocketIoGameSocket(url: string, getAuth: () => SocketAuth)
         }
         let settled = false;
         let finish: (error: unknown) => void = () => {};
+        const cancel = (): void => finish(new Error('Socket connection cancelled'));
         const onError = (error: Error): void => finish(connectionErrorData(error));
         const onConnect = (): void => finish(null);
         const timeout = setTimeout(() => {
@@ -51,13 +52,13 @@ export function createSocketIoGameSocket(url: string, getAuth: () => SocketAuth)
           if (settled) return;
           settled = true;
           clearTimeout(timeout);
-          cancelConnection = null;
+          if (cancelConnection === cancel) cancelConnection = null;
           socket.off(SOCKET_IO_CLIENT_EVENT.CONNECT, onConnect);
           socket.off(SOCKET_IO_CLIENT_EVENT.CONNECTION_ERROR, onError);
           if (error === null) resolve();
           else reject(error);
         };
-        cancelConnection = () => finish(new Error('Socket connection cancelled'));
+        cancelConnection = cancel;
         socket.once(SOCKET_IO_CLIENT_EVENT.CONNECT, onConnect);
         socket.once(SOCKET_IO_CLIENT_EVENT.CONNECTION_ERROR, onError);
         socket.connect();

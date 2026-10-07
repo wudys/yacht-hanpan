@@ -229,8 +229,7 @@ async function executeSerialized(
       if (!transition.ok) {
         return failure(PUBLIC_ERROR_CODE.INTERNAL_ERROR);
       }
-      const commandState = stateAfterTransition(current, transition, commitAt);
-      if (commandState === null) return failure(PUBLIC_ERROR_CODE.INTERNAL_ERROR);
+      const commandState: PlayingRoomState = { room: current.room, match: transition.match };
       return completeCommand(commandState, { ok: true, roll: roll.artifact }, true);
     }
 
@@ -372,8 +371,9 @@ function failureForCommit(reason: CommitFailure['reason']): ExecuteGameCommandRe
   };
 }
 
-function failure(code: PublicErrorCode): ExecuteGameCommandResult {
-  if (code === PUBLIC_ERROR_CODE.RATE_LIMITED) return rateLimited();
+function failure(
+  code: Exclude<PublicErrorCode, typeof PUBLIC_ERROR_CODE.RATE_LIMITED>,
+): ExecuteGameCommandResult {
   return {
     result: {
       ok: false,

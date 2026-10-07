@@ -24,7 +24,7 @@ try {
   for (let batchStart = 0; batchStart < ITERATIONS; batchStart += BATCH_SIZE) {
     const results = await Promise.all(
       Array.from({ length: Math.min(BATCH_SIZE, ITERATIONS - batchStart) }, () =>
-        harness.execute(ROLL_WORKER_GOLDEN_INPUT),
+        harness.execute(ROLL_WORKER_GOLDEN_INPUT, { deadlineMs: performance.now() + 10_000 }),
       ),
     );
     await Promise.all(results.map(assertGoldenResult));

@@ -2,7 +2,7 @@ import { appendFileSync, existsSync } from 'node:fs';
 import { parentPort } from 'node:worker_threads';
 
 import { initializeDeterministicRapierForBun } from '@repo/dice-simulation/rapier/bun';
-import { simulateRollOutcome } from '@repo/dice-simulation/simulate';
+import { evaluateRollCandidate } from '@repo/dice-simulation/simulate';
 
 import { ROLL_WORKER_GOLDEN_DIGEST } from '@/roll/worker/roll-worker-golden';
 import {
@@ -57,6 +57,19 @@ port.on('message', (request: RollWorkerRequest) => {
 async function run(request: Extract<RollWorkerRequest, { readonly kind: 'run' }>): Promise<void> {
   try {
     if (request.input.seed === 'test-hang') return;
+    if (request.input.seed === 'test-quality-rejection') {
+      port.postMessage({
+        kind: 'result',
+        id: request.id,
+        result: {
+          status: 'rejected',
+          input: request.input,
+          reason: 'stable-stack',
+          simulationMs: 2000,
+        },
+      } satisfies RollWorkerResponse);
+      return;
+    }
     if (request.input.seed === 'test-delay') await Bun.sleep(75);
     if (request.input.seed.startsWith('test-job-error-')) {
       throw new TypeError('test job failure', { cause: new RangeError('test job cause') });
@@ -83,10 +96,14 @@ async function run(request: Extract<RollWorkerRequest, { readonly kind: 'run' }>
         result.authoritativeValuesBySlot[0]!.value = Infinity;
       if (request.input.seed === 'test-malformed-slot')
         result.authoritativeValuesBySlot[0]!.slot = 4;
-      port.postMessage({ kind: 'result', id: request.id, result });
+      port.postMessage({
+        kind: 'result',
+        id: request.id,
+        result: { status: 'accepted', outcome: result },
+      });
       return;
     }
-    const result = await simulateRollOutcome(request.input);
+    const result = await evaluateRollCandidate(request.input);
     port.postMessage({ kind: 'result', id: request.id, result } satisfies RollWorkerResponse);
   } catch (error) {
     port.postMessage({

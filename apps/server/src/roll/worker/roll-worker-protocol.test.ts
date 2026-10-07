@@ -2,7 +2,10 @@ import { initializeDeterministicRapierForBun } from '@repo/dice-simulation/rapie
 import { simulateRollOutcome } from '@repo/dice-simulation/simulate';
 import { expect, test } from 'bun:test';
 
-import { ROLL_WORKER_GOLDEN_DIGEST } from '@/roll/worker/roll-worker-golden';
+import {
+  ROLL_WORKER_GOLDEN_DIGEST,
+  ROLL_WORKER_GOLDEN_INPUT,
+} from '@/roll/worker/roll-worker-golden';
 import {
   parseRollWorkerResponse,
   restoreRollWorkerError,
@@ -25,23 +28,50 @@ test('accepts only exact internal worker response envelopes', () => {
   expect(() => parseRollWorkerResponse({ kind: 'private-error', message: 'raw' })).toThrow();
 });
 
+test('accepts quality rejections as results and rejects malformed or mixed candidate data', () => {
+  const result = {
+    status: 'rejected' as const,
+    input: ROLL_WORKER_GOLDEN_INPUT,
+    reason: 'stable-stack' as const,
+    simulationMs: 2000,
+  };
+  expect(parseRollWorkerResponse(structuredClone({ kind: 'result', id: 1, result }))).toEqual({
+    kind: 'result',
+    id: 1,
+    result,
+  });
+  for (const changed of [
+    { ...result, reason: 'unsupported' },
+    { ...result, simulationMs: -1 },
+    { ...result, simulationMs: Infinity },
+    { ...result, simulationMs: 2.5 },
+    { ...result, outcome: {} },
+    { ...result, status: 'accepted' },
+  ]) {
+    expect(() => parseRollWorkerResponse({ kind: 'result', id: 1, result: changed })).toThrow(
+      'Invalid roll worker response',
+    );
+  }
+});
+
 test('rejects sparse outcomes preserved by worker structuredClone', async () => {
   await initializeDeterministicRapierForBun();
-  const result = await simulateRollOutcome({
+  const outcome = await simulateRollOutcome({
     rollId: 'worker-sparse-result',
     seed: 'worker-sparse-result',
     rolledSlots: [0],
     pourStyle: 'classic',
   });
+  const result = { status: 'accepted' as const, outcome };
   expect(parseRollWorkerResponse(structuredClone({ kind: 'result', id: 1, result }))).toEqual({
     kind: 'result',
     id: 1,
     result,
   });
   const malformed = structuredClone(result);
-  Reflect.deleteProperty(malformed.authoritativeValuesBySlot, 0);
+  Reflect.deleteProperty(malformed.outcome.authoritativeValuesBySlot, 0);
   const message = structuredClone({ kind: 'result', id: 1, result: malformed });
-  expect(0 in message.result.authoritativeValuesBySlot).toBe(false);
+  expect(0 in message.result.outcome.authoritativeValuesBySlot).toBe(false);
   expect(() => parseRollWorkerResponse(message)).toThrow('Invalid roll worker response');
 });
 

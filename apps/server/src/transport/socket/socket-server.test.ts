@@ -1,5 +1,12 @@
 import { createServer } from 'node:http';
 
+import {
+  POUR_STYLE,
+  type RollCandidateEvaluation,
+  type SimulationInput,
+} from '@repo/dice-simulation/contract';
+import { createGameClient, type CreateGameClientOptions } from '@repo/game-client-sdk';
+import { CLIENT_ERROR_CODE } from '@repo/game-client-sdk/errors';
 import { PUBLIC_ERROR_CODE } from '@repo/game-protocol/errors';
 import { parseCreateRoomResponse, parseJoinRoomResponse } from '@repo/game-protocol/http';
 import {
@@ -16,6 +23,7 @@ import { Server as SocketIoServer } from 'socket.io';
 import { io as createClient, type Socket as ClientSocket } from 'socket.io-client';
 
 import { type GameServer, startGameServer } from '@/app/start-game-server';
+import { createAuthoritativeRollCommandExecutor } from '@/roll/authoritative-roll-command-executor';
 import {
   ROLL_SIMULATION_EXECUTOR_ERROR_CODE,
   RollSimulationExecutorError,
@@ -506,6 +514,194 @@ describe('authoritative Socket server', () => {
     }
     expect(creatorPublications).toEqual([seenByCreator]);
     expect(joinerPublications).toEqual([seenByJoiner]);
+  });
+
+  test('preserves queued authoritative roll and sync admission after real SDK waiters expire', async () => {
+    const simulation = Promise.withResolvers<RollCandidateEvaluation>();
+    const entered = Promise.withResolvers<SimulationInput>();
+    let simulationCalls = 0;
+    let authorityTime = 0;
+    const server = await startGameServer({
+      config: {
+        allowedOrigins: [],
+        trustRenderProxy: false,
+        host: '127.0.0.1',
+        port: 0,
+        releaseId: RELEASE_ID,
+      },
+      rolls: createAuthoritativeRollCommandExecutor({
+        contract: createCompatibilityContract(RELEASE_ID),
+        executionBudgetMs: 15_000,
+        monotonicNow: () => authorityTime,
+        logger: { error: () => {} },
+        recipeSource: {
+          createRollId: () => '8184fc0a-4e59-455d-a7c1-579a9ee96403',
+          createRollSeed: () => 'recovery-queue-seed',
+          createPourStyle: () => POUR_STYLE.CLASSIC,
+        },
+        simulation: {
+          execute: (input, budget) => {
+            simulationCalls += 1;
+            expect(budget.deadlineMs).toBe(15_000);
+            entered.resolve(input);
+            return simulation.promise;
+          },
+        },
+      }),
+    });
+    servers.push(server);
+    const created = parseCreateRoomResponse(
+      (
+        await post(`${server.url}/rooms`, {
+          clientId: '018f47f2-c2d8-7f4a-8bf4-3f559c39843d',
+          operationId: 'a352d145-d218-48d0-b454-2369451f0966',
+          profile: { characterId: 'navy-bob', variant: false },
+        })
+      ).body,
+    );
+    if (!created.ok) throw new Error('create failed');
+    const joined = parseJoinRoomResponse(
+      (
+        await post(`${server.url}/rooms/${created.data.view.room.roomCode}/join`, {
+          clientId: '018f47f2-c2d8-7f4a-8bf4-3f559c398440',
+          operationId: 'ad4e3b2b-eac3-48e3-bfc9-3d6477013ef5',
+          profile: { characterId: 'blonde-buns', variant: false },
+        })
+      ).body,
+    );
+    if (!joined.ok) throw new Error('join failed');
+    const creator = await connect(server.url, {
+      roomId: created.data.authority.roomId,
+      seatToken: created.data.authority.seatToken,
+      contract: createCompatibilityContract(RELEASE_ID),
+    });
+    const joiner = await connect(server.url, {
+      roomId: joined.data.authority.roomId,
+      seatToken: joined.data.authority.seatToken,
+      contract: createCompatibilityContract(RELEASE_ID),
+    });
+    // Only the network port is adapted; room FIFO, authority and Socket admission stay real.
+    type RawSocket = ReturnType<NonNullable<CreateGameClientOptions['socketFactory']>['create']>;
+    let connected = () => {};
+    const commandAcks: ReturnType<typeof parseCommandAck>[] = [];
+    const syncAcks: ReturnType<typeof parseSyncAck>[] = [];
+    const raw: RawSocket = {
+      connect: async () => connected(),
+      disconnect: () => {
+        creator.disconnect();
+      },
+      dispose: () => {
+        creator.disconnect();
+      },
+      emitCommand: (command, acknowledge) =>
+        creator.emit(SOCKET_EVENT.GAME_COMMAND, command, (value: unknown) => {
+          commandAcks.push(parseCommandAck(value));
+          acknowledge(value);
+        }),
+      emitSync: (acknowledge) =>
+        creator.emit(SOCKET_EVENT.GAME_SYNC, (value: unknown) => {
+          syncAcks.push(parseSyncAck(value));
+          acknowledge(value);
+        }),
+      onConnected: (listener) => {
+        connected = listener;
+        return () => {};
+      },
+      onDisconnected: (listener) => {
+        creator.on('disconnect', listener);
+        return () => {
+          creator.off('disconnect', listener);
+        };
+      },
+      onRoomUpdate: (listener) => {
+        creator.on(SOCKET_EVENT.ROOM_STATE, listener);
+        return () => {
+          creator.off(SOCKET_EVENT.ROOM_STATE, listener);
+        };
+      },
+      onConnectionError: () => () => {},
+      onReplaced: () => () => {},
+    };
+    const sdk = createGameClient({
+      serverUrl: server.url,
+      releaseId: RELEASE_ID,
+      createActionId: () => 'a635fe2c-c4c8-4382-80d7-c35c5d5d455d',
+      retryPolicy: { acknowledgementTimeoutMs: 40, maximumAttempts: 2, retryDelayMs: 0 },
+      socketFactory: { create: () => raw },
+    }).createSession(created.data.authority);
+    try {
+      expect(await sdk.connect()).toEqual({ ok: true });
+      const publications: unknown[] = [];
+      creator.on(SOCKET_EVENT.ROOM_STATE, (value: unknown) => publications.push(value));
+      const joinerUpdate = onceEvent(joiner, SOCKET_EVENT.ROOM_STATE);
+      const rolled = sdk.rollDice();
+      const input = await within(entered.promise, 'simulation admitted');
+      expect(await within(rolled, 'SDK command and recovery waiters expire')).toMatchObject({
+        ok: false,
+        error: { code: CLIENT_ERROR_CODE.ACK_TIMEOUT },
+      });
+      expect(sdk.getSnapshot()).toMatchObject({
+        syncStatus: 'idle',
+        syncRevision: 1,
+        error: { code: CLIENT_ERROR_CODE.ACK_TIMEOUT },
+      });
+      expect(commandAcks).toHaveLength(0);
+      expect(syncAcks).toHaveLength(1);
+      expect(await within(sdk.synchronize(), 'additional sync rejected')).toMatchObject({
+        ok: false,
+        error: {
+          kind: 'server',
+          error: { code: PUBLIC_ERROR_CODE.RATE_LIMITED, params: { retryAfterMs: 1_000 } },
+        },
+      });
+      expect(simulationCalls).toBe(1);
+      expect(commandAcks).toHaveLength(0);
+      expect(sdk.getSnapshot().syncRevision).toBe(1);
+
+      authorityTime = 14_000;
+      simulation.resolve({
+        status: 'accepted',
+        outcome: {
+          input,
+          authoritativeValuesBySlot: input.rolledSlots.map((slot) => ({ slot, value: 2 })),
+        },
+      });
+      const committed = parseCommittedRoomUpdate(await within(joinerUpdate, 'late roll committed'));
+      // A FIFO barrier also drains the original host sync/ACK after the roll commit.
+      expect(parseSyncAck(await emitAckWithin(joiner, SOCKET_EVENT.GAME_SYNC)).ok).toBeTrue();
+      expect(commandAcks).toHaveLength(2);
+      expect(commandAcks[0]).toMatchObject({
+        ok: true,
+        data: { receipt: { stateVersion: 2, roll: {} } },
+      });
+      expect(commandAcks[1]).toMatchObject({
+        ok: true,
+        data: { receipt: commandAcks[0]!.ok ? commandAcks[0]!.data.receipt : undefined },
+      });
+      expect(committed.type).toBe('roll:committed');
+      expect(publications).toEqual([committed]);
+      expect(sdk.getSnapshot()).toMatchObject({
+        error: null,
+        syncRevision: 1,
+        game: { stateVersion: 2 },
+      });
+      expect(await within(sdk.synchronize(), 'fresh confirmation')).toEqual({ ok: true });
+      expect(sdk.getSnapshot().syncRevision).toBe(2);
+      const duplicate = await within(sdk.rollDice(), 'completed command replay');
+      expect(duplicate).toMatchObject({
+        ok: true,
+        data: commandAcks[0]!.ok ? commandAcks[0]!.data.receipt : undefined,
+      });
+      expect(simulationCalls).toBe(1);
+      expect(sdk.getSnapshot()).toMatchObject({
+        game: { stateVersion: 2, match: { currentTurn: { rollCount: 1 } } },
+      });
+      expect(parseSyncAck(await emitAckWithin(creator, SOCKET_EVENT.GAME_SYNC)).ok).toBeTrue();
+      expect(publications).toEqual([committed]);
+    } finally {
+      simulation.reject(new Error('test ended'));
+      sdk.dispose();
+    }
   });
 
   test('replaces the previous seat connection without letting its disconnect mark presence offline', async () => {

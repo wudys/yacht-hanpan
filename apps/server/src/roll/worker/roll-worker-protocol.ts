@@ -1,7 +1,7 @@
 import {
-  isSimulationOutcome,
+  isRollCandidateEvaluation,
+  type RollCandidateEvaluation,
   type SimulationInput,
-  type SimulationOutcome,
 } from '@repo/dice-simulation/contract';
 
 export interface RollWorkerRequest {
@@ -22,7 +22,7 @@ const MAX_ERROR_CAUSE_DEPTH = 5;
 
 export type RollWorkerResponse =
   | { readonly kind: 'ready'; readonly goldenDigest: string }
-  | { readonly kind: 'result'; readonly id: number; readonly result: SimulationOutcome }
+  | { readonly kind: 'result'; readonly id: number; readonly result: RollCandidateEvaluation }
   | { readonly kind: 'error'; readonly id: number; readonly error: RollWorkerError }
   | { readonly kind: 'startup-error'; readonly error: RollWorkerError };
 
@@ -73,7 +73,7 @@ export function parseRollWorkerResponse(value: unknown): RollWorkerResponse {
     if (
       !hasExactKeys(value, ['id', 'kind', 'result']) ||
       !isJobId(value.id) ||
-      !isSimulationOutcome(value.result)
+      !isRollCandidateEvaluation(value.result)
     ) {
       throw invalidResponse();
     }
@@ -89,15 +89,12 @@ function parseRollWorkerError(value: unknown, depth: number = 0): RollWorkerErro
     typeof value.name !== 'string' ||
     typeof value.message !== 'string' ||
     ('stack' in value && typeof value.stack !== 'string') ||
-    !hasExactKeys(
-      value,
-      [
-        'message',
-        'name',
-        ...('stack' in value ? ['stack'] : []),
-        ...('cause' in value ? ['cause'] : []),
-      ].sort(),
-    )
+    !hasExactKeys(value, [
+      'message',
+      'name',
+      ...('stack' in value ? ['stack'] : []),
+      ...('cause' in value ? ['cause'] : []),
+    ])
   ) {
     throw invalidResponse();
   }
@@ -110,8 +107,8 @@ function parseRollWorkerError(value: unknown, depth: number = 0): RollWorkerErro
 }
 
 function hasExactKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {
-  const actual = Object.keys(value).sort();
-  return actual.length === keys.length && actual.every((key, index) => key === keys[index]);
+  const actual = Object.keys(value);
+  return actual.length === keys.length && keys.every((key) => Object.hasOwn(value, key));
 }
 
 function isJobId(value: unknown): value is number {

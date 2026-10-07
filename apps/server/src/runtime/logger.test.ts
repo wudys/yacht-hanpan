@@ -1,8 +1,50 @@
 import { describe, expect, test } from 'bun:test';
 
-import { createJsonLogger } from '@/runtime/logger';
+import { createJsonLogger, type LogFields, protectLogger } from '@/runtime/logger';
 
 describe('JSON logger', () => {
+  test('preserves a class logger method surface and receiver', () => {
+    class ErrorLogger {
+      public readonly events: string[] = [];
+      public error(event: string, _fields?: LogFields): void {
+        this.events.push(event);
+        throw new Error('diagnostic failure');
+      }
+    }
+    const source = new ErrorLogger();
+    const logger = protectLogger(source);
+    expect(Object.keys(logger)).toEqual(['error']);
+    expect(() => logger.error('failed')).not.toThrow();
+    expect(source.events).toEqual(['failed']);
+  });
+
+  test('retains minimum log level and circular field normalization', () => {
+    const lines: string[] = [];
+    const logger = createJsonLogger((line) => lines.push(line), 'warn');
+    const fields: Record<string, unknown> = { safe: 'visible' };
+    fields.self = fields;
+    logger.info('filtered');
+    logger.warn('circular', fields);
+    expect(lines.map((line) => JSON.parse(line))).toEqual([
+      { level: 'warn', event: 'circular', safe: 'visible', self: '[Circular]' },
+    ]);
+  });
+
+  test('isolates synchronous sink and field normalization failures', () => {
+    const failure = () => {
+      throw new Error('diagnostic failure');
+    };
+    const logger = createJsonLogger(failure);
+    expect(() => logger.info('sink.failed')).not.toThrow();
+    expect(() =>
+      logger.error('normalization.failed', {
+        get field() {
+          return failure();
+        },
+      }),
+    ).not.toThrow();
+  });
+
   test('writes one structured JSON event', () => {
     const lines: string[] = [];
     const logger = createJsonLogger((line) => lines.push(line));

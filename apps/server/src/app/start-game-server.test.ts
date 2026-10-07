@@ -53,6 +53,39 @@ function config() {
 }
 
 describe('production game HTTP server', () => {
+  test('serves requests and closes its owned worker with a throwing custom logger', async () => {
+    const worker = captureOwnedWorker();
+    let logs = 0;
+    const fail = () => {
+      logs += 1;
+      throw new Error('diagnostic failure');
+    };
+    try {
+      const server = await startGameServer({
+        config: config(),
+        logger: { debug: fail, info: fail, warn: fail, error: fail },
+      });
+      servers.push(server);
+      expect((await json(`${server.url}/health/ready`)).status).toBe(200);
+      expect(
+        (
+          await post(`${server.url}/rooms`, {
+            clientId: CREATOR_CLIENT_ID,
+            operationId: CREATE_OPERATION_ID,
+            profile: { characterId: 'navy-bob', variant: false },
+          })
+        ).status,
+      ).toBe(201);
+      expect(logs).toBeGreaterThan(0);
+      await server.close();
+      expect(worker.closeCalls()).toBe(1);
+      expect(worker.readyWorkers()).toBe(0);
+      await expect(fetch(`${server.url}/health/live`)).rejects.toThrow();
+    } finally {
+      await worker.cleanup();
+    }
+  });
+
   test('shutdown failure still closes the listener, transport and owned worker once', async () => {
     const failure = new Error('scheduler close failure');
     const originalStart = RollSimulationWorkerPool.prototype.start;

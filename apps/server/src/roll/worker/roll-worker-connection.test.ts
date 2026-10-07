@@ -1,5 +1,6 @@
 import { Worker } from 'node:worker_threads';
 
+import type { RollCandidateEvaluation, SimulationOutcome } from '@repo/dice-simulation/contract';
 import { describe, expect, spyOn, test } from 'bun:test';
 
 import { ROLL_SIMULATION_EXECUTOR_ERROR_CODE } from '@/roll/roll-simulation-executor';
@@ -33,16 +34,17 @@ describe('roll worker connection', () => {
       expect(connection.start()).toBe(first);
       await first;
       const input = { ...ROLL_WORKER_GOLDEN_INPUT, seed: 'test-wrong-id' };
-      expect((await connection.run(1, input)).input).toEqual(input);
-      expect((await connection.run(2, ROLL_WORKER_GOLDEN_INPUT)).authoritativeValuesBySlot).toEqual(
-        ROLL_WORKER_GOLDEN_OUTCOME,
-      );
+      expect(acceptedOutcome(await connection.run(1, input)).input).toEqual(input);
+      expect(
+        acceptedOutcome(await connection.run(2, ROLL_WORKER_GOLDEN_INPUT))
+          .authoritativeValuesBySlot,
+      ).toEqual(ROLL_WORKER_GOLDEN_OUTCOME);
       expect(reports).toEqual([]);
       expect(terminal).toEqual([]);
     } finally {
       await connection.close();
     }
-    expect(terminal).toEqual([{ intentional: true, warmed: true }]);
+    expect(terminal).toEqual([{ reason: 'shutdown', warmed: true }]);
     expect(reports).toEqual([]);
   });
 
@@ -76,7 +78,7 @@ describe('roll worker connection', () => {
       expect(terminate).toHaveBeenCalledTimes(1);
       finishTermination();
       await first;
-      expect(terminal).toEqual([{ intentional: true, warmed: false }]);
+      expect(terminal).toEqual([{ reason: 'shutdown', warmed: false }]);
       expect(reports).toEqual([]);
     } finally {
       finishTermination();
@@ -114,10 +116,16 @@ describe('roll worker connection', () => {
       });
       await connection.close();
       expect(reports).toEqual([{ error: cause, operation: 'worker.timeout' }]);
-      expect(terminal).toEqual([{ intentional: false, warmed: true }]);
+      expect(terminal).toEqual([{ reason: 'failure', warmed: true }]);
     } finally {
       terminate.mockRestore();
       await connection.close();
     }
   });
 });
+
+function acceptedOutcome(candidate: RollCandidateEvaluation): SimulationOutcome {
+  expect(candidate.status).toBe('accepted');
+  if (candidate.status !== 'accepted') throw new Error('Expected accepted fixture');
+  return candidate.outcome;
+}

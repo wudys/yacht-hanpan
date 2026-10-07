@@ -1,7 +1,7 @@
 import { parentPort } from 'node:worker_threads';
 
 import { initializeDeterministicRapierForBun } from '@repo/dice-simulation/rapier/bun';
-import { simulateRoll, simulateRollOutcome } from '@repo/dice-simulation/simulate';
+import { evaluateRollCandidate, simulateRoll } from '@repo/dice-simulation/simulate';
 
 import {
   ROLL_WORKER_GOLDEN_DIGEST,
@@ -23,7 +23,9 @@ try {
   if (golden.replayDigest !== ROLL_WORKER_GOLDEN_DIGEST) {
     throw new Error('roll simulation worker golden mismatch');
   }
-  const outcome = await simulateRollOutcome(ROLL_WORKER_GOLDEN_INPUT);
+  const candidate = await evaluateRollCandidate(ROLL_WORKER_GOLDEN_INPUT);
+  if (candidate.status !== 'accepted') throw new Error('roll simulation worker golden rejected');
+  const { outcome } = candidate;
   if (
     outcome.authoritativeValuesBySlot.length !== ROLL_WORKER_GOLDEN_OUTCOME.length ||
     outcome.authoritativeValuesBySlot.some(
@@ -52,7 +54,7 @@ port.on('message', (request: RollWorkerRequest) => {
 
 async function execute(request: RollWorkerRequest): Promise<void> {
   try {
-    const result = await simulateRollOutcome(request.input);
+    const result = await evaluateRollCandidate(request.input);
     port.postMessage({ kind: 'result', id: request.id, result } satisfies RollWorkerResponse);
   } catch (error) {
     port.postMessage({

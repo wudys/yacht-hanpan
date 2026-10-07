@@ -21,7 +21,7 @@ import type { RoomApplication } from '@/rooms/room-application';
 import type { Clock } from '@/runtime/clock';
 import { systemClock } from '@/runtime/clock';
 import { type ErrorReporter, reportUnexpected } from '@/runtime/error-reporter';
-import { createJsonLogger, type Logger } from '@/runtime/logger';
+import { createJsonLogger, type Logger, protectLogger } from '@/runtime/logger';
 import type { ServerConfig } from '@/runtime/server-config';
 import { parseServerConfig } from '@/runtime/server-config';
 import { createProductionIdentity, type ServerIdentity } from '@/runtime/server-identity';
@@ -31,6 +31,8 @@ import { resolveClientAddress } from '@/transport/client-address';
 import { HttpRequestAdmission } from '@/transport/http/http-request-admission';
 import { createHttpRequestHandler } from '@/transport/http/request-handler';
 import { attachGameSocketServer, type GameSocketServer } from '@/transport/socket/socket-server';
+
+const ROLL_EXECUTION_BUDGET_MS = 15_000;
 
 export interface StartGameServerOptions {
   readonly clock?: Clock;
@@ -55,8 +57,9 @@ export interface GameServer {
 export async function startGameServer(options: StartGameServerOptions = {}): Promise<GameServer> {
   const config = options.config ?? parseServerConfig(process.env);
   const clock = options.clock ?? systemClock;
+  const monotonicNow = () => performance.now();
   const identity = options.identity ?? createProductionIdentity();
-  const logger = options.logger ?? createJsonLogger();
+  const logger = protectLogger(options.logger ?? createJsonLogger());
   const httpAdmission = new HttpRequestAdmission();
   const expectedContract = createCompatibilityContract(config.releaseId);
   let rollSimulation: RollSimulationWorkerPool | null = null;
@@ -84,12 +87,15 @@ export async function startGameServer(options: StartGameServerOptions = {}): Pro
       rollSimulation = new RollSimulationWorkerPool({
         size: 1,
         maxQueued: 128,
+        monotonicNow,
         logger,
         reportUnexpected: options.reportUnexpected,
       });
       await rollSimulation.start();
       rolls = createAuthoritativeRollCommandExecutor({
         contract: expectedContract,
+        executionBudgetMs: ROLL_EXECUTION_BUDGET_MS,
+        monotonicNow,
         logger,
         recipeSource: createProductionRollRecipeSource(),
         reportUnexpected: options.reportUnexpected,

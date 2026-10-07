@@ -1,6 +1,6 @@
 import { Worker } from 'node:worker_threads';
 
-import type { SimulationInput, SimulationOutcome } from '@repo/dice-simulation/contract';
+import type { RollCandidateEvaluation, SimulationInput } from '@repo/dice-simulation/contract';
 
 import {
   ROLL_SIMULATION_EXECUTOR_ERROR_CODE,
@@ -20,7 +20,7 @@ import {
 } from '@/runtime/error-reporter';
 
 export interface RollWorkerTerminal {
-  readonly intentional: boolean;
+  readonly reason: 'shutdown' | 'budget-expired' | 'failure';
   readonly warmed: boolean;
 }
 
@@ -38,7 +38,7 @@ interface RollWorkerConnectionOptions {
 
 interface PendingRun {
   readonly id: number;
-  readonly resolve: (result: SimulationOutcome) => void;
+  readonly resolve: (result: RollCandidateEvaluation) => void;
   readonly reject: (error: RollSimulationExecutorError) => void;
 }
 
@@ -48,7 +48,7 @@ export class RollWorkerConnection {
   #ready: boolean = false;
   #warmed: boolean = false;
   #terminal: boolean = false;
-  #intentional: boolean = false;
+  #terminalReason: RollWorkerTerminal['reason'] = 'failure';
   #finished: boolean = false;
   #current: PendingRun | null = null;
   #readyTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -83,18 +83,18 @@ export class RollWorkerConnection {
       }, this.#options.readyTimeoutMs);
       this.#readyTimeout.unref();
     } catch (error) {
-      this.#markTerminal({ error, operation: 'worker.startup' });
+      this.#markTerminal('failure', { error, operation: 'worker.startup' });
       this.#finish();
     }
     return this.#startPromise;
   }
 
-  public run(id: number, input: SimulationInput): Promise<SimulationOutcome> {
+  public run(id: number, input: SimulationInput): Promise<RollCandidateEvaluation> {
     const worker = this.#worker;
     if (!this.#ready || this.#current !== null || worker === null) {
       return Promise.reject(unavailable());
     }
-    return new Promise<SimulationOutcome>((resolve, reject) => {
+    return new Promise<RollCandidateEvaluation>((resolve, reject) => {
       this.#current = { id, resolve, reject };
       try {
         worker.postMessage({ kind: 'run', id, input } satisfies RollWorkerRequest);
@@ -104,12 +104,16 @@ export class RollWorkerConnection {
     });
   }
 
-  public terminate(cause?: RollWorkerFailure): void {
-    void this.#stop(cause);
+  public terminate(cause: RollWorkerFailure): void {
+    void this.#stop('failure', cause);
+  }
+
+  public expireBudget(): void {
+    void this.#stop('budget-expired');
   }
 
   public close(): Promise<void> {
-    return this.#stop();
+    return this.#stop('shutdown');
   }
 
   readonly #onMessage = (value: unknown): void => {
@@ -158,22 +162,25 @@ export class RollWorkerConnection {
   };
 
   readonly #onError = (error: Error): void => {
-    this.#markTerminal({ error, operation: this.#warmed ? 'worker.exit' : 'worker.startup' });
+    this.#markTerminal('failure', {
+      error,
+      operation: this.#warmed ? 'worker.exit' : 'worker.startup',
+    });
     // Native errors are followed by exit, which completes the connection's lifetime.
   };
 
   readonly #onExit = (): void => {
-    this.#markTerminal({
+    this.#markTerminal('failure', {
       error: new Error('Roll worker exited unexpectedly'),
       operation: this.#warmed ? 'worker.exit' : 'worker.startup',
     });
     this.#finish();
   };
 
-  #markTerminal(cause?: RollWorkerFailure): void {
+  #markTerminal(reason: RollWorkerTerminal['reason'], cause?: RollWorkerFailure): void {
     if (this.#terminal) return;
     this.#terminal = true;
-    this.#intentional = cause === undefined;
+    this.#terminalReason = reason;
     this.#ready = false;
     this.#clearReadyTimeout();
     this.#startup?.reject(unavailable());
@@ -185,13 +192,13 @@ export class RollWorkerConnection {
     }
   }
 
-  #stop(cause?: RollWorkerFailure): Promise<void> {
+  #stop(reason: RollWorkerTerminal['reason'], cause?: RollWorkerFailure): Promise<void> {
     if (this.#closePromise !== null) return this.#closePromise;
     let resolveClose = () => {};
     this.#closePromise = new Promise<void>((resolve) => {
       resolveClose = resolve;
     });
-    this.#markTerminal(cause);
+    this.#markTerminal(reason, cause);
     const finish = (): void => {
       this.#finish();
       resolveClose();
@@ -214,7 +221,7 @@ export class RollWorkerConnection {
     this.#worker?.off('message', this.#onMessage);
     this.#worker?.off('error', this.#onError);
     this.#worker?.off('exit', this.#onExit);
-    this.#options.onTerminal(this, { intentional: this.#intentional, warmed: this.#warmed });
+    this.#options.onTerminal(this, { reason: this.#terminalReason, warmed: this.#warmed });
   }
 
   #clearReadyTimeout(): void {

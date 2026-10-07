@@ -1,4 +1,4 @@
-import type { SimulationInput, SimulationOutcome } from '@repo/dice-simulation/contract';
+import type { RollCandidateEvaluation, SimulationInput } from '@repo/dice-simulation/contract';
 
 export const ROLL_SIMULATION_EXECUTOR_ERROR_CODE = {
   CAPACITY: 'CAPACITY',
@@ -18,6 +18,14 @@ export class RollSimulationExecutorError extends Error {
   }
 }
 
+export interface RollExecutionBudget {
+  // Absolute deadline for the whole command, using the authority's monotonic clock origin.
+  readonly deadlineMs: number;
+}
+
 export interface RollSimulationExecutor {
-  execute(input: SimulationInput): Promise<SimulationOutcome>;
+  // Adapters share that clock origin, settle every call, and reclaim queued/native work
+  // within the deadline. Expected capacity or execution failures reject with
+  // RollSimulationExecutorError (CAPACITY or UNAVAILABLE); unexpected faults retain their cause.
+  execute(input: SimulationInput, budget: RollExecutionBudget): Promise<RollCandidateEvaluation>;
 }

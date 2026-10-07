@@ -1,13 +1,14 @@
-import type { SimulationInput, SimulationOutcome } from '@repo/dice-simulation/contract';
+import type { RollCandidateEvaluation, SimulationInput } from '@repo/dice-simulation/contract';
 
 import {
   ROLL_SIMULATION_EXECUTOR_ERROR_CODE,
+  type RollExecutionBudget,
   type RollSimulationExecutor,
   RollSimulationExecutorError,
 } from '@/roll/roll-simulation-executor';
 import { RollWorkerConnection } from '@/roll/worker/roll-worker-connection';
 import { type ErrorReporter, reportUnexpected } from '@/runtime/error-reporter';
-import type { Logger } from '@/runtime/logger';
+import { type Logger, protectLogger } from '@/runtime/logger';
 
 const DEFAULT_JOB_TIMEOUT_MS = 10_000;
 const DEFAULT_QUEUE_TIMEOUT_MS = 10_000;
@@ -19,6 +20,7 @@ interface RollSimulationWorkerPoolOptions {
   readonly jobTimeoutMs?: number;
   readonly queueTimeoutMs?: number;
   readonly readyTimeoutMs?: number;
+  readonly monotonicNow?: () => number;
   readonly workerUrl?: URL;
   readonly logger?: Logger;
   readonly reportUnexpected?: ErrorReporter;
@@ -28,10 +30,18 @@ interface PendingJob {
   readonly id: number;
   readonly input: SimulationInput;
   readonly queuedAt: number;
-  startedAt: number | null;
+  readonly deadlineMs: number;
+  readonly queueDeadline: StageDeadline;
+  finished: boolean;
   timeout: ReturnType<typeof setTimeout> | null;
-  readonly resolve: (result: SimulationOutcome) => void;
+  readonly resolve: (result: RollCandidateEvaluation) => void;
   readonly reject: (error: RollSimulationExecutorError) => void;
+}
+
+interface StageDeadline {
+  readonly commandMs: number;
+  readonly localMs: number;
+  readonly expiresMs: number;
 }
 
 interface WorkerSlot {
@@ -43,6 +53,7 @@ export class RollSimulationWorkerPool implements RollSimulationExecutor {
   readonly #logger: Logger | undefined;
   readonly #reportUnexpected: ErrorReporter | undefined;
   readonly #jobTimeoutMs: number;
+  readonly #monotonicNow: () => number;
   readonly #queueTimeoutMs: number;
   readonly #readyTimeoutMs: number;
   readonly #maxQueued: number;
@@ -75,12 +86,13 @@ export class RollSimulationWorkerPool implements RollSimulationExecutor {
     if (!Number.isSafeInteger(readyTimeoutMs) || readyTimeoutMs < 1) {
       throw new Error('invalid worker ready timeout');
     }
+    this.#monotonicNow = options.monotonicNow ?? (() => performance.now());
     this.#size = options.size;
     this.#maxQueued = options.maxQueued;
     this.#jobTimeoutMs = jobTimeoutMs;
     this.#queueTimeoutMs = queueTimeoutMs;
     this.#readyTimeoutMs = readyTimeoutMs;
-    this.#logger = options.logger;
+    this.#logger = options.logger === undefined ? undefined : protectLogger(options.logger);
     this.#reportUnexpected = options.reportUnexpected;
     this.#workerUrl = options.workerUrl ?? defaultWorkerUrl();
   }
@@ -91,8 +103,15 @@ export class RollSimulationWorkerPool implements RollSimulationExecutor {
     return this.#startPromise;
   }
 
-  public execute(input: SimulationInput): Promise<SimulationOutcome> {
+  public execute(
+    input: SimulationInput,
+    budget: RollExecutionBudget,
+  ): Promise<RollCandidateEvaluation> {
     if (!this.#accepting || this.#closing) return Promise.reject(unavailable());
+    const now = this.#monotonicNow();
+    if (!Number.isFinite(budget.deadlineMs) || now >= budget.deadlineMs) {
+      return Promise.reject(unavailable());
+    }
     const idle = this.#slots.find((slot) => slot.connection.ready && slot.current === null);
     if (!idle && this.#queue.length >= this.#maxQueued) {
       this.#logger?.warn('roll_worker_saturated', { queueDepth: this.#queue.length });
@@ -101,21 +120,22 @@ export class RollSimulationWorkerPool implements RollSimulationExecutor {
       );
     }
 
-    const job = new Promise<SimulationOutcome>((resolve, reject) => {
+    const job = new Promise<RollCandidateEvaluation>((resolve, reject) => {
       const pending: PendingJob = {
         id: (this.#nextJobId += 1),
         input,
-        queuedAt: performance.now(),
-        startedAt: null,
+        queuedAt: now,
+        deadlineMs: budget.deadlineMs,
+        queueDeadline: stageDeadline(budget.deadlineMs, now, this.#queueTimeoutMs),
+        finished: false,
         timeout: null,
         resolve,
         reject,
       };
-      if (idle) this.#dispatch(idle, pending);
+      if (idle) this.#dispatch(idle, pending, now);
       else {
         this.#queue.push(pending);
-        pending.timeout = setTimeout(() => this.#expireQueued(pending), this.#queueTimeoutMs);
-        pending.timeout.unref();
+        this.#scheduleQueueTimeout(pending, now);
       }
     });
     return job;
@@ -139,6 +159,7 @@ export class RollSimulationWorkerPool implements RollSimulationExecutor {
     const error = unavailable();
     for (const job of this.#queue.splice(0)) {
       clearJobTimeout(job);
+      job.finished = true;
       job.reject(error);
     }
     for (const slot of this.#slots) {
@@ -169,11 +190,11 @@ export class RollSimulationWorkerPool implements RollSimulationExecutor {
       workerUrl: this.#workerUrl,
       readyTimeoutMs: this.#readyTimeoutMs,
       reportUnexpected: this.#reportUnexpected,
-      onTerminal: (connection, { intentional, warmed }) => {
+      onTerminal: (connection, { reason, warmed }) => {
         const index = this.#slots.findIndex((slot) => slot.connection === connection);
         if (index < 0) return;
         this.#slots.splice(index, 1);
-        if (!intentional && !this.#closing && this.#accepting && warmed) {
+        if (reason !== 'shutdown' && !this.#closing && this.#accepting && warmed) {
           this.#restarts += 1;
           this.#logger?.warn('roll_worker_restarting', { restarts: this.#restarts });
           this.#spawnReplacement();
@@ -209,63 +230,120 @@ export class RollSimulationWorkerPool implements RollSimulationExecutor {
       if (!idle) return;
       const next = this.#queue[0];
       if (next === undefined) return;
-      if (performance.now() - next.queuedAt >= this.#queueTimeoutMs) {
-        this.#expireQueued(next);
+      const now = this.#monotonicNow();
+      if (stageExpiry(next.queueDeadline, now) !== null) {
+        this.#expireQueued(next, now);
         continue;
       }
       this.#queue.shift();
-      this.#dispatch(idle, next);
+      this.#dispatch(idle, next, now);
     }
   }
 
-  #dispatch(slot: WorkerSlot, job: PendingJob): void {
+  #dispatch(slot: WorkerSlot, job: PendingJob, now: number): void {
     clearJobTimeout(job);
+    if (now >= job.deadlineMs) {
+      job.finished = true;
+      job.reject(unavailable());
+      return;
+    }
     slot.current = job;
-    job.startedAt = performance.now();
-    job.timeout = setTimeout(() => {
-      if (slot.current !== job) return;
-      slot.connection.terminate({
-        error: new Error('Roll worker job timed out'),
-        operation: 'worker.timeout',
-      });
-      this.#logger?.warn('roll_worker_timed_out', { timeoutMs: this.#jobTimeoutMs });
-    }, this.#jobTimeoutMs);
-    job.timeout.unref();
+    const deadline = stageDeadline(job.deadlineMs, now, this.#jobTimeoutMs);
+    this.#scheduleJobTimeout(slot, job, deadline, now);
     this.#logger?.debug('roll_worker_dispatched', {
       queueDepth: this.#queue.length,
-      queueWaitMs: Math.max(0, performance.now() - job.queuedAt),
+      queueWaitMs: Math.max(0, now - job.queuedAt),
     });
     void slot.connection.run(job.id, job.input).then(
       (result) => {
-        this.#finishJob(slot, job);
+        const completedAt = this.#monotonicNow();
+        if (!this.#finishJob(slot, job)) return;
         this.#logger?.debug('roll_worker_completed', {
-          simulationDurationMs:
-            job.startedAt === null ? null : Math.max(0, performance.now() - job.startedAt),
+          jobElapsedMs: Math.max(0, completedAt - now),
         });
-        job.resolve(result);
+        const expiry = stageExpiry(deadline, completedAt);
+        if (expiry === 'local') {
+          this.#logger?.warn('roll_worker_timed_out', { timeoutMs: this.#jobTimeoutMs });
+        }
+        if (expiry !== null) job.reject(unavailable());
+        else job.resolve(result);
         this.#dispatchNext();
       },
       () => {
-        this.#finishJob(slot, job);
+        if (!this.#finishJob(slot, job)) return;
         job.reject(unavailable());
         this.#dispatchNext();
       },
     );
   }
 
-  #finishJob(slot: WorkerSlot, job: PendingJob): void {
-    clearJobTimeout(job);
-    if (slot.current === job) slot.current = null;
+  #scheduleJobTimeout(
+    slot: WorkerSlot,
+    job: PendingJob,
+    deadline: StageDeadline,
+    now: number,
+  ): void {
+    job.timeout = setTimeout(() => {
+      if (slot.current !== job || job.finished) return;
+      const current = this.#monotonicNow();
+      const expiry = stageExpiry(deadline, current);
+      if (expiry === null) {
+        this.#scheduleJobTimeout(slot, job, deadline, current);
+      } else if (expiry === 'command') {
+        slot.connection.expireBudget();
+      } else {
+        slot.connection.terminate({
+          error: new Error('Roll worker job timed out'),
+          operation: 'worker.timeout',
+        });
+        this.#logger?.warn('roll_worker_timed_out', { timeoutMs: this.#jobTimeoutMs });
+      }
+    }, deadline.expiresMs - now);
+    job.timeout.unref();
   }
 
-  #expireQueued(job: PendingJob): void {
+  #finishJob(slot: WorkerSlot, job: PendingJob): boolean {
+    if (job.finished || slot.current !== job) return false;
+    job.finished = true;
+    clearJobTimeout(job);
+    slot.current = null;
+    return true;
+  }
+
+  #scheduleQueueTimeout(job: PendingJob, now: number): void {
+    job.timeout = setTimeout(
+      () => this.#expireQueued(job, this.#monotonicNow()),
+      job.queueDeadline.expiresMs - now,
+    );
+    job.timeout.unref();
+  }
+
+  #expireQueued(job: PendingJob, now: number): void {
     const index = this.#queue.indexOf(job);
     if (index < 0) return;
+    const expiry = stageExpiry(job.queueDeadline, now);
+    if (expiry === null) {
+      this.#scheduleQueueTimeout(job, now);
+      return;
+    }
     this.#queue.splice(index, 1);
+    job.finished = true;
     clearJobTimeout(job);
-    this.#logger?.warn('roll_worker_queue_timed_out', { timeoutMs: this.#queueTimeoutMs });
+    if (expiry === 'local') {
+      this.#logger?.warn('roll_worker_queue_timed_out', { timeoutMs: this.#queueTimeoutMs });
+    }
     job.reject(unavailable());
   }
+}
+
+function stageDeadline(commandMs: number, startedAt: number, capMs: number): StageDeadline {
+  const localMs = startedAt + capMs;
+  return { commandMs, localMs, expiresMs: Math.min(commandMs, localMs) };
+}
+
+function stageExpiry(deadline: StageDeadline, now: number): 'command' | 'local' | null {
+  if (now >= deadline.commandMs) return 'command';
+  return now >= deadline.localMs ? 'local' : null;
 }
 
 function clearJobTimeout(job: PendingJob): void {

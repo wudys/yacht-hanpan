@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
+import type { SimulationInput } from '@repo/dice-simulation/contract';
 import { PUBLIC_ERROR_CODE } from '@repo/game-protocol/errors';
 import { GAME_COMMAND_TYPE, parseCommandAck, parseGameCommand } from '@repo/game-protocol/socket';
 import { GAME_PROTOCOL_VERSION } from '@repo/game-protocol/version';
@@ -27,6 +28,10 @@ import {
   TURN_ID,
   unavailableRollCommandExecutor,
 } from '@/rooms/application/commands/execute-game-command.test-fixture';
+import {
+  candidateRollExecutor,
+  installSparseRollRecord,
+} from '@/rooms/application/commands/execute-game-command-candidate.test-fixture';
 import { InMemoryRoomRepository } from '@/rooms/application/room-repository';
 import { RoomStateCommitter } from '@/rooms/application/room-state-committer';
 import { RoomDeadlineScheduler } from '@/rooms/application/scheduling/deadline-scheduler';
@@ -1291,6 +1296,158 @@ describe('executeGameCommand', () => {
       expect(state.published).toHaveLength(1);
     },
   );
+
+  test('commits one sparse roll after internal reseeding while duplicates share its final artifact', async () => {
+    const state = await fixture();
+    installSparseRollRecord(state.repository);
+    const before = playingRecord(state.repository);
+    const candidates: SimulationInput[] = [];
+    const barrier = Promise.withResolvers<void>();
+    const dependencies: ExecuteGameCommandDependencies = {
+      ...state.dependencies,
+      rolls: candidateRollExecutor(async (input) => {
+        candidates.push(input);
+        if (candidates.length === 1)
+          return { status: 'rejected', input, reason: 'stable-stack', simulationMs: 2500 };
+        await barrier.promise;
+        return {
+          status: 'accepted',
+          outcome: {
+            input,
+            authoritativeValuesBySlot: input.rolledSlots.map((slot) => ({ slot, value: 6 })),
+          },
+        };
+      }),
+    };
+    const input = {
+      roomId: roomId(ROOM_ID),
+      seatIndex: CREATOR_SEAT_INDEX,
+      command: parseGameCommand({
+        type: GAME_COMMAND_TYPE.ROLL_DICE,
+        actionId: ACTION_ID,
+        turnId: TURN_ID,
+      }),
+      receivedAt: 3_000,
+    };
+    const first = executeGameCommand(input, dependencies);
+    const pendingDuplicate = executeGameCommand(input, dependencies);
+    let laterWorkRan = false;
+    try {
+      await Bun.sleep(0);
+      expect(candidates).toHaveLength(2);
+      expect(playingRecord(state.repository).match).toEqual(before.match);
+      expect(playingRecord(state.repository).stateVersion).toBe(before.stateVersion);
+      expect(state.published).toHaveLength(0);
+      expect(dependencies.pending.count(ROOM_ID)).toBe(1);
+      const laterWork = dependencies.queue.run(input.roomId, () => {
+        laterWorkRan = true;
+        return playingRecord(state.repository);
+      });
+      expect(laterWorkRan).toBe(false);
+      barrier.resolve();
+      const [owner, duplicate, after] = await Promise.all([first, pendingDuplicate, laterWork]);
+      expect(owner.result.ok).toBe(true);
+      if (!owner.result.ok || !owner.result.data.receipt.roll)
+        throw new Error('Expected the final accepted roll artifact');
+      const artifact = owner.result.data.receipt.roll;
+      expect(duplicate).toEqual({ result: owner.result, committedStateVersion: null });
+      expect(owner.committedStateVersion).toBe(before.stateVersion + 1);
+      expect(artifact.replay).toMatchObject({
+        seed: candidates[1].seed,
+        rollId: candidates[0].rollId,
+        pourStyle: 'burst',
+        rolledSlots: [1, 4],
+      });
+      expect(candidates[1].seed).not.toBe(candidates[0].seed);
+      expect(candidates.every((candidate) => candidate.rollId === candidates[0].rollId)).toBe(true);
+      expect(candidates.map((candidate) => candidate.rolledSlots)).toEqual([
+        [1, 4],
+        [1, 4],
+      ]);
+      expect(after.stateVersion).toBe(before.stateVersion + 1);
+      expect(after.match.currentTurn.diceState).toEqual({
+        rollCount: 2,
+        dice: [{ value: 1 }, { value: 6 }, { value: 3 }, { value: 4 }, { value: 6 }],
+      });
+      expect(after.match.currentTurn.heldSlots).toEqual([3, 0, 2]);
+      expect(after.match.players).toEqual(before.match.players);
+      expect(laterWorkRan).toBe(true);
+      expect(state.published).toHaveLength(1);
+      expect(state.published[0]).toMatchObject({
+        kind: 'game',
+        update: { roll: artifact, view: { game: { stateVersion: before.stateVersion + 1 } } },
+      });
+      expect(await executeGameCommand(input, dependencies)).toEqual({
+        result: owner.result,
+        committedStateVersion: null,
+      });
+      expect(candidates).toHaveLength(2);
+      expect(dependencies.pending.count(ROOM_ID)).toBe(0);
+    } finally {
+      barrier.resolve();
+      await Promise.all([first, pendingDuplicate]);
+    }
+  });
+
+  test('three rejected candidates preserve game state and leave the same action retryable', async () => {
+    const state = await fixture();
+    installSparseRollRecord(state.repository);
+    const before = playingRecord(state.repository);
+    const candidates: SimulationInput[] = [];
+    let rejectCandidates = true;
+    const dependencies: ExecuteGameCommandDependencies = {
+      ...state.dependencies,
+      rolls: candidateRollExecutor(async (input) => {
+        candidates.push(input);
+        return rejectCandidates
+          ? { status: 'rejected', input, reason: 'repeated-assist', simulationMs: 3300 }
+          : {
+              status: 'accepted',
+              outcome: {
+                input,
+                authoritativeValuesBySlot: input.rolledSlots.map((slot) => ({ slot, value: 6 })),
+              },
+            };
+      }),
+    };
+    const input = {
+      roomId: roomId(ROOM_ID),
+      seatIndex: CREATOR_SEAT_INDEX,
+      command: parseGameCommand({
+        type: GAME_COMMAND_TYPE.ROLL_DICE,
+        actionId: ACTION_ID,
+        turnId: TURN_ID,
+      }),
+      receivedAt: 3_000,
+    };
+    expect(await executeGameCommand(input, dependencies)).toEqual({
+      result: { ok: false, error: { code: PUBLIC_ERROR_CODE.ROLL_UNAVAILABLE, params: {} } },
+      committedStateVersion: null,
+    });
+    const failed = playingRecord(state.repository);
+    expect(candidates).toHaveLength(3);
+    expect(failed.match).toEqual(before.match);
+    expect(failed.stateVersion).toBe(before.stateVersion);
+    expect(failed.actionLedger).toEqual([
+      expect.objectContaining({ status: 'retryable', actionId: ACTION_ID }),
+    ]);
+    expect(state.published).toHaveLength(0);
+    expect(dependencies.pending.count(ROOM_ID)).toBe(0);
+
+    rejectCandidates = false;
+    const retried = await executeGameCommand(input, dependencies);
+    expect(retried.result.ok).toBe(true);
+    if (!retried.result.ok || !retried.result.data.receipt.roll)
+      throw new Error('Expected the retried accepted roll artifact');
+    expect(retried.result.data.receipt.roll.replay.seed).toBe(candidates[3].seed);
+    expect(candidates).toHaveLength(4);
+    const after = playingRecord(state.repository);
+    expect(after.match.currentTurn.diceState.rollCount).toBe(2);
+    expect(after.match.currentTurn.heldSlots).toEqual(before.match.currentTurn.heldSlots);
+    expect(after.match.players).toEqual(before.match.players);
+    expect(after.stateVersion).toBe(before.stateVersion + 1);
+    expect(state.published).toHaveLength(1);
+  });
 
   test('coalesces an in-flight duplicate onto one physics execution', async () => {
     const state = await fixture();

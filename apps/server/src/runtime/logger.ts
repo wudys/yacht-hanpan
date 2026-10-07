@@ -13,6 +13,25 @@ type LogSink = (line: string) => void;
 
 const SENSITIVE_KEY_PATTERN = /authorization|credential.*hash|secret|token/iu;
 
+// Diagnostics must never interrupt the operation or resource cleanup they describe.
+// Retain only the supplied logging methods, including methods inherited from a class.
+export function protectLogger<T extends Partial<Logger>>(
+  logger: T,
+): Pick<Logger, keyof T & keyof Logger> {
+  const protectedLogger: Partial<Record<keyof Logger, Logger['error']>> = {};
+  for (const level of ['debug', 'error', 'info', 'warn'] as const) {
+    if (!(level in logger)) continue;
+    protectedLogger[level] = (event, fields) => {
+      try {
+        logger[level]?.call(logger, event, fields);
+      } catch {
+        // Reporting through the same logger could recurse into the failed sink.
+      }
+    };
+  }
+  return protectedLogger as Pick<Logger, keyof T & keyof Logger>;
+}
+
 export function createJsonLogger(
   sink: LogSink = console.log,
   minimumLevel: LogLevel = 'info',
@@ -24,12 +43,12 @@ export function createJsonLogger(
     sink(JSON.stringify({ level, event, ...payload }));
   };
 
-  return {
+  return protectLogger({
     debug: (event, fields) => write('debug', event, fields),
     error: (event, fields) => write('error', event, fields),
     info: (event, fields) => write('info', event, fields),
     warn: (event, fields) => write('warn', event, fields),
-  };
+  });
 }
 
 function normalize(value: unknown, seen: WeakSet<object>, key: string = ''): unknown {

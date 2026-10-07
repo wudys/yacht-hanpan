@@ -1,6 +1,7 @@
 import { expect, type WebSocketRoute } from '@playwright/test';
 
 import { joinProductGame, PRODUCT_GAME_ORIGIN } from '../helpers/product-game';
+import { createSocketPacketObserver } from '../helpers/socket-packets';
 import { test } from '../helpers/test';
 
 test('full sync settles a pending roll and its delayed duplicate ACK does not replay it', async ({
@@ -16,24 +17,33 @@ test('full sync settles a pending roll and its delayed duplicate ACK does not re
   await page.routeWebSocket(/\/game-socket\//u, (socket) => {
     activeSocket = socket;
     const server = socket.connectToServer();
+    const packets = createSocketPacketObserver();
+    socket.onClose((code, reason) => {
+      packets.dispose();
+      void server.close({ code, reason });
+    });
+    server.onClose((code, reason) => {
+      packets.dispose();
+      void socket.close({ code, reason });
+    });
     server.onMessage((message) => {
-      const packet = typeof message === 'string' ? /^43\d+(\[.*\])$/u.exec(message) : null;
-      if (packet && !gateOpen) {
-        const [response] = JSON.parse(packet[1]!) as [{ data?: { receipt?: { roll?: unknown } } }];
-        if (response.data?.receipt?.roll) {
-          heldRollAcks += 1;
-          releaseRollAck = () => socket.send(message);
-          return;
-        }
+      const response = packets.observeServer(message);
+      if (
+        !gateOpen &&
+        response?.kind === 'command' &&
+        response.ack.ok &&
+        'roll' in response.ack.data.receipt
+      ) {
+        heldRollAcks += 1;
+        releaseRollAck = () => socket.send(message);
+        return;
       }
       socket.send(message);
     });
     socket.onMessage((message) => {
-      const event = typeof message === 'string' ? /^42\d+(\[.*\])$/u.exec(message) : null;
-      if (event) {
-        const [name, command] = JSON.parse(event[1]!) as [string, { type?: string }];
-        if (name === 'game:command' && command.type === 'rollDice') rollCommands.push(command);
-      }
+      const request = packets.observeClient(message);
+      if (request?.kind === 'command' && request.command.type === 'rollDice')
+        rollCommands.push(request.command);
       server.send(message);
     });
   });

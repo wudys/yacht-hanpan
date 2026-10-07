@@ -1,5 +1,6 @@
 import { type JSHandle, type Page } from '@playwright/test';
-import { parseCommittedRoomUpdate } from '@repo/game-protocol/socket';
+
+import { readRoomStatePacket } from './socket-packets';
 
 export interface ScoreFeedbackObservation {
   readonly at: number;
@@ -135,25 +136,21 @@ export async function holdScorePublication(page: Page) {
   await page.routeWebSocket(/\/game-socket\//u, (socket) => {
     const server = socket.connectToServer();
     server.onMessage((message) => {
-      const packet = typeof message === 'string' ? /^42(\[.*\])$/u.exec(message) : null;
-      if (packet && category !== null) {
-        const [name, body] = JSON.parse(packet[1]!) as [string, unknown];
-        if (name === 'room:state') {
-          const update = parseCommittedRoomUpdate(body);
-          const { game } = update.view;
-          if (
-            update.type === 'state:committed' &&
-            game?.match.status === 'playing' &&
-            Object.hasOwn(game.match.players[0].scorecard, category)
-          ) {
-            publication ??= {
-              receivedAt: Date.now(),
-              startedAt: game.match.currentTurn.startedAt,
-              deadlineAt: game.match.currentTurn.deadlineAt,
-            };
-            pending.push(() => socket.send(message));
-            return;
-          }
+      const update = readRoomStatePacket(message);
+      if (update !== null && category !== null) {
+        const { game } = update.view;
+        if (
+          update.type === 'state:committed' &&
+          game?.match.status === 'playing' &&
+          Object.hasOwn(game.match.players[0].scorecard, category)
+        ) {
+          publication ??= {
+            receivedAt: Date.now(),
+            startedAt: game.match.currentTurn.startedAt,
+            deadlineAt: game.match.currentTurn.deadlineAt,
+          };
+          pending.push(() => socket.send(message));
+          return;
         }
       }
       socket.send(message);

@@ -1,6 +1,7 @@
 import { expect } from '@playwright/test';
 
 import { joinProductGame, PRODUCT_GAME_ORIGIN } from '../helpers/product-game';
+import { createSocketPacketObserver, readRoomStatePacket } from '../helpers/socket-packets';
 import { test } from '../helpers/test';
 
 test('real deadline warns at five seconds and locks input before the next server turn arrives', async ({
@@ -13,16 +14,27 @@ test('real deadline warns at five seconds and locks input before the next server
   const pendingStates: Array<() => void> = [];
   await page.routeWebSocket(/\/game-socket\//u, (socket) => {
     const server = socket.connectToServer();
+    const packets = createSocketPacketObserver();
+    socket.onClose((code, reason) => {
+      packets.dispose();
+      void server.close({ code, reason });
+    });
+    server.onClose((code, reason) => {
+      packets.dispose();
+      void socket.close({ code, reason });
+    });
     server.onMessage((message) => {
+      packets.observeServer(message);
+      const update = readRoomStatePacket(message);
       // Hold only delivery of genuine updates; the server and opponent keep running.
-      if (holdState && typeof message === 'string' && message.startsWith('42["room:state",')) {
+      if (holdState && update !== null) {
         pendingStates.push(() => socket.send(message));
         return;
       }
       socket.send(message);
     });
     socket.onMessage((message) => {
-      if (typeof message === 'string' && /^42\d+\["game:command",/u.test(message)) {
+      if (packets.observeClient(message)?.kind === 'command') {
         commandCount += 1;
       }
       server.send(message);

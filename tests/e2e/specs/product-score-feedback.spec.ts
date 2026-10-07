@@ -8,6 +8,7 @@ import {
   readScoreFeedback,
   scoreFeedbackNodesRetained,
 } from '../helpers/score-feedback';
+import { createSocketPacketObserver } from '../helpers/socket-packets';
 import { test } from '../helpers/test';
 
 async function rollAndSettle(page: Page, english: boolean = false) {
@@ -43,12 +44,24 @@ test('both clients confirm zero and normal records with the source owner, then Y
   test.setTimeout(90_000);
   const gameplayCommands: [number, number] = [0, 0];
   const observeCommands = (client: Page, seat: 0 | 1) =>
-    client.on('websocket', (socket) =>
-      socket.on('framesent', ({ payload }) => {
-        if (/"(?:selectScoreCategory|rollDice|setDieHeld)"/u.test(payload.toString()))
+    client.on('websocket', (socket) => {
+      const packets = createSocketPacketObserver();
+      const observeRequest = ({ payload }: { payload: string | Buffer }) => {
+        const request = packets.observeClient(payload);
+        if (request?.kind === 'command' && request.command.type !== 'forfeitMatch')
           gameplayCommands[seat] += 1;
-      }),
-    );
+      };
+      const observeResponse = ({ payload }: { payload: string | Buffer }) => {
+        packets.observeServer(payload);
+      };
+      socket.on('framesent', observeRequest);
+      socket.on('framereceived', observeResponse);
+      socket.once('close', () => {
+        packets.dispose();
+        socket.off('framesent', observeRequest);
+        socket.off('framereceived', observeResponse);
+      });
+    });
   observeCommands(page, 0);
   await page.setViewportSize({ width: 320, height: 740 });
   await page.goto(PRODUCT_GAME_ORIGIN);

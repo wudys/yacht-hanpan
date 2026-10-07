@@ -1,6 +1,7 @@
 import { expect } from '@playwright/test';
 
 import { joinProductGame, PRODUCT_GAME_ORIGIN } from '../helpers/product-game';
+import { createSocketPacketObserver } from '../helpers/socket-packets';
 import { test } from '../helpers/test';
 
 for (const { code, expires } of [
@@ -18,37 +19,41 @@ for (const { code, expires } of [
       const commands: unknown[] = [];
       await page.routeWebSocket(/\/game-socket\//u, (socket) => {
         const server = socket.connectToServer();
+        const packets = createSocketPacketObserver();
+        socket.onClose((code, reason) => {
+          packets.dispose();
+          void server.close({ code, reason });
+        });
+        server.onClose((code, reason) => {
+          packets.dispose();
+          void socket.close({ code, reason });
+        });
         server.onMessage((message) => {
-          const ack = typeof message === 'string' ? /^43\d+(\[.*\])$/u.exec(message) : null;
-          if (ack) {
-            const [response] = JSON.parse(ack[1]!) as [{ meta?: { gameProtocolVersion?: string } }];
-            protocolVersion = response.meta?.gameProtocolVersion ?? protocolVersion;
-          }
+          const response = packets.observeServer(message);
+          protocolVersion = response?.ack.meta.gameProtocolVersion ?? protocolVersion;
           socket.send(message);
         });
         socket.onMessage((message) => {
-          const event = typeof message === 'string' ? /^42(\d+)(\[.*\])$/u.exec(message) : null;
-          if (event) {
-            const [name, command] = JSON.parse(event[2]!) as [string, { actionId: string }];
-            if (name === 'game:command') {
-              commands.push(command);
-              if (commands.length === 1) {
-                // Reject before server delivery; subsequent sync and retry use the real authority.
-                socket.send(
-                  `43${event[1]}${JSON.stringify([
-                    {
-                      ok: false,
-                      error: { code, params: {} },
-                      meta: {
-                        requestId: globalThis.crypto.randomUUID(),
-                        gameProtocolVersion: protocolVersion,
-                        actionId: command.actionId,
-                      },
+          const request = packets.observeClient(message);
+          if (request?.kind === 'command') {
+            const { command } = request;
+            commands.push(command);
+            if (commands.length === 1) {
+              // Reject before server delivery; subsequent sync and retry use the real authority.
+              socket.send(
+                `43${request.ackId}${JSON.stringify([
+                  {
+                    ok: false,
+                    error: { code, params: {} },
+                    meta: {
+                      requestId: globalThis.crypto.randomUUID(),
+                      gameProtocolVersion: protocolVersion,
+                      actionId: command.actionId,
                     },
-                  ])}`,
-                );
-                return;
-              }
+                  },
+                ])}`,
+              );
+              return;
             }
           }
           server.send(message);
@@ -102,42 +107,44 @@ for (const locale of ['ko', 'en'] as const) {
     let rejectedAt = 0;
     await page.routeWebSocket(/\/game-socket\//u, (socket) => {
       const server = socket.connectToServer();
+      const packets = createSocketPacketObserver();
+      socket.onClose((code, reason) => {
+        packets.dispose();
+        void server.close({ code, reason });
+      });
+      server.onClose((code, reason) => {
+        packets.dispose();
+        void socket.close({ code, reason });
+      });
       server.onMessage((message) => {
-        if (typeof message === 'string') {
-          const ack = /^43\d+(\[.*\])$/u.exec(message);
-          if (ack) {
-            const [response] = JSON.parse(ack[1]!) as [{ meta?: { gameProtocolVersion?: string } }];
-            protocolVersion = response.meta?.gameProtocolVersion ?? protocolVersion;
-          }
-        }
+        const response = packets.observeServer(message);
+        protocolVersion = response?.ack.meta.gameProtocolVersion ?? protocolVersion;
         socket.send(message);
       });
       socket.onMessage((message) => {
-        const event = typeof message === 'string' ? /^42(\d+)(\[.*\])$/u.exec(message) : null;
-        if (event) {
-          const [name, command] = JSON.parse(event[2]!) as [string, { actionId: string }];
-          if (name === 'game:command') {
-            commandCount += 1;
-            if (rejectNextCommand) {
-              rejectNextCommand = false;
-              rejectedAt = Date.now();
-              // Fault injection only: never forward the rejected command to the real server.
-              // Admission, full-sync, timer and subsequent gameplay remain authoritative.
-              socket.send(
-                `43${event[1]}${JSON.stringify([
-                  {
-                    ok: false,
-                    error: { code: 'RATE_LIMITED', params: { retryAfterMs: 1500 } },
-                    meta: {
-                      requestId: globalThis.crypto.randomUUID(),
-                      gameProtocolVersion: protocolVersion,
-                      actionId: command.actionId,
-                    },
+        const request = packets.observeClient(message);
+        if (request?.kind === 'command') {
+          const { command } = request;
+          commandCount += 1;
+          if (rejectNextCommand) {
+            rejectNextCommand = false;
+            rejectedAt = Date.now();
+            // Fault injection only: never forward the rejected command to the real server.
+            // Admission, full-sync, timer and subsequent gameplay remain authoritative.
+            socket.send(
+              `43${request.ackId}${JSON.stringify([
+                {
+                  ok: false,
+                  error: { code: 'RATE_LIMITED', params: { retryAfterMs: 1500 } },
+                  meta: {
+                    requestId: globalThis.crypto.randomUUID(),
+                    gameProtocolVersion: protocolVersion,
+                    actionId: command.actionId,
                   },
-                ])}`,
-              );
-              return;
-            }
+                },
+              ])}`,
+            );
+            return;
           }
         }
         server.send(message);
@@ -217,15 +224,26 @@ test('Game malformed command acknowledgement requires refresh without replaying 
   let commands = 0;
   await page.routeWebSocket(/\/game-socket\//u, (socket) => {
     const server = socket.connectToServer();
+    const packets = createSocketPacketObserver();
+    socket.onClose((code, reason) => {
+      packets.dispose();
+      void server.close({ code, reason });
+    });
+    server.onClose((code, reason) => {
+      packets.dispose();
+      void socket.close({ code, reason });
+    });
+    server.onMessage((message) => {
+      packets.observeServer(message);
+      socket.send(message);
+    });
     socket.onMessage((message) => {
-      const event = typeof message === 'string' ? /^42(\d+)(\[.*\])$/u.exec(message) : null;
-      if (event) {
-        const [name] = JSON.parse(event[2]!) as [string];
-        if (name === 'game:command') {
-          commands += 1;
-          socket.send(`43${event[1]}${JSON.stringify([{ unexpected: true }])}`);
-          return;
-        }
+      const request = packets.observeClient(message);
+      if (request?.kind === 'command') {
+        commands += 1;
+        // Deliberately malformed: bypass the observer and exercise the client's parser.
+        socket.send(`43${request.ackId}${JSON.stringify([{ unexpected: true }])}`);
+        return;
       }
       server.send(message);
     });

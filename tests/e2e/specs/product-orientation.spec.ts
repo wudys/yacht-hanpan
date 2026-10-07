@@ -1,6 +1,7 @@
 import { expect } from '@playwright/test';
 
 import { joinProductGame, PRODUCT_GAME_ORIGIN } from '../helpers/product-game';
+import { createSocketPacketObserver } from '../helpers/socket-packets';
 import { createTestContext, test } from '../helpers/test';
 
 for (const locale of ['ko', 'en'] as const) {
@@ -17,13 +18,22 @@ for (const locale of ['ko', 'en'] as const) {
     let releaseSync: (() => void) | undefined;
     await page.routeWebSocket(/\/game-socket\//u, (socket) => {
       const server = socket.connectToServer();
+      const packets = createSocketPacketObserver();
+      socket.onMessage((message) => {
+        packets.observeClient(message);
+        server.send(message);
+      });
+      socket.onClose((code, reason) => {
+        packets.dispose();
+        void server.close({ code, reason });
+      });
+      server.onClose((code, reason) => {
+        packets.dispose();
+        void socket.close({ code, reason });
+      });
       server.onMessage((message) => {
-        if (
-          holdSync &&
-          typeof message === 'string' &&
-          message.startsWith('43') &&
-          message.includes('serverTime')
-        ) {
+        const response = packets.observeServer(message);
+        if (holdSync && response?.kind === 'sync' && response.ack.ok) {
           heldSyncCount += 1;
           releaseSync = () => socket.send(message);
           return;

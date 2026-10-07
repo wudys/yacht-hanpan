@@ -1,6 +1,7 @@
 import { expect, type Page } from '@playwright/test';
 
 import { joinProductGame, PRODUCT_GAME_ORIGIN } from '../helpers/product-game';
+import { createSocketPacketObserver } from '../helpers/socket-packets';
 import { test } from '../helpers/test';
 
 for (const locale of ['ko', 'en'] as const) {
@@ -18,18 +19,30 @@ for (const locale of ['ko', 'en'] as const) {
 
     await page.routeWebSocket(/\/game-socket\//u, (socket) => {
       const server = socket.connectToServer();
-      server.onMessage((message) => socket.send(message));
+      const packets = createSocketPacketObserver();
+      socket.onClose((code, reason) => {
+        packets.dispose();
+        void server.close({ code, reason });
+      });
+      server.onClose((code, reason) => {
+        packets.dispose();
+        void socket.close({ code, reason });
+      });
+      server.onMessage((message) => {
+        packets.observeServer(message);
+        socket.send(message);
+      });
       socket.onMessage((message) => {
-        const event = typeof message === 'string' ? /^42(\d+)(\[.*\])$/u.exec(message) : null;
-        if (event) {
-          const [name, command] = JSON.parse(event[2]!) as [string, { type?: unknown }];
-          if (name === 'game:command' && command.type === 'rollDice') {
+        const request = packets.observeClient(message);
+        if (request?.kind === 'command') {
+          const { command } = request;
+          if (command.type === 'rollDice') {
             rollCommandCount += 1;
             rollReached.resolve();
             void rollGate.promise.then(() => server.send(message));
             return;
           }
-          if (name === 'game:command' && command.type === 'selectScoreCategory') {
+          if (command.type === 'selectScoreCategory') {
             scoreCommandCount += 1;
             scoreReached.resolve();
             void scoreGate.promise.then(() => server.send(message));

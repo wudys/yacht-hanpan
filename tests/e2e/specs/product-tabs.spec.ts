@@ -1,6 +1,8 @@
 import { expect, type Page, type WebSocketRoute } from '@playwright/test';
+import { SOCKET_EVENT } from '@repo/game-protocol/socket';
 
 import { joinProductGame, PRODUCT_GAME_ORIGIN } from '../helpers/product-game';
+import { createSocketPacketObserver, decodeSocketPacket } from '../helpers/socket-packets';
 import { test } from '../helpers/test';
 
 const copy = {
@@ -132,7 +134,8 @@ test('lost replacement packets end the old execution on authentication retry', a
       server.onClose(() => {});
     }
     server.onMessage((message) => {
-      if (typeof message === 'string' && message.startsWith('42["session:replaced"')) {
+      const packet = decodeSocketPacket(message);
+      if (packet?.kind === 'event' && packet.name === SOCKET_EVENT.SESSION_REPLACED) {
         droppedReplacement += 1;
         return;
       }
@@ -198,17 +201,20 @@ test('a normal reconnect replaces its own lingering server transport without end
     const server = socket.connectToServer();
     if (attempts === 1) {
       firstSocket = socket;
+      const packets = createSocketPacketObserver();
+      socket.onMessage((message) => {
+        packets.observeClient(message);
+        server.send(message);
+      });
       server.onMessage((message) => {
-        if (
-          typeof message === 'string' &&
-          message.startsWith('43') &&
-          message.includes('serverTime')
-        )
-          initialSyncComplete = true;
+        const response = packets.observeServer(message);
+        if (response?.kind === 'sync' && response.ack.ok) initialSyncComplete = true;
         socket.send(message);
       });
-      socket.onClose(() => {});
+      // This fixture deliberately leaves the server transport alive after client close.
+      socket.onClose(() => packets.dispose());
       server.onClose(() => {
+        packets.dispose();
         oldServerClosed = true;
       });
     }
@@ -309,9 +315,13 @@ test('a playing seat moves to the new tab with its current turn and score', asyn
       'false',
     );
     const after = await next.locator('.game-board__timer').textContent();
-    expect(Number(after?.replace(/[^0-9]/gu, ''))).toBeLessThanOrEqual(
-      Number(before?.replace(/[^0-9]/gu, '')),
-    );
+    expect(before).toMatch(/^\d+초$/u);
+    expect(after).toMatch(/^\d+초$/u);
+    const beforeSeconds = Number.parseInt(before ?? '', 10);
+    const afterSeconds = Number.parseInt(after ?? '', 10);
+    expect(Number.isFinite(beforeSeconds)).toBe(true);
+    expect(Number.isFinite(afterSeconds)).toBe(true);
+    expect(afterSeconds).toBeLessThanOrEqual(beforeSeconds);
     await expect(guest.locator('[data-screen="game"]')).toBeVisible();
     await next.getByRole('button', { name: '점수판', exact: true }).click();
     expect(
@@ -438,10 +448,25 @@ test('a sync failure after successful authentication keeps the prior execution r
   let corrupted = 0;
   await next.routeWebSocket('**/game-socket/**', (socket) => {
     const server = socket.connectToServer();
+    const packets = createSocketPacketObserver();
+    socket.onMessage((message) => {
+      packets.observeClient(message);
+      server.send(message);
+    });
+    socket.onClose((code, reason) => {
+      packets.dispose();
+      void server.close({ code, reason });
+    });
+    server.onClose((code, reason) => {
+      packets.dispose();
+      void socket.close({ code, reason });
+    });
     server.onMessage((message) => {
-      if (typeof message === 'string' && message.startsWith('43')) {
+      const response = packets.observeServer(message);
+      if (response?.kind === 'sync') {
         corrupted += 1;
-        socket.send(`${message.slice(0, message.indexOf('['))}[null]`);
+        // Deliberately malformed: send to the client without parsing the injected ACK.
+        socket.send(`43${response.ackId}[null]`);
       } else socket.send(message);
     });
   });

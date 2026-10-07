@@ -62,10 +62,101 @@ for (const [scenario, score, locale] of [
       '.score-feedback__sweep, .score-feedback__particle, [data-yacht-ring="recorded"] rect',
     );
     const paused = await readPausedAnimations(animated);
+    const timings = await animated.evaluateAll((elements) =>
+      elements.map((element) => ({
+        name: getComputedStyle(element).animationName,
+        duration: element.getAnimations()[0]?.effect?.getComputedTiming().duration,
+        delay: element.getAnimations()[0]?.effect?.getComputedTiming().delay,
+      })),
+    );
+    expect(timings).toEqual(
+      score === 0
+        ? [
+            { name: 'score-record-sweep', duration: 600, delay: -250 },
+            { name: 'score-value-particle', duration: 600, delay: -180 },
+            { name: 'score-value-particle', duration: 600, delay: -180 },
+          ]
+        : [
+            { name: 'score-record-sweep', duration: 600, delay: -250 },
+            { name: 'yacht-ring-tail', duration: 650, delay: -250 },
+          ],
+    );
     await page.waitForTimeout(1100);
     expect(await readPausedAnimations(animated)).toEqual(paused);
     await page.evaluate(() => document.fonts.ready);
     await page.screenshot({ path: test.info().outputPath(`yacht-${score}-${locale}-320.png`) });
+  });
+}
+
+for (const scenario of ['score', 'yacht', 'bonus'] as const) {
+  test(`${scenario} CSS finishes at its adopted boundary before the record confirmation ends`, async ({
+    page,
+  }) => {
+    await page.goto(`/dev/anchors.html?anchor=game&feedback=${scenario}&elapsed=0&locale=en`);
+    await page.locator('[data-feedback-fixture]').evaluate((element) => {
+      element.removeAttribute('data-feedback-fixture');
+    });
+    const targets = page.locator(
+      '.score-feedback__sweep, .score-feedback__particle, [data-yacht-ring="recorded"] rect, .player-summary__bonus-check-glow, .player-summary__bonus-star, .player-summary__bonus-gain',
+    );
+    const finished = await targets.evaluateAll(async (elements) =>
+      Promise.all(
+        elements.map(async (element) => {
+          const animation = element.getAnimations()[0]!;
+          await animation.ready;
+          const timing = animation.effect!.getComputedTiming();
+          const name = getComputedStyle(element).animationName;
+          // Run the real CSS animation from the paused fixture's original zero age.
+          animation.play();
+          await animation.finished;
+          const style = getComputedStyle(element);
+          return {
+            name,
+            duration: timing.duration,
+            delay: timing.delay,
+            endTime: timing.endTime,
+            playState: animation.playState,
+            progress: animation.effect!.getComputedTiming().progress,
+            opacity: style.opacity,
+            transform: style.transform,
+          };
+        }),
+      ),
+    );
+    const expected =
+      scenario === 'yacht'
+        ? [
+            { name: 'score-record-sweep', duration: 600, delay: 0, endTime: 600 },
+            { name: 'yacht-ring-tail', duration: 650, delay: 0, endTime: 650 },
+          ]
+        : [
+            { name: 'score-record-sweep', duration: 600, delay: 0, endTime: 600 },
+            { name: 'score-value-particle', duration: 600, delay: 70, endTime: 670 },
+            { name: 'score-value-particle', duration: 600, delay: 70, endTime: 670 },
+          ];
+    if (scenario === 'bonus')
+      expected.unshift(
+        { name: 'score-bonus-check', duration: 655, delay: 0, endTime: 655 },
+        { name: 'score-bonus-star', duration: 480, delay: 120, endTime: 600 },
+        { name: 'score-bonus-star', duration: 480, delay: 175, endTime: 655 },
+        { name: 'score-bonus-gain', duration: 720, delay: 80, endTime: 800 },
+      );
+    expect(finished.map(({ name, duration }) => ({ name, duration }))).toEqual(
+      expected.map(({ name, duration }) => ({ name, duration })),
+    );
+    for (const [index, state] of finished.entries()) {
+      // CSS seconds use binary floating-point; converting to milliseconds can leave a tiny residue.
+      expect(state.delay).toBeCloseTo(expected[index]!.delay, 10);
+      expect(state.endTime).toBeCloseTo(expected[index]!.endTime, 10);
+      expect(state.playState).toBe('finished');
+      expect(state.progress).toBe(1);
+      expect(state.opacity).toBe('0');
+      if (state.name === 'score-value-particle') {
+        expect(state.transform).toMatch(/^matrix\(0\.5, 0, 0, 0\.5, (?:-18, 15|18, -15)\)$/u);
+      }
+    }
+    // The CSS finish is observable while the fixture still retains the confirmed cell.
+    await expect(page.locator('[data-score-confirmed="true"]')).toBeAttached();
   });
 }
 

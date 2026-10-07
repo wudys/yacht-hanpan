@@ -1,8 +1,8 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 import { PUBLIC_ERROR_CODE } from '@repo/game-protocol';
-import { parseSyncAck } from '@repo/game-protocol/socket';
 
 import { joinProductGame, PRODUCT_GAME_ORIGIN } from '../helpers/product-game';
+import { createSocketPacketObserver, readRoomStatePacket } from '../helpers/socket-packets';
 import { createTestContext, test } from '../helpers/test';
 
 async function installScreenTrace(page: Page): Promise<void> {
@@ -250,7 +250,7 @@ test('displayed waiting expiry resumes a real match when its room update was los
     const server = socket.connectToServer();
     server.onMessage((message) => {
       // Drop live RoomView pushes. Auth, heartbeats and full-sync acknowledgements pass.
-      if (typeof message === 'string' && message.startsWith('42["room:state",')) {
+      if (readRoomStatePacket(message) !== null) {
         blockedUpdates += 1;
         return;
       }
@@ -427,18 +427,30 @@ test('pending saved Game confirms a permanent first sync failure without navigat
     let rejected = false;
     await guest.routeWebSocket(/\/game-socket\//u, (socket) => {
       const server = socket.connectToServer();
+      const packets = createSocketPacketObserver();
+      socket.onMessage((message) => {
+        packets.observeClient(message);
+        server.send(message);
+      });
+      socket.onClose((code, reason) => {
+        packets.dispose();
+        void server.close({ code, reason });
+      });
+      server.onClose((code, reason) => {
+        packets.dispose();
+        void socket.close({ code, reason });
+      });
       server.onMessage((message) => {
-        if (!rejected && typeof message === 'string' && message.startsWith('43')) {
-          const payloadStart = message.indexOf('[');
-          const [response] = JSON.parse(message.slice(payloadStart)) as unknown[];
-          const ack = parseSyncAck(response);
+        const response = packets.observeServer(message);
+        if (!rejected && response?.kind === 'sync') {
+          const { ack } = response;
           if (ack.ok && ack.data.game !== null) {
             // Use the real server's current Game as a live update before first-sync confirmation fails.
             socket.send(
               `42${JSON.stringify(['room:state', { type: 'state:committed', view: ack.data }])}`,
             );
             socket.send(
-              `${message.slice(0, payloadStart)}${JSON.stringify([
+              `43${response.ackId}${JSON.stringify([
                 {
                   ok: false,
                   error: { code: PUBLIC_ERROR_CODE.ROOM_NOT_FOUND, params: {} },

@@ -1,7 +1,7 @@
 import { expect, type WebSocketRoute } from '@playwright/test';
-import { SOCKET_EVENT } from '@repo/game-protocol/socket';
 
 import { joinProductGame, PRODUCT_GAME_ORIGIN } from '../helpers/product-game';
+import { createSocketPacketObserver } from '../helpers/socket-packets';
 import { createTestContext, test } from '../helpers/test';
 
 for (const locale of ['ko', 'en'] as const) {
@@ -75,14 +75,19 @@ for (const locale of ['ko', 'en'] as const) {
     await page.routeWebSocket(/\/game-socket\//u, (socket) => {
       activeSocket = socket;
       const server = socket.connectToServer();
+      const packets = createSocketPacketObserver();
+      socket.onClose((code, reason) => {
+        packets.dispose();
+        void server.close({ code, reason });
+      });
+      server.onClose((code, reason) => {
+        packets.dispose();
+        void socket.close({ code, reason });
+      });
       server.onMessage((message) => {
         // Delay a real full-sync ack, not a fabricated game snapshot or connection.
-        if (
-          holdSync &&
-          typeof message === 'string' &&
-          message.startsWith('43') &&
-          message.includes('serverTime')
-        ) {
+        const response = packets.observeServer(message);
+        if (holdSync && response?.kind === 'sync' && response.ack.ok) {
           holdSync = false;
           releaseSync = () => socket.send(message);
           return;
@@ -90,11 +95,7 @@ for (const locale of ['ko', 'en'] as const) {
         socket.send(message);
       });
       socket.onMessage((message) => {
-        const packet = typeof message === 'string' ? /^42\d+(\[.*\])$/u.exec(message) : null;
-        if (packet) {
-          const [event] = JSON.parse(packet[1]!) as [string];
-          if (event === SOCKET_EVENT.GAME_SYNC) syncRequests += 1;
-        }
+        if (packets.observeClient(message)?.kind === 'sync') syncRequests += 1;
         server.send(message);
       });
     });

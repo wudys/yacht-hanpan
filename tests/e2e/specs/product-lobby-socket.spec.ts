@@ -1,6 +1,7 @@
 import { expect, type WebSocketRoute } from '@playwright/test';
 
 import { PRODUCT_GAME_ORIGIN } from '../helpers/product-game';
+import { createSocketPacketObserver } from '../helpers/socket-packets';
 import { test } from '../helpers/test';
 
 test('Lobby bounds a stalled Socket authentication and stops the connection', async ({ page }) => {
@@ -46,12 +47,22 @@ test('Waiting room recovers via full sync or ends at 30 seconds without clearing
     }
     activeSocket = socket;
     const server = socket.connectToServer();
+    const packets = createSocketPacketObserver();
+    socket.onMessage((message) => {
+      packets.observeClient(message);
+      server.send(message);
+    });
+    socket.onClose((code, reason) => {
+      packets.dispose();
+      void server.close({ code, reason });
+    });
+    server.onClose((code, reason) => {
+      packets.dispose();
+      void socket.close({ code, reason });
+    });
     server.onMessage((message) => {
-      if (
-        typeof message === 'string' &&
-        message.startsWith('43') &&
-        message.includes('serverTime')
-      ) {
+      const response = packets.observeServer(message);
+      if (response?.kind === 'sync' && response.ack.ok) {
         synced = true;
         if (holdSync) {
           releaseSync = () => socket.send(message);
@@ -108,12 +119,22 @@ for (const entry of ['admission', 'restore'] as const) {
     await page.routeWebSocket(/\/game-socket\//u, (socket) => {
       if (failSync) failedConnections += 1;
       const server = socket.connectToServer();
+      const packets = createSocketPacketObserver();
+      socket.onMessage((message) => {
+        packets.observeClient(message);
+        server.send(message);
+      });
+      socket.onClose((code, reason) => {
+        packets.dispose();
+        void server.close({ code, reason });
+      });
+      server.onClose((code, reason) => {
+        packets.dispose();
+        void socket.close({ code, reason });
+      });
       server.onMessage((message) => {
-        if (
-          typeof message === 'string' &&
-          message.startsWith('43') &&
-          message.includes('serverTime')
-        ) {
+        const response = packets.observeServer(message);
+        if (response?.kind === 'sync' && response.ack.ok) {
           firstSync = true;
           if (failSync) {
             void socket.close({ code: 1012 });

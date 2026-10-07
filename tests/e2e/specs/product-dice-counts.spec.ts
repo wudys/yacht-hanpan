@@ -1,6 +1,7 @@
 import { expect } from '@playwright/test';
 
 import { joinProductGame, PRODUCT_GAME_ORIGIN } from '../helpers/product-game';
+import { readRoomStatePacket } from '../helpers/socket-packets';
 import { test } from '../helpers/test';
 
 type ObservedRoll = Readonly<{
@@ -19,23 +20,13 @@ test('both players replay one through five dice while preserving held slots', as
   const rolls: ObservedRoll[] = [];
   page.on('websocket', (socket) => {
     socket.on('framereceived', ({ payload }) => {
-      if (typeof payload !== 'string' || !payload.startsWith('42["room:state",')) return;
-      const [, update] = JSON.parse(payload.slice(2)) as [
-        string,
-        {
-          type: string;
-          roll?: {
-            replay: { pourStyle: string; rolledSlots: number[] };
-            outcome: { authoritativeValuesBySlot: ObservedRoll['values'] };
-          };
-        },
-      ];
-      if (update.type !== 'roll:committed' || !update.roll) return;
+      const update = readRoomStatePacket(payload);
+      if (update?.type !== 'roll:committed') return;
       // Observe the real server recipe without printing credentials, seeds or snapshots.
       rolls.push({
         style: update.roll.replay.pourStyle,
-        slots: update.roll.replay.rolledSlots,
-        values: update.roll.outcome.authoritativeValuesBySlot,
+        slots: [...update.roll.replay.rolledSlots],
+        values: [...update.roll.outcome.authoritativeValuesBySlot],
       });
     });
   });

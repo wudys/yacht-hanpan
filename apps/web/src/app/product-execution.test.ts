@@ -121,6 +121,95 @@ test('releases acquired owners when starting presentation fails and preserves th
   expect(fixture.accessDispose).not.toHaveBeenCalled();
 });
 
+test.each([
+  ['access', fixture.accessDispose],
+  ['restore', fixture.restoreDispose],
+  ['feedback', fixture.feedbackDispose],
+  ['recovery', fixture.recoveryDispose],
+  ['presentation', fixture.presentationDispose],
+  ['sessions', fixture.sessionsDispose],
+] as const)(
+  'continues stopping all owners when %s cleanup throws and telemetry fails',
+  (owner, dispose) => {
+    const failure = new Error(`${owner} cleanup failed`);
+    const reportUnexpected = vi.fn(() => {
+      throw new Error('telemetry failed');
+    });
+    dispose.mockImplementationOnce(() => {
+      fixture.order.push(owner);
+      throw failure;
+    });
+    const execution = createExecution({ ...inactiveTelemetry, reportUnexpected });
+    execution.activity.addEventListener('abort', execution.stop);
+
+    expect(execution.stop).not.toThrow();
+    execution.stop();
+
+    expect(execution.activity.aborted).toBe(true);
+    expect(fixture.order).toEqual([
+      'access',
+      'restore',
+      'feedback',
+      'recovery',
+      'presentation',
+      'sessions',
+      'audio',
+    ]);
+    expect(reportUnexpected).toHaveBeenCalledExactlyOnceWith(failure);
+  },
+);
+
+test.each(['throw', 'reject'] as const)(
+  'accepts audio dispose %s after synchronous stop and reports its cause once',
+  async (kind) => {
+    const failure = new Error('native close failed');
+    if (kind === 'throw')
+      fixture.audioDispose.mockImplementationOnce(() => {
+        throw failure;
+      });
+    else fixture.audioDispose.mockRejectedValueOnce(failure);
+    const reportUnexpected = vi.fn(() => {
+      throw new Error('telemetry failed');
+    });
+    const execution = createExecution({ ...inactiveTelemetry, reportUnexpected });
+
+    expect(execution.stop()).toBeUndefined();
+    expect(execution.activity.aborted).toBe(true);
+    execution.stop();
+    await vi.waitFor(() =>
+      expect(reportUnexpected).toHaveBeenCalledExactlyOnceWith(failure, { stage: 'audio' }),
+    );
+    expect(fixture.audioDispose).toHaveBeenCalledOnce();
+  },
+);
+
+test('preserves startup error identity when acquired-owner cleanup also fails', () => {
+  const startupFailure = new Error('presentation start failed');
+  const cleanupFailure = new Error('feedback cleanup failed');
+  fixture.presentationStart.mockImplementationOnce(() => {
+    throw startupFailure;
+  });
+  fixture.feedbackDispose.mockImplementationOnce(() => {
+    throw cleanupFailure;
+  });
+  const reportUnexpected = vi.fn();
+  let caught: unknown;
+
+  try {
+    createExecution({ ...inactiveTelemetry, reportUnexpected });
+  } catch (error) {
+    caught = error;
+  }
+
+  expect(caught).toBe(startupFailure);
+  expect(fixture.activity?.aborted).toBe(true);
+  expect(fixture.recoveryDispose).toHaveBeenCalledOnce();
+  expect(fixture.presentationDispose).toHaveBeenCalledOnce();
+  expect(fixture.sessionsDispose).toHaveBeenCalledOnce();
+  expect(fixture.audioDispose).toHaveBeenCalledOnce();
+  expect(reportUnexpected).toHaveBeenCalledExactlyOnceWith(cleanupFailure);
+});
+
 test.each([new Error('simulation failed'), 'simulation failed', undefined])(
   'reports simulation fallback cause %s once and requests refresh without raw fields',
   (cause) => {

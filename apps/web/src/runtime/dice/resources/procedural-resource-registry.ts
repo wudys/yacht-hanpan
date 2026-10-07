@@ -9,7 +9,7 @@ export interface ProceduralResourceRegistry {
   dispose(): Promise<void>;
 }
 
-/** Lazily creates one shared procedural Three resource set per browser module instance. */
-export const PROCEDURAL_RESOURCE_REGISTRY: ProceduralResourceRegistry = new SharedResourceRegistry(
-  createProceduralDiceResources,
-);
+/** Lazily creates one procedural Three resource set shared within its visual owner. */
+export function createProceduralResourceRegistry(): ProceduralResourceRegistry {
+  return new SharedResourceRegistry(createProceduralDiceResources);
+}

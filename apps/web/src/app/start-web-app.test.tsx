@@ -19,6 +19,11 @@ const fixture = vi.hoisted(() => ({
   prepareVisuals: vi.fn<ProductVisualPreparation['prepare']>(),
   disposeVisuals: vi.fn<ProductVisualPreparation['dispose']>(),
   trackEvent: vi.fn(),
+  reportUnexpected: vi.fn(),
+  stopTelemetry: vi.fn(),
+  unsubscribeReplacement: vi.fn(),
+  unsubscribeConnectivity: vi.fn(),
+  unsubscribeRenderer: vi.fn(),
 }));
 
 vi.mock('@repo/game-client-sdk', () => ({ createGameClient: () => ({ clock: {} }) }));
@@ -40,6 +45,14 @@ vi.mock('@/bootstrap/product-visual-preparation', async () => {
   return {
     createProductVisualPreparation: () => {
       const renderer = createReadiness();
+      const { subscribe } = renderer;
+      renderer.subscribe = (listener) => {
+        const unsubscribe = subscribe(listener);
+        return () => {
+          unsubscribe();
+          fixture.unsubscribeRenderer();
+        };
+      };
       fixture.disposeVisuals.mockImplementation(async () => renderer.dispose());
       return { renderer, prepare: fixture.prepareVisuals, dispose: fixture.disposeVisuals };
     },
@@ -80,7 +93,10 @@ vi.mock('@/runtime/session/game-session-holder', () => ({
     }),
     subscribe: (listener: () => void) => {
       fixture.sessionListeners.add(listener);
-      return () => fixture.sessionListeners.delete(listener);
+      return () => {
+        fixture.sessionListeners.delete(listener);
+        fixture.unsubscribeReplacement();
+      };
     },
     dispose: vi.fn(),
   }),
@@ -89,7 +105,10 @@ vi.mock('@/runtime/session/session-recovery', () => ({
   createSessionRecovery: () => ({ start: vi.fn(), dispose: vi.fn() }),
 }));
 vi.mock('@/runtime/telemetry/session-telemetry-observer', () => ({
-  observeSessionTelemetry: () => vi.fn(),
+  observeSessionTelemetry: () => fixture.stopTelemetry,
+}));
+vi.mock('@/runtime/network/browser-connectivity', () => ({
+  subscribeBrowserConnectivity: () => fixture.unsubscribeConnectivity,
 }));
 
 let disposeApp: (() => void) | undefined;
@@ -102,6 +121,11 @@ beforeEach(() => {
   fixture.router.mockImplementation(() => ({}));
   fixture.loadResources.mockImplementation(async () => undefined);
   fixture.prepareVisuals.mockImplementation(async () => undefined);
+  fixture.stopTelemetry.mockImplementation(() => undefined);
+  fixture.unsubscribeReplacement.mockImplementation(() => undefined);
+  fixture.unsubscribeConnectivity.mockImplementation(() => undefined);
+  fixture.unsubscribeRenderer.mockImplementation(() => undefined);
+  fixture.reportUnexpected.mockImplementation(() => undefined);
   document.body.innerHTML = '<div id="root"></div>';
 });
 
@@ -112,7 +136,11 @@ afterEach(() => {
 
 async function start() {
   const { startWebApp } = await import('@/app/start-web-app');
-  disposeApp = startWebApp({ ...inactiveTelemetry, trackEvent: fixture.trackEvent });
+  disposeApp = startWebApp({
+    ...inactiveTelemetry,
+    trackEvent: fixture.trackEvent,
+    reportUnexpected: fixture.reportUnexpected,
+  });
   const context = fixture.router.mock.calls[0]?.[0];
   if (!context) throw new Error('Product router was not assembled');
   return context;
@@ -218,4 +246,136 @@ test('cleans up actor, Canvas consumers, and visual ownership after React render
     fixture.disposeVisuals.mock.invocationCallOrder[0]!,
   );
   expect(fixture.sessionListeners.size).toBe(0);
+});
+
+test.each(['telemetry', 'replacement', 'connectivity', 'renderer', 'actor', 'react'] as const)(
+  'continues final cleanup when %s teardown throws and diagnostics fail',
+  async (owner) => {
+    const context = await start();
+    const stopActor = context.globalActor.stop.bind(context.globalActor);
+    const actorStop = vi.spyOn(context.globalActor, 'stop');
+    const dispose = {
+      telemetry: fixture.stopTelemetry,
+      replacement: fixture.unsubscribeReplacement,
+      connectivity: fixture.unsubscribeConnectivity,
+      renderer: fixture.unsubscribeRenderer,
+      actor: actorStop,
+      react: fixture.unmount,
+    }[owner];
+    const failure = new Error(`${owner} teardown failed`);
+    dispose.mockImplementationOnce(() => {
+      if (owner === 'actor') stopActor();
+      disposeApp?.();
+      throw failure;
+    });
+    fixture.reportUnexpected.mockImplementationOnce(() => {
+      throw new Error('telemetry failed');
+    });
+
+    expect(disposeApp).not.toThrow();
+    disposeApp?.();
+
+    expect(context.activity.aborted).toBe(true);
+    expect(fixture.stopTelemetry).toHaveBeenCalledOnce();
+    expect(fixture.unsubscribeReplacement).toHaveBeenCalledOnce();
+    expect(fixture.unsubscribeConnectivity).toHaveBeenCalledOnce();
+    expect(fixture.unsubscribeRenderer).toHaveBeenCalledOnce();
+    expect(actorStop).toHaveBeenCalledOnce();
+    expect(fixture.unmount).toHaveBeenCalledOnce();
+    expect(fixture.disposeVisuals).toHaveBeenCalledOnce();
+    expect(fixture.reportUnexpected).toHaveBeenCalledExactlyOnceWith(failure);
+    expect(fixture.sessionListeners.size).toBe(0);
+    expect(fixture.stopTelemetry.mock.invocationCallOrder[0]).toBeLessThan(
+      fixture.unsubscribeReplacement.mock.invocationCallOrder[0]!,
+    );
+    expect(fixture.unsubscribeReplacement.mock.invocationCallOrder[0]).toBeLessThan(
+      fixture.unsubscribeConnectivity.mock.invocationCallOrder[0]!,
+    );
+    expect(fixture.unsubscribeConnectivity.mock.invocationCallOrder[0]).toBeLessThan(
+      fixture.unsubscribeRenderer.mock.invocationCallOrder[0]!,
+    );
+    expect(fixture.unsubscribeRenderer.mock.invocationCallOrder[0]).toBeLessThan(
+      fixture.audioDispose.mock.invocationCallOrder[0]!,
+    );
+    expect(fixture.audioDispose.mock.invocationCallOrder[0]).toBeLessThan(
+      actorStop.mock.invocationCallOrder[0]!,
+    );
+    expect(actorStop.mock.invocationCallOrder[0]).toBeLessThan(
+      fixture.unmount.mock.invocationCallOrder[0]!,
+    );
+    expect(fixture.unmount.mock.invocationCallOrder[0]).toBeLessThan(
+      fixture.disposeVisuals.mock.invocationCallOrder[0]!,
+    );
+  },
+);
+
+test.each(['throw', 'reject'] as const)(
+  'accepts visual dispose %s and reports the original cause once',
+  async (kind) => {
+    const failure = new Error('visual disposal failed');
+    const context = await start();
+    if (kind === 'throw')
+      fixture.disposeVisuals.mockImplementationOnce(() => {
+        throw failure;
+      });
+    else fixture.disposeVisuals.mockRejectedValueOnce(failure);
+    fixture.reportUnexpected.mockImplementationOnce(() => {
+      throw new Error('telemetry failed');
+    });
+
+    expect(disposeApp?.()).toBeUndefined();
+    disposeApp?.();
+
+    expect(context.activity.aborted).toBe(true);
+    await vi.waitFor(() =>
+      expect(fixture.reportUnexpected).toHaveBeenCalledExactlyOnceWith(failure, {
+        stage: 'canvas',
+      }),
+    );
+    expect(fixture.disposeVisuals).toHaveBeenCalledOnce();
+  },
+);
+
+test('preserves startup error identity when partial-start teardown also fails', async () => {
+  const startupFailure = new Error('React render failed');
+  const cleanupFailure = new Error('observer teardown failed');
+  fixture.render.mockImplementationOnce(() => {
+    throw startupFailure;
+  });
+  fixture.stopTelemetry.mockImplementationOnce(() => {
+    throw cleanupFailure;
+  });
+  const { startWebApp } = await import('@/app/start-web-app');
+  let caught: unknown;
+
+  try {
+    startWebApp({ ...inactiveTelemetry, reportUnexpected: fixture.reportUnexpected });
+  } catch (error) {
+    caught = error;
+  }
+
+  expect(caught).toBe(startupFailure);
+  expect(fixture.audioDispose).toHaveBeenCalledOnce();
+  expect(fixture.presentationDispose).toHaveBeenCalledOnce();
+  expect(fixture.unmount).toHaveBeenCalledOnce();
+  expect(fixture.disposeVisuals).toHaveBeenCalledOnce();
+  expect(fixture.sessionListeners.size).toBe(0);
+  expect(fixture.reportUnexpected).toHaveBeenCalledExactlyOnceWith(cleanupFailure);
+});
+
+test('shows the replacement shell even when execution cleanup fails', async () => {
+  const context = await start();
+  const failure = new Error('presentation teardown failed');
+  fixture.presentationDispose.mockImplementationOnce(() => {
+    throw failure;
+  });
+
+  replaceSession();
+
+  expect(context.activity.aborted).toBe(true);
+  expect(context.globalActor.getSnapshot().matches('replaced')).toBe(true);
+  expect(fixture.audioDispose).toHaveBeenCalledOnce();
+  expect(fixture.unmount).not.toHaveBeenCalled();
+  expect(fixture.disposeVisuals).not.toHaveBeenCalled();
+  expect(fixture.reportUnexpected).toHaveBeenCalledExactlyOnceWith(failure);
 });

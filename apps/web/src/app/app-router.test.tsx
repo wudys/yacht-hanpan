@@ -208,13 +208,15 @@ function renderApp(
     recovery,
   });
   const renderer = createReadiness();
+  const profile = createProfileSelectionStore({ getItem: () => null, setItem: () => undefined });
+  profile.initialize();
   const router = createAppRouter({
     activity,
     access,
     audio,
     feedback: { observeCommand: () => {} },
     globalActor,
-    profile: createProfileSelectionStore({ getItem: () => null, setItem: () => undefined }),
+    profile,
     preferences,
     renderer,
     clock: client.clock,

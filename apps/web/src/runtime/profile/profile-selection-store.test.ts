@@ -3,6 +3,29 @@ import { expect, test, vi } from 'vitest';
 
 import { createProfileSelectionStore } from '@/runtime/profile/profile-selection-store';
 
+test('requires explicit initialization before snapshot reads without storage or random effects', () => {
+  const storage = { getItem: vi.fn(() => null), setItem: vi.fn() };
+  const random = vi.fn(() => 0);
+  const profile = createProfileSelectionStore(storage, random);
+  const listener = vi.fn();
+  const unsubscribe = profile.subscribe(listener);
+
+  expect(() => profile.getSnapshot()).toThrow('Profile selection has not been initialized');
+  expect(storage.getItem).not.toHaveBeenCalled();
+  expect(storage.setItem).not.toHaveBeenCalled();
+  expect(random).not.toHaveBeenCalled();
+  expect(listener).not.toHaveBeenCalled();
+
+  const initial = profile.initialize();
+  expect(profile.getSnapshot()).toBe(initial);
+  expect(profile.getSnapshot()).toBe(initial);
+  expect(profile.initialize()).toBe(initial);
+  expect(storage.getItem).toHaveBeenCalledOnce();
+  expect(storage.setItem).toHaveBeenCalledOnce();
+  expect(random).toHaveBeenCalledOnce();
+  unsubscribe();
+});
+
 test('initializes only when requested and preserves legacy identity and unrelated storage', () => {
   const values = new Map([
     ['characterId', 'lumi'],
@@ -26,7 +49,7 @@ test('initializes only when requested and preserves legacy identity and unrelate
   expect(profile.initialize()).toBe(profile.getSnapshot());
   expect(random).toHaveBeenCalledTimes(1);
   profile.setSelection({ characterId: CHARACTER_IDS[4], variant: true });
-  expect(createProfileSelectionStore(storage).getSnapshot().selection).toEqual({
+  expect(createProfileSelectionStore(storage).initialize().selection).toEqual({
     characterId: CHARACTER_IDS[4],
     variant: true,
   });
@@ -43,7 +66,7 @@ test.each([
   const storage = { getItem: () => stored, setItem: vi.fn() };
   const profile = createProfileSelectionStore(storage, () => 0.25);
   const selection = { characterId: CHARACTER_IDS[3], variant: false };
-  expect(profile.getSnapshot().selection).toEqual(selection);
+  expect(profile.initialize().selection).toEqual(selection);
   expect(storage.setItem).toHaveBeenCalledWith('profileSelection', JSON.stringify(selection));
 });
 

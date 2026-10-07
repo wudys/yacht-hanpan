@@ -161,6 +161,24 @@ test('creates and activates one native audio context from duplicate starts', asy
   expect(FakeAudioContext.instances[0]?.close).toHaveBeenCalledTimes(1);
 });
 
+test('preserves native close rejection while disposing the Tone context once', async () => {
+  vi.stubGlobal('AudioContext', FakeAudioContext);
+  vi.stubGlobal('Audio', FakeAudioElement);
+  const runtime = createBrowserAudioRuntime();
+  await runtime.activate();
+  await runtime.prepareCues();
+  const context = FakeAudioContext.instances[0]!;
+  const failure = new Error('native close failed');
+  vi.mocked(context.close).mockRejectedValueOnce(failure);
+
+  await expect(runtime.dispose()).rejects.toBe(failure);
+  await expect(runtime.dispose()).resolves.toBeUndefined();
+
+  expect(context.close).toHaveBeenCalledOnce();
+  expect(toneHarness.toneContext.dispose).toHaveBeenCalledOnce();
+  await expect(runtime.activate()).rejects.toThrow('disposed');
+});
+
 test('reports unsupported environments without constructing audio', async () => {
   vi.stubGlobal('AudioContext', undefined);
   vi.stubGlobal('webkitAudioContext', undefined);

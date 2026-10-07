@@ -11,7 +11,7 @@ import {
   type VisualAssetManifestEntry,
 } from '@/bootstrap/preload-assets';
 import {
-  PROCEDURAL_RESOURCE_REGISTRY,
+  createProceduralResourceRegistry,
   type ProceduralDiceResources,
   type ProceduralResourceRegistry,
 } from '@/runtime/dice/resources';
@@ -41,6 +41,7 @@ function disposedError(): Error {
 export type ProductVisualResourcesOptions = Readonly<{
   decodeAsset?: AssetDecoder;
   initializeRuntime?: typeof initializeDeterministicRapierForBrowser;
+  /** Transfers this registry's disposal ownership to this visual owner. */
   proceduralRegistry?: ProceduralResourceRegistry;
 }>;
 
@@ -65,7 +66,7 @@ export function createProductVisualResources(
     return value;
   });
   const initializeRuntime = options.initializeRuntime ?? initializeDeterministicRapierForBrowser;
-  const proceduralRegistry = options.proceduralRegistry ?? PROCEDURAL_RESOURCE_REGISTRY;
+  const proceduralRegistry = options.proceduralRegistry ?? createProceduralResourceRegistry();
   let resources: ProceduralDiceResources | null = null;
   let loading: Promise<ProceduralDiceResources> | null = null;
   let simulationReady = false;

@@ -48,6 +48,8 @@ export function createRendererReadiness(onRuntimeFailure?: (error: unknown) => v
     prepare(signal?: AbortSignal): Promise<void> {
       if (signal?.aborted) return Promise.reject(signal.reason);
       if (snapshot.status === 'disposed') return Promise.reject(new Error('Renderer is disposed'));
+      if (snapshot.status === 'runtimeFailed')
+        return Promise.reject(new Error('Renderer has failed'));
       if (snapshot.status === 'ready') return Promise.resolve();
       if (pending) return pending.promise;
       let onReady!: () => void;

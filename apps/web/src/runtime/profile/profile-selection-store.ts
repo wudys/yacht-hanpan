@@ -55,7 +55,10 @@ export function createProfileSelectionStore(
 
   return {
     initialize,
-    getSnapshot: initialize,
+    getSnapshot() {
+      if (snapshot === null) throw new Error('Profile selection has not been initialized');
+      return snapshot;
+    },
     subscribe(listener: () => void) {
       subscribers.add(listener);
       return () => subscribers.delete(listener);

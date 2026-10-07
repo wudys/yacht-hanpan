@@ -111,3 +111,31 @@ test('reports the original runtime failure once without a React context and igno
   expect(report).toHaveBeenCalledExactlyOnceWith(error);
   expect(renderer.getSnapshot().status).toBe('runtimeFailed');
 });
+
+test('rejects preparation after runtime failure, including subscriber reentry', async () => {
+  const report = vi.fn();
+  const renderer = createReadinessGate(report);
+  const ready = renderer.prepare();
+  const { attempt } = renderer.getSnapshot();
+  await renderer.run(attempt, async () => undefined);
+  await ready;
+  let reentry: Promise<unknown> | undefined;
+  renderer.subscribe(() => {
+    if (renderer.getSnapshot().status === 'runtimeFailed') {
+      reentry = renderer.prepare().catch((error: unknown) => error);
+    }
+  });
+  const failure = new Error('context lost');
+
+  renderer.fail(attempt, failure);
+
+  expect(renderer.getSnapshot()).toEqual({ status: 'runtimeFailed', attempt });
+  expect(await reentry).toBeInstanceOf(Error);
+  await expect(renderer.prepare()).rejects.toThrow('failed');
+  const warmup = vi.fn(async () => undefined);
+  await renderer.run(attempt, warmup);
+  expect(warmup).not.toHaveBeenCalled();
+  renderer.fail(attempt, failure);
+  expect(report).toHaveBeenCalledExactlyOnceWith(failure);
+  await expect(renderer.prepare(AbortSignal.abort('cancelled'))).rejects.toBe('cancelled');
+});

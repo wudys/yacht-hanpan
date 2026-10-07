@@ -17,6 +17,7 @@ import { detectStaticGameplayCapabilities } from '@/bootstrap/static-capabilitie
 import { parseWebConfig } from '@/bootstrap/web-config';
 import { subscribeBrowserConnectivity } from '@/runtime/network/browser-connectivity';
 import { createPreferencesStore } from '@/runtime/preferences/preferences-store';
+import type { ErrorContext } from '@/runtime/telemetry/error-policy';
 import { createReactErrorHandler } from '@/runtime/telemetry/react-errors';
 import { observeSessionTelemetry } from '@/runtime/telemetry/session-telemetry-observer';
 import type { Telemetry } from '@/runtime/telemetry/telemetry';
@@ -58,17 +59,35 @@ export function startWebApp(telemetry: Telemetry): () => void {
   let unsubscribeConnectivity: (() => void) | undefined;
   let unsubscribeRenderer: (() => void) | undefined;
 
+  function cleanup(callback: () => void | Promise<void>, context?: ErrorContext) {
+    const report = (error: unknown) => {
+      try {
+        if (context) telemetry.reportUnexpected(error, context);
+        else telemetry.reportUnexpected(error);
+      } catch {
+        // A failed diagnostic must not interrupt the remaining cleanup.
+      }
+    };
+    try {
+      void Promise.resolve(callback()).catch(report);
+    } catch (error) {
+      report(error);
+    }
+  }
+
   function disposeApp() {
     if (disposed) return;
     disposed = true;
-    stopTelemetry?.();
-    unsubscribeReplacement?.();
-    unsubscribeConnectivity?.();
-    unsubscribeRenderer?.();
-    execution.stop();
-    appActor?.stop();
-    reactRoot?.unmount();
-    void visuals?.dispose().catch(() => undefined);
+    cleanup(() => stopTelemetry?.());
+    cleanup(() => unsubscribeReplacement?.());
+    cleanup(() => unsubscribeConnectivity?.());
+    cleanup(() => unsubscribeRenderer?.());
+    cleanup(() => execution.stop());
+    cleanup(() => {
+      appActor?.stop();
+    });
+    cleanup(() => reactRoot?.unmount());
+    cleanup(() => visuals?.dispose(), { stage: 'canvas' });
   }
 
   try {

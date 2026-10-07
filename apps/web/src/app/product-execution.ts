@@ -29,6 +29,7 @@ import {
   type SessionCredentialStore,
 } from '@/runtime/session/session-credential-store';
 import { createSessionRecovery, type SessionRecovery } from '@/runtime/session/session-recovery';
+import type { ErrorContext } from '@/runtime/telemetry/error-policy';
 import type { Telemetry } from '@/runtime/telemetry/telemetry';
 
 export interface ProductExecution {
@@ -67,17 +68,33 @@ export function createProductExecution({
   let reentry: StoredRoomReentry | undefined;
   let access: RoomAccess | undefined;
 
+  function cleanup(callback: () => void | Promise<void>, context?: ErrorContext) {
+    const report = (error: unknown) => {
+      try {
+        if (context) telemetry.reportUnexpected(error, context);
+        else telemetry.reportUnexpected(error);
+      } catch {
+        // A failed diagnostic must not interrupt the remaining cleanup.
+      }
+    };
+    try {
+      void Promise.resolve(callback()).catch(report);
+    } catch (error) {
+      report(error);
+    }
+  }
+
   function stop() {
     if (stopped) return;
     stopped = true;
-    activity.abort();
-    access?.dispose();
-    reentry?.dispose();
-    feedback?.dispose();
-    recovery?.dispose();
-    presentation?.dispose();
-    sessions?.dispose();
-    void audio?.dispose();
+    cleanup(() => activity.abort());
+    cleanup(() => access?.dispose());
+    cleanup(() => reentry?.dispose());
+    cleanup(() => feedback?.dispose());
+    cleanup(() => recovery?.dispose());
+    cleanup(() => presentation?.dispose());
+    cleanup(() => sessions?.dispose());
+    cleanup(() => audio?.dispose(), { stage: 'audio' });
   }
 
   try {

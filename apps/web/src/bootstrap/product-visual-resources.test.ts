@@ -1,12 +1,18 @@
 // @vitest-environment jsdom
-import { describe, expect, test, vi } from 'vitest';
+import { afterEach, describe, expect, test, vi } from 'vitest';
 
 import { VISUAL_ASSET_MANIFEST } from '@/bootstrap/preload-assets';
 import { createProductVisualResources } from '@/bootstrap/product-visual-resources';
-import {
-  PROCEDURAL_RESOURCE_REGISTRY,
-  type ProceduralDiceResources,
-} from '@/runtime/dice/resources';
+import type { ProceduralDiceResources } from '@/runtime/dice/resources';
+import { createProceduralDiceResources } from '@/runtime/dice/resources/procedural-resources';
+
+vi.mock('@/runtime/dice/resources/procedural-resources', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@/runtime/dice/resources/procedural-resources')>();
+  return { ...actual, createProceduralDiceResources: vi.fn(actual.createProceduralDiceResources) };
+});
+
+afterEach(() => vi.mocked(createProceduralDiceResources).mockReset());
 
 function createProceduralResources(dispose: () => void = vi.fn()): ProceduralDiceResources {
   return { dispose } as unknown as ProceduralDiceResources;
@@ -21,6 +27,36 @@ function deferred<T>() {
 }
 
 describe('createProductVisualResources', () => {
+  test('lazily owns separate default procedural resources while reusing each owner preload', async () => {
+    const leftResources = createProceduralResources();
+    const rightResources = createProceduralResources();
+    vi.mocked(createProceduralDiceResources)
+      .mockReturnValueOnce(leftResources)
+      .mockReturnValueOnce(rightResources);
+    const options = {
+      decodeAsset: async () => new Image(),
+      initializeRuntime: vi.fn(async () => 'ready'),
+    };
+    const left = createProductVisualResources(options);
+    const right = createProductVisualResources(options);
+    expect(createProceduralDiceResources).not.toHaveBeenCalled();
+    expect(options.initializeRuntime).not.toHaveBeenCalled();
+
+    try {
+      const [loadedLeft, loadedRight] = await Promise.all([left.preload(), right.preload()]);
+      expect(loadedLeft).toBe(leftResources);
+      expect(loadedRight).toBe(rightResources);
+      await left.dispose();
+      expect(leftResources.dispose).toHaveBeenCalledOnce();
+      expect(rightResources.dispose).not.toHaveBeenCalled();
+      await expect(right.preload()).resolves.toBe(rightResources);
+      expect(createProceduralDiceResources).toHaveBeenCalledTimes(2);
+    } finally {
+      await Promise.all([left.dispose(), right.dispose()]);
+    }
+    expect(rightResources.dispose).toHaveBeenCalledOnce();
+  });
+
   test('aborts pending preparation and immediately retries without waiting for the old WASM', async () => {
     const activity = new AbortController();
     const oldWasm = deferred<string>();
@@ -52,7 +88,6 @@ describe('createProductVisualResources', () => {
   });
 
   test('removes a failed procedural preload reporter before retrying', async () => {
-    await PROCEDURAL_RESOURCE_REGISTRY.dispose();
     vi.stubGlobal('document', {
       createElement() {
         throw new Error('canvas unavailable');
@@ -148,10 +183,9 @@ describe('createProductVisualResources', () => {
 
   test('disposal during preload cleans completed resources and prevents recreation', async () => {
     const assetGate = deferred<void>();
-    const proceduralGate = deferred<ProceduralDiceResources>();
     const disposeProcedural = vi.fn();
     const resources = createProceduralResources(disposeProcedural);
-    const preloadProcedural = vi.fn(() => proceduralGate.promise);
+    vi.mocked(createProceduralDiceResources).mockReturnValueOnce(resources);
     const initializeRuntime = vi.fn(async () => 'rapier-version');
     const decodeAsset = vi.fn(async () => {
       await assetGate.promise;
@@ -160,13 +194,11 @@ describe('createProductVisualResources', () => {
     const runtime = createProductVisualResources({
       decodeAsset,
       initializeRuntime,
-      proceduralRegistry: { preload: preloadProcedural, dispose: async () => resources.dispose() },
     });
 
     const preload = runtime.preload();
     const disposal = runtime.dispose();
     assetGate.resolve();
-    proceduralGate.resolve(resources);
 
     await expect(preload).rejects.toThrow('Product visual resources are disposed');
     await disposal;
@@ -174,6 +206,6 @@ describe('createProductVisualResources', () => {
     await expect(runtime.preload()).rejects.toThrow('Product visual resources are disposed');
     expect(initializeRuntime).toHaveBeenCalledTimes(1);
     expect(decodeAsset).toHaveBeenCalledTimes(VISUAL_ASSET_MANIFEST.length);
-    expect(preloadProcedural).toHaveBeenCalledTimes(1);
+    expect(createProceduralDiceResources).toHaveBeenCalledTimes(1);
   });
 });

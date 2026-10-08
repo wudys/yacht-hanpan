@@ -6,9 +6,9 @@ import {
   parseSocketAuth,
 } from '@repo/game-protocol/socket';
 import { createCompatibilityContract, GAME_PROTOCOL_VERSION } from '@repo/game-protocol/version';
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, jest, test } from 'bun:test';
 
-import type { GameSocketFactory } from '../ports';
+import type { GameSocketFactory, RawGameSocket } from '../ports';
 import { createServerClock } from '../server-clock';
 import { createGameSession } from './session';
 import {
@@ -22,11 +22,104 @@ import {
   room,
   ROOM_ID,
   SEAT_TOKEN,
+  syncResponse,
   TURN_ID,
   viewFromGame,
 } from './session.test-fixtures';
 
+class ReceiverSocket implements RawGameSocket {
+  readonly #transport = new FakeSocket();
+  #syncs = 0;
+  #commands = 0;
+
+  public readonly connect = this.#transport.connect;
+  public readonly disconnect = this.#transport.disconnect;
+  public readonly dispose = this.#transport.dispose;
+  public readonly onConnected = this.#transport.onConnected;
+  public readonly onConnectionError = this.#transport.onConnectionError;
+  public readonly onDisconnected = this.#transport.onDisconnected;
+  public readonly onReplaced = this.#transport.onReplaced;
+  public readonly onRoomUpdate = this.#transport.onRoomUpdate;
+
+  public get syncCount(): number {
+    return this.#syncs;
+  }
+
+  public get commandCount(): number {
+    return this.#commands;
+  }
+
+  public emitSync(acknowledge: (value: unknown) => void): void {
+    this.#syncs += 1;
+    acknowledge(syncResponse(viewFromGame(game(1))));
+  }
+
+  public emitCommand(command: GameCommand, acknowledge: (value: unknown) => void): void {
+    this.#commands += 1;
+    acknowledge({
+      ok: false,
+      error: { code: PUBLIC_ERROR_CODE.NOT_YOUR_TURN, params: {} },
+      meta: {
+        requestId: REQUEST_ID,
+        actionId: command.actionId,
+        gameProtocolVersion: GAME_PROTOCOL_VERSION,
+      },
+    });
+  }
+}
+
 describe('game session', () => {
+  test('preserves the socket receiver during initial and explicit synchronization', async () => {
+    const socket = new ReceiverSocket();
+    const session = createGameSession({
+      socketUrl: 'https://game.example.test',
+      authority: AUTHORITY,
+      contract: createCompatibilityContract('release-1'),
+      socketFactory: { create: () => socket },
+      retryPolicy: { acknowledgementTimeoutMs: 20, maximumAttempts: 1, retryDelayMs: 0 },
+    });
+    try {
+      expect(await session.connect()).toEqual({ ok: true });
+      expect(socket.syncCount).toBe(1);
+      expect(session.getSnapshot().syncRevision).toBe(1);
+      expect(await session.synchronize()).toEqual({ ok: true });
+      expect(socket.syncCount).toBe(2);
+      expect(session.getSnapshot().syncRevision).toBe(2);
+      expect(session.getSnapshot().game).toEqual(game(1));
+    } finally {
+      session.dispose();
+    }
+  });
+
+  test('preserves the socket receiver and server rejection correlation for commands', async () => {
+    const socket = new ReceiverSocket();
+    socket.emitSync = socket.emitSync.bind(socket);
+    const session = createGameSession({
+      socketUrl: 'https://game.example.test',
+      authority: AUTHORITY,
+      contract: createCompatibilityContract('release-1'),
+      socketFactory: { create: () => socket },
+      createActionId: () => ROOM_ID,
+      retryPolicy: { acknowledgementTimeoutMs: 20, maximumAttempts: 1, retryDelayMs: 0 },
+    });
+    try {
+      expect(await session.connect()).toEqual({ ok: true });
+      expect(await session.rollDice()).toEqual({
+        ok: false,
+        error: {
+          kind: 'server',
+          error: { code: PUBLIC_ERROR_CODE.NOT_YOUR_TURN, params: {} },
+          requestId: REQUEST_ID,
+          actionId: ROOM_ID,
+        },
+      });
+      expect(socket.commandCount).toBe(1);
+      expect(session.getSnapshot().syncRevision).toBe(2);
+    } finally {
+      session.dispose();
+    }
+  });
+
   test('replacement ends pending work and cannot be revived by late callbacks or reconnect', async () => {
     const socket = new FakeSocket();
     let acknowledgeSync!: (value: unknown) => void;
@@ -1700,15 +1793,24 @@ describe('game session', () => {
       retryPolicy: { acknowledgementTimeoutMs: 5_000, maximumAttempts: 3, retryDelayMs: 1_000 },
       createActionId: () => 'de305d54-75b4-431b-adb2-eb6b9e546010',
     });
-    await session.connect();
+    jest.useFakeTimers();
+    try {
+      await session.connect();
+      const timerBaseline = jest.getTimerCount();
 
-    const pending = session.rollDice();
-    session.dispose();
+      const pending = session.rollDice();
+      expect(jest.getTimerCount()).toBe(timerBaseline + 1);
+      session.dispose();
+      expect(jest.getTimerCount()).toBe(timerBaseline);
 
-    expect(await pending).toMatchObject({
-      ok: false,
-      error: { kind: 'protocol', code: 'SESSION_DISPOSED' },
-    });
+      expect(await pending).toMatchObject({
+        ok: false,
+        error: { kind: 'protocol', code: 'SESSION_DISPOSED' },
+      });
+    } finally {
+      session.dispose();
+      jest.useRealTimers();
+    }
   });
 
   test('maps a handshake version rejection to one protocol compatibility error', () => {

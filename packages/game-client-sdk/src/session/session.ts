@@ -146,7 +146,7 @@ export function createGameSession(options: CreateGameSessionOptions): GameSessio
     syncStatus = 'synchronizing';
     const pending = requestSync({
       timeoutMs: (options.retryPolicy ?? GAME_CLIENT_RETRY_POLICY).acknowledgementTimeoutMs,
-      emit: socket.emitSync,
+      emit: (acknowledge) => socket.emitSync(acknowledge),
       signal: controller.signal,
     }).then((response): SessionOperationResult => {
       if (lifecycle.signal.aborted || activeSynchronization?.promise !== pending) {
@@ -299,7 +299,7 @@ export function createGameSession(options: CreateGameSessionOptions): GameSessio
     retryPolicy: options.retryPolicy ?? GAME_CLIENT_RETRY_POLICY,
     createActionId: options.createActionId ?? uuidV7,
     getGame: () => state.view?.game ?? null,
-    emit: socket.emitCommand,
+    emit: (command, acknowledge) => socket.emitCommand(command, acknowledge),
     synchronize,
     applySuccess: (data, command) => {
       const reduction = validAuthorityView(data.view)

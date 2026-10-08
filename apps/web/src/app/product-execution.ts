@@ -5,10 +5,13 @@ import {
   createBrowserAudioRuntime,
 } from '@/runtime/audio/browser-audio-runtime';
 import {
-  type GameAudioFeedback,
-  startGameAudioFeedback,
-} from '@/runtime/audio/game-audio-feedback';
-import { createDicePresentation, type DicePresentation } from '@/runtime/dice/dice-presentation';
+  type SessionAudioFeedback,
+  startSessionAudioFeedback,
+} from '@/runtime/audio/session-audio-feedback';
+import {
+  createDicePresentationController,
+  type DicePresentationController,
+} from '@/runtime/dice/dice-presentation-controller';
 import { createServerReadiness } from '@/runtime/network/server-readiness';
 import type { PreferencesStore } from '@/runtime/preferences/preferences-store';
 import {
@@ -40,8 +43,8 @@ export interface ProductExecution {
   readonly sessionCredentialStore: SessionCredentialStore;
   readonly sessions: GameSessionHolder;
   readonly recovery: SessionRecovery;
-  readonly feedback: GameAudioFeedback;
-  readonly presentation: DicePresentation;
+  readonly feedback: SessionAudioFeedback;
+  readonly presentation: DicePresentationController;
   readonly reentry: StoredRoomReentry;
   readonly access: RoomAccess;
   setSurfaceExposed(exposed: boolean): void;
@@ -64,8 +67,8 @@ export function createProductExecution({
   let audio: BrowserAudioRuntime | undefined;
   let sessions: GameSessionHolder | undefined;
   let recovery: SessionRecovery | undefined;
-  let feedback: GameAudioFeedback | undefined;
-  let presentation: DicePresentation | undefined;
+  let feedback: SessionAudioFeedback | undefined;
+  let presentation: DicePresentationController | undefined;
   let reentry: StoredRoomReentry | undefined;
   let access: RoomAccess | undefined;
 
@@ -123,7 +126,7 @@ export function createProductExecution({
     });
     recovery = executionRecovery;
     executionRecovery.start();
-    const executionFeedback = startGameAudioFeedback({
+    const executionFeedback = startSessionAudioFeedback({
       audio: executionAudio,
       clock: client.clock,
       sessions: executionSessions,
@@ -132,7 +135,7 @@ export function createProductExecution({
     });
     feedback = executionFeedback;
     executionFeedback.setSurfaceExposed(false);
-    const executionPresentation = createDicePresentation({
+    const executionPresentation = createDicePresentationController({
       sessions: executionSessions,
       requestSynchronization: executionRecovery.requestSynchronization,
       onUnexpected: (error) => telemetry.reportUnexpected(error, { stage: 'replay' }),

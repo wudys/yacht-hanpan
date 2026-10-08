@@ -1,6 +1,6 @@
 import { type CueRecipeId, renderCueBuffers } from '@/runtime/audio/render-cue-buffers';
 
-export const PRODUCT_CUE = {
+export const AUDIO_CUE = {
   CLICK: 'ui.click',
   SELECT: 'ui.select',
   HOLD: 'dice.hold',
@@ -12,8 +12,8 @@ export const PRODUCT_CUE = {
   ACHIEVEMENT_OTHER: 'achievement.other',
   ACHIEVEMENT_YACHT: 'achievement.yacht',
 } as const;
-export type ProductCue = (typeof PRODUCT_CUE)[keyof typeof PRODUCT_CUE];
-const keys: Record<ProductCue, CueRecipeId> = {
+export type AudioCue = (typeof AUDIO_CUE)[keyof typeof AUDIO_CUE];
+const cueRecipeByCue: Record<AudioCue, CueRecipeId> = {
   'ui.click': 'click',
   'roll.click': 'click',
   'ui.select': 'click',
@@ -46,9 +46,9 @@ export function createCueRuntime(
   let preparation: Promise<void> | null = null;
   let buffers = new Map<CueRecipeId, AudioBuffer>();
   const active = new Map<AudioBufferSourceNode, CueRecipeId>();
-  function stop(cue?: ProductCue) {
+  function stop(cue?: AudioCue) {
     for (const [source, key] of active) {
-      if (cue && keys[cue] !== key) continue;
+      if (cue && cueRecipeByCue[cue] !== key) continue;
       source.stop();
       source.disconnect();
       active.delete(source);
@@ -85,8 +85,8 @@ export function createCueRuntime(
       });
       return preparation;
     },
-    play(cue: ProductCue) {
-      const buffer = buffers.get(keys[cue]);
+    play(cue: AudioCue) {
+      const buffer = buffers.get(cueRecipeByCue[cue]);
       if (
         !enabled ||
         suppressed ||
@@ -100,7 +100,7 @@ export function createCueRuntime(
       const source = context.createBufferSource();
       source.buffer = buffer;
       source.connect(output);
-      active.set(source, keys[cue]);
+      active.set(source, cueRecipeByCue[cue]);
       source.onended = () => {
         source.disconnect();
         active.delete(source);

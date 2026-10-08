@@ -8,7 +8,7 @@ export function LobbyNoticeLayer({
   actions,
 }: Readonly<{ title: string; children: ReactNode; actions: ReactNode }>) {
   return (
-    <LobbyLayer role='alertdialog' ariaLabel={title}>
+    <LobbyLayer kind='notice' role='alertdialog' ariaLabel={title}>
       <ScrollablePanel
         className='web-lobby-surface'
         variant='notice'
@@ -25,17 +25,17 @@ export function LobbyLayer({
   children,
   role,
   ariaLabel,
-  admission,
+  kind,
 }: Readonly<{
   children: ReactNode;
   role?: 'alertdialog';
   ariaLabel?: string;
-  admission?: 'join' | 'waiting';
+  kind: 'profile' | 'settings' | 'join' | 'waiting' | 'reentry' | 'notice';
 }>) {
   return (
     <div
       className='web-lobby-layer'
-      data-admission={admission}
+      data-lobby-layer={kind}
       role={role}
       aria-label={ariaLabel}
       aria-modal={role ? 'true' : undefined}

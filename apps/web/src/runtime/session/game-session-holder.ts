@@ -4,7 +4,7 @@ import type {
   GameSessionSnapshot,
   RoomAuthority,
 } from '@repo/game-client-sdk';
-import type { PublicRoom } from '@repo/game-protocol/socket';
+import type { PublicRoom } from '@repo/game-protocol/state';
 
 export type GameSessionHolderSnapshot =
   | Readonly<{

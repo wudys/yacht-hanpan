@@ -2,7 +2,7 @@
 import { beforeEach, expect, test, vi } from 'vitest';
 
 import { createProductExecution } from '@/app/product-execution';
-import type { DicePresentationOptions } from '@/runtime/dice/dice-presentation';
+import type { DicePresentationOptions } from '@/runtime/dice/dice-presentation-controller';
 import { createPreferencesStore } from '@/runtime/preferences/preferences-store';
 import { inactiveTelemetry, type Telemetry } from '@/runtime/telemetry/telemetry';
 
@@ -31,14 +31,14 @@ vi.mock('@/runtime/audio/browser-audio-runtime', () => ({
     setSurfaceExposed: fixture.audioExposure,
   }),
 }));
-vi.mock('@/runtime/audio/game-audio-feedback', () => ({
-  startGameAudioFeedback: () => ({
+vi.mock('@/runtime/audio/session-audio-feedback', () => ({
+  startSessionAudioFeedback: () => ({
     dispose: fixture.feedbackDispose,
     setSurfaceExposed: fixture.feedbackExposure,
   }),
 }));
-vi.mock('@/runtime/dice/dice-presentation', () => ({
-  createDicePresentation: (options: DicePresentationOptions) => {
+vi.mock('@/runtime/dice/dice-presentation-controller', () => ({
+  createDicePresentationController: (options: DicePresentationOptions) => {
     fixture.presentationOptions = options;
     return { start: fixture.presentationStart, dispose: fixture.presentationDispose };
   },

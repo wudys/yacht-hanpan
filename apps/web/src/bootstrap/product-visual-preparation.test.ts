@@ -1,7 +1,7 @@
 import { beforeEach, expect, test, vi } from 'vitest';
 
 import type { ProductVisualResources } from '@/bootstrap/product-visual-resources';
-import type { DicePresentation } from '@/runtime/dice/dice-presentation';
+import type { DicePresentationController } from '@/runtime/dice/dice-presentation-controller';
 import type { ProceduralDiceResources } from '@/runtime/dice/resources';
 
 const fixture = vi.hoisted(() => ({
@@ -52,7 +52,7 @@ function deferred<Value>() {
 }
 
 async function createPreparation(
-  presentation: Pick<DicePresentation, 'prepare' | 'setResources'> = {
+  presentation: Pick<DicePresentationController, 'prepare' | 'setResources'> = {
     prepare: vi.fn(async () => undefined),
     setResources: vi.fn(),
   },

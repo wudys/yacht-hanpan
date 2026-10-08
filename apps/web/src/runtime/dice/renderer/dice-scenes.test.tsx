@@ -17,7 +17,7 @@ import { DiceRollScene } from '@/runtime/dice/renderer/DiceRollScene';
 import { DiceSettledScene } from '@/runtime/dice/renderer/DiceSettledScene';
 import { DiceWarmupScene } from '@/runtime/dice/renderer/DiceWarmupScene';
 import { CupMesh } from '@/runtime/dice/renderer/parts/CupMesh';
-import { RollStage } from '@/runtime/dice/renderer/parts/RollStage';
+import { DiceStage } from '@/runtime/dice/renderer/parts/DiceStage';
 import type { RollPlayback } from '@/runtime/dice/replay/resolve-playback';
 import { createCupResources } from '@/runtime/dice/resources/cup-resources';
 import type { ProceduralDiceResources } from '@/runtime/dice/resources/procedural-resources';
@@ -59,7 +59,7 @@ test('keeps the full tray-to-ceiling shadow volume inside the light camera', asy
   try {
     await actR3f(async () =>
       root.render(
-        <RollStage
+        <DiceStage
           rollArea={ROLL_AREA}
           layout={{
             layerPadding: { extraX: 4, extraTop: 72, extraBottom: 4 },
@@ -67,7 +67,7 @@ test('keeps the full tray-to-ceiling shadow volume inside the light camera', asy
           }}
         >
           {null}
-        </RollStage>,
+        </DiceStage>,
       ),
     );
     const light = scene.children.find(
@@ -161,7 +161,7 @@ test('projects the physics floor below the protected rack with side staging spac
     });
     await actR3f(async () =>
       root.render(
-        <RollStage
+        <DiceStage
           rollArea={ROLL_AREA}
           layout={{
             layerPadding: { extraX: 16, extraTop: 52, extraBottom: 8 },
@@ -169,7 +169,7 @@ test('projects the physics floor below the protected rack with side staging spac
           }}
         >
           {null}
-        </RollStage>,
+        </DiceStage>,
       ),
     );
     camera.updateMatrixWorld();

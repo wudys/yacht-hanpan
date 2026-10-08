@@ -6,3 +6,10 @@
 .web-app-shell .game-logical-canvas:has([data-score-table='true']) {
   background: var(--product-base-deep);
 }
+
+.web-logo {
+  display: block;
+  width: 80px;
+  height: 32px;
+  object-fit: contain;
+}

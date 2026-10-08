@@ -6,14 +6,14 @@ import { CanvasFailureBoundary } from '@/runtime/dice/canvas/CanvasFailureBounda
 import { DicePresentationScene } from '@/runtime/dice/canvas/DicePresentationScene';
 import type { RendererReadiness } from '@/runtime/dice/canvas/renderer-readiness';
 import { warmupRenderer } from '@/runtime/dice/canvas/warmup-renderer';
-import type { DicePresentationView } from '@/runtime/dice/dice-presentation';
+import type { DicePresentationRenderPort } from '@/runtime/dice/dice-presentation-controller';
 import { DICE_CANVAS_VIEWPORT_SIZE } from '@/runtime/dice/game-dice-layout';
 import { DiceWarmupScene } from '@/runtime/dice/renderer';
 
 function WarmupScene({
   renderer,
   presentation,
-}: Readonly<{ renderer: RendererReadiness; presentation: DicePresentationView }>) {
+}: Readonly<{ renderer: RendererReadiness; presentation: DicePresentationRenderPort }>) {
   const { gl, scene, camera } = useThree();
   const snapshot = useSyncExternalStore(renderer.subscribe, renderer.getSnapshot);
   const { resources } = useSyncExternalStore(presentation.subscribe, presentation.getSnapshot);
@@ -29,7 +29,7 @@ function WarmupScene({
 export default function DiceCanvasHost({
   presentation,
   renderer,
-}: Readonly<{ presentation: DicePresentationView; renderer: RendererReadiness }>) {
+}: Readonly<{ presentation: DicePresentationRenderPort; renderer: RendererReadiness }>) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rootRef = useRef<ReturnType<typeof createRoot> | null>(null);
   const snapshot = useSyncExternalStore(renderer.subscribe, renderer.getSnapshot);

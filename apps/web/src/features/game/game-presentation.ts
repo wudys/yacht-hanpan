@@ -1,5 +1,5 @@
 import { requireGameAsset, resolveCharacterImageAssetId } from '@repo/game-assets';
-import type { GameSnapshot, PublicRoom } from '@repo/game-protocol/socket';
+import type { GameSnapshot, PublicRoom } from '@repo/game-protocol/state';
 import { CATEGORY_IDS, MAX_ROLLS_PER_TURN, type SeatIndex } from '@repo/yacht-rules';
 
 import type { TurnFeedbackSnapshot } from '@/features/game/feedback/use-turn-feedback';
@@ -9,7 +9,7 @@ import type {
   GameResultViewProps,
   GameViewModel,
   PlayerScoreSummaryView,
-} from '@/features/game/view';
+} from '@/features/game/ui';
 import { type Locale, translate } from '@/i18n';
 
 export function createGameFeedbackPresentation({
@@ -113,10 +113,7 @@ export function createGameBoardPresentation(
       highestLower: highest(scoreGroupPreviews.lower),
       firstRollGuide: translate(locale, 'game.firstRollGuide'),
       emptyScore: translate(locale, 'game.emptyScore'),
-    } satisfies Omit<
-      GameBoardProps['labels'],
-      'timer' | 'total' | 'bonus' | 'bonusStatus' | 'presence'
-    >,
+    } satisfies Omit<GameBoardProps['labels'], 'total' | 'bonus' | 'bonusStatus'>,
   };
 }
 

@@ -29,7 +29,7 @@ export function WaitingRoomLayer({
 }>) {
   const waitingRecovery = recovery !== 'none';
   return (
-    <LobbyLayer admission='waiting'>
+    <LobbyLayer kind='waiting'>
       <ScrollablePanel
         className='web-lobby-surface'
         title={translate(locale, 'lobby.createRoom')}

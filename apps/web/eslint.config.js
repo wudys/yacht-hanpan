@@ -14,7 +14,7 @@ const browserImportRestrictions = {
   ],
 };
 
-const injectedViewRules = (allowedLocalImports) => ({
+const injectedUiRules = (allowedLocalImports) => ({
   'no-restricted-imports': [
     'error',
     {
@@ -130,11 +130,11 @@ export default [
   {
     files: ['src/ui/**/*.{ts,tsx}'],
     ignores: ['**/*.test.{ts,tsx}'],
-    rules: injectedViewRules('ui(?:/|$)'),
+    rules: injectedUiRules('ui(?:/|$)'),
   },
   ...['entry', 'loading', 'settings', 'lobby', 'game'].map((feature) => ({
-    files: [`src/features/${feature}/view/**/*.{ts,tsx}`],
+    files: [`src/features/${feature}/ui/**/*.{ts,tsx}`],
     ignores: ['**/*.test.{ts,tsx}'],
-    rules: injectedViewRules(`(?:ui(?:/|$)|features/${feature}/view(?:/|$))`),
+    rules: injectedUiRules(`(?:ui(?:/|$)|features/${feature}/ui(?:/|$))`),
   })),
 ];

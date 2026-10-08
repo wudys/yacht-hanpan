@@ -5,8 +5,8 @@ import type { ActorRefFrom } from 'xstate';
 
 import { appLifecycleMachine } from '@/app/app-lifecycle-machine';
 import { APP_SCREEN_PATH } from '@/app/screen-paths';
-import { CapabilityFailureView } from '@/features/entry/view/CapabilityFailureView';
-import { EntryView } from '@/features/entry/view/EntryView';
+import { CapabilityFailureView } from '@/features/entry/ui/CapabilityFailureView';
+import { EntryView } from '@/features/entry/ui/EntryView';
 import { PrivacyDialog } from '@/features/privacy/PrivacyDialog';
 import { type Locale, translate } from '@/i18n';
 import type { BrowserAudioRuntime } from '@/runtime/audio/browser-audio-runtime';

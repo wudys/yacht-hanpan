@@ -28,7 +28,7 @@ for (const locale of [LOCALE.KO, LOCALE.EN]) {
       const harness = {
         ...createGameSessionHarness(),
         audio: createAudioMock(),
-        feedback: { observeCommand: vi.fn() },
+        feedback: { observeHoldReceipt: vi.fn() },
         clock: { now: () => 10_000 },
         sessionCredentialStore: createSessionCredentialStoreSpy(),
         preferences: createPreferencesStore({ getItem: () => null, setItem: () => undefined }),

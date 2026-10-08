@@ -21,7 +21,7 @@ import { afterEach, expect, test, vi } from 'vitest';
 import LobbyScreen from '@/features/lobby/LobbyScreen';
 import { LOCALE, type Locale, translate } from '@/i18n';
 import type { BrowserAudioRuntime } from '@/runtime/audio/browser-audio-runtime';
-import { PRODUCT_CUE } from '@/runtime/audio/cue-runtime';
+import { AUDIO_CUE } from '@/runtime/audio/cue-runtime';
 import type { ServerReadiness } from '@/runtime/network/server-readiness';
 import {
   createPreferencesStore,
@@ -1421,7 +1421,7 @@ test('keeps a failed profile selection applied and clears its inline warning aft
   fireEvent.click(screen.getByRole('button', { name: translate(LOCALE.EN, 'lobby.profile') }));
   vi.mocked(audio.playCue).mockClear();
   fireEvent.click(screen.getByRole('button', { name: 'onyx-topknot' }));
-  expect(audio.playCue).toHaveBeenCalledExactlyOnceWith(PRODUCT_CUE.SELECT);
+  expect(audio.playCue).toHaveBeenCalledExactlyOnceWith(AUDIO_CUE.SELECT);
   expect(profile.getSnapshot().selection.characterId).toBe('onyx-topknot');
   expect(screen.getByRole('button', { name: 'onyx-topknot' }).getAttribute('aria-pressed')).toBe(
     'true',

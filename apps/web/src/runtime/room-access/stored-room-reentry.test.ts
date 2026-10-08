@@ -1,8 +1,8 @@
 import type { GameClient, GameSession, GameSessionSnapshot } from '@repo/game-client-sdk';
 import { CLIENT_ERROR_CODE, createTransportError } from '@repo/game-client-sdk/errors';
 import { PUBLIC_ERROR_CODE } from '@repo/game-protocol';
-import type { GameSnapshot, PresenceSnapshot, PublicRoom } from '@repo/game-protocol/socket';
-import { parsePublicRoom } from '@repo/game-protocol/socket';
+import type { GameSnapshot, PresenceSnapshot, PublicRoom } from '@repo/game-protocol/state';
+import { parsePublicRoom } from '@repo/game-protocol/state';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 
 import { createServerReadiness, type ServerReadiness } from '@/runtime/network/server-readiness';

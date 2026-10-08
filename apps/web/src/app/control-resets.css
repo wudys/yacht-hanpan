@@ -4,3 +4,8 @@
 .player-summary__bonus-action {
   font: inherit;
 }
+
+.game-logical-canvas button:focus-visible {
+  outline: 2px solid var(--product-focus);
+  outline-offset: -3px;
+}

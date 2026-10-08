@@ -8,10 +8,10 @@ import { reportClientFailure } from '@/runtime/telemetry/error-policy';
 import { clientFailureFields, type Telemetry } from '@/runtime/telemetry/telemetry';
 
 export function observeSessionTelemetry(options: {
-  telemetry: Telemetry;
-  sessions: GameSessionHolder;
-  recovery: SessionRecovery;
-  reentry: StoredRoomReentry;
+  telemetry: Pick<Telemetry, 'trackEvent' | 'reportUnexpected'>;
+  sessions: Pick<GameSessionHolder, 'getSnapshot' | 'subscribe'>;
+  recovery: Pick<SessionRecovery, 'subscribeAttempt'>;
+  reentry: Pick<StoredRoomReentry, 'getSnapshot' | 'subscribeAttempt'>;
 }): () => void {
   const { telemetry, sessions, recovery, reentry } = options;
   const seen = new WeakMap<

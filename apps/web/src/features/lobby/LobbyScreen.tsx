@@ -11,12 +11,12 @@ import { LobbyLayer, LobbyNoticeLayer, PendingIndicator } from '@/features/lobby
 import { ProfileLayer } from '@/features/lobby/layer/ProfileLayer';
 import { type CopyStatus, WaitingRoomLayer } from '@/features/lobby/layer/WaitingRoomLayer';
 import { lobbyError, lobbyErrorKey } from '@/features/lobby/lobby-errors';
+import { LobbyView } from '@/features/lobby/ui/LobbyView';
 import { useLobbyAdmission } from '@/features/lobby/use-lobby-admission';
-import { LobbyView } from '@/features/lobby/view/LobbyView';
-import { SettingsLayer } from '@/features/settings/SettingsLayer';
+import { SettingsPanel } from '@/features/settings/SettingsPanel';
 import { type Locale, translate } from '@/i18n';
 import type { BrowserAudioRuntime } from '@/runtime/audio/browser-audio-runtime';
-import { PRODUCT_CUE } from '@/runtime/audio/cue-runtime';
+import { AUDIO_CUE } from '@/runtime/audio/cue-runtime';
 import type { PreferencesStore } from '@/runtime/preferences/preferences-store';
 import type { ProfileSelectionStore } from '@/runtime/profile/profile-selection-store';
 import type { RoomAccess } from '@/runtime/room-access/room-access';
@@ -61,7 +61,7 @@ export default function LobbyScreen({
   }, [audio]);
 
   const {
-    view,
+    screenState,
     waitingRoom,
     error,
     joinCode,
@@ -89,11 +89,11 @@ export default function LobbyScreen({
     access,
     clock,
     profile: productProfile,
-    onIntent: () => audio.playCue(PRODUCT_CUE.CLICK),
+    onIntent: () => audio.playCue(AUDIO_CUE.CLICK),
   });
   const reentryBlocking = restoreView.status !== 'idle';
   const waitingRecovery =
-    view === 'waiting' &&
+    screenState === 'waiting' &&
     !reentryBlocking &&
     (recoveryPhase === 'reconnecting' || recoveryPhase === 'synchronizing');
 
@@ -111,17 +111,17 @@ export default function LobbyScreen({
         copyTimerRef.current = null;
       }
     };
-  }, [view, waitingRoom?.expiresAt, waitingRoom?.roomCode]);
+  }, [screenState, waitingRoom?.expiresAt, waitingRoom?.roomCode]);
 
-  const click = () => audio.playCue(PRODUCT_CUE.CLICK);
+  const click = () => audio.playCue(AUDIO_CUE.CLICK);
   const copyRoomCode = async () => {
-    if (!waitingRoom || view !== 'waiting') return;
+    if (!waitingRoom || screenState !== 'waiting') return;
     const attempt = ++copyAttemptRef.current;
     try {
       await navigator.clipboard.writeText(waitingRoom.roomCode);
       if (copyAttemptRef.current !== attempt) return;
       setCopyStatus('copied');
-      audio.playCue(PRODUCT_CUE.SUCCESS);
+      audio.playCue(AUDIO_CUE.SUCCESS);
     } catch {
       if (copyAttemptRef.current !== attempt) return;
       setCopyStatus('failed');
@@ -136,11 +136,11 @@ export default function LobbyScreen({
 
   const selectCharacter = (nextCharacterId: CharacterId) => {
     const selection = { characterId: nextCharacterId, variant: browsedVariant };
-    if (productProfile.setSelection(selection)) audio.playCue(PRODUCT_CUE.SELECT);
+    if (productProfile.setSelection(selection)) audio.playCue(AUDIO_CUE.SELECT);
   };
 
   const createProgress =
-    view === 'creating' && showDelayedProgress ? (
+    screenState === 'creating' && showDelayedProgress ? (
       <PendingIndicator
         label={translate(
           locale,
@@ -149,7 +149,7 @@ export default function LobbyScreen({
       />
     ) : undefined;
   const reentryProgressLabel =
-    view === 'checkingExpiry' || restoreView.status === 'checking'
+    screenState === 'checkingExpiry' || restoreView.status === 'checking'
       ? translate(locale, 'lobby.reentryChecking')
       : restoreView.status === 'synchronizing' || restoreView.status === 'gameReady'
         ? translate(locale, 'lobby.reentrySynchronizing')
@@ -164,7 +164,7 @@ export default function LobbyScreen({
   return (
     <div
       className='web-lobby-scene'
-      data-lobby-view={view}
+      data-lobby-view={screenState}
       data-reentry-state={restoreView.status}
       data-screen='lobby'
       data-testid='lobby-screen'
@@ -172,7 +172,7 @@ export default function LobbyScreen({
       <h1 className='web-lobby-scene__sr-only'>{translate(locale, 'lobby.title')}</h1>
       <LobbyView
         hideRoomActions={
-          !reentryBlocking && ['joinRoom', 'joining', 'waiting', 'matching'].includes(view)
+          !reentryBlocking && ['joinRoom', 'joining', 'waiting', 'matching'].includes(screenState)
         }
         profile={{
           imageUrl: requireGameAsset(resolveCharacterImageAssetId(characterId, variant)).url,
@@ -184,7 +184,7 @@ export default function LobbyScreen({
           createRoom: translate(locale, 'lobby.createRoom'),
           joinRoom: translate(locale, 'lobby.joinRoom'),
         }}
-        interactionLocked={reentryBlocking || view !== 'home'}
+        interactionLocked={reentryBlocking || screenState !== 'home'}
         createProgress={createProgress}
         onCreateRoom={() => void createRoom()}
         onJoinRoom={openJoinRoom}
@@ -195,8 +195,8 @@ export default function LobbyScreen({
         onOpenSettings={openSettings}
       />
 
-      {reentryProgress || view === 'checkingExpiry' ? (
-        <LobbyLayer>
+      {reentryProgress || screenState === 'checkingExpiry' ? (
+        <LobbyLayer kind='reentry'>
           <ScrollablePanel className='web-lobby-surface' title={translate(locale, 'lobby.resume')}>
             <div
               className='web-lobby-reentry'
@@ -253,7 +253,7 @@ export default function LobbyScreen({
         </LobbyNoticeLayer>
       ) : null}
 
-      {!reentryBlocking && view === 'profile' ? (
+      {!reentryBlocking && screenState === 'profile' ? (
         <ProfileLayer
           locale={locale}
           variant={browsedVariant}
@@ -263,24 +263,24 @@ export default function LobbyScreen({
           onStyleChange={(next) => {
             if (next !== browsedVariant) {
               setBrowsedVariant(next);
-              audio.playCue(PRODUCT_CUE.SELECT);
+              audio.playCue(AUDIO_CUE.SELECT);
             }
           }}
           onSelect={selectCharacter}
         />
       ) : null}
 
-      {!reentryBlocking && view === 'settings' ? (
-        <LobbyLayer>
-          <SettingsLayer audio={audio} preferences={preferences} onClose={closeSettings} />
+      {!reentryBlocking && screenState === 'settings' ? (
+        <LobbyLayer kind='settings'>
+          <SettingsPanel audio={audio} preferences={preferences} onClose={closeSettings} />
         </LobbyLayer>
       ) : null}
 
-      {!reentryBlocking && (view === 'joinRoom' || view === 'joining') ? (
+      {!reentryBlocking && (screenState === 'joinRoom' || screenState === 'joining') ? (
         <JoinRoomLayer
           locale={locale}
           code={joinCode}
-          joining={view === 'joining'}
+          joining={screenState === 'joining'}
           rateLimited={rateLimited}
           showDelayedProgress={showDelayedProgress}
           preparingServer={readinessOperation === 'join'}
@@ -292,11 +292,11 @@ export default function LobbyScreen({
         />
       ) : null}
 
-      {!reentryBlocking && (view === 'waiting' || view === 'matching') ? (
+      {!reentryBlocking && (screenState === 'waiting' || screenState === 'matching') ? (
         <WaitingRoomLayer
           locale={locale}
           waitingRoom={waitingRoom}
-          matching={view === 'matching'}
+          matching={screenState === 'matching'}
           recovery={
             waitingRecovery
               ? recoveryPhase === 'synchronizing'
@@ -311,7 +311,7 @@ export default function LobbyScreen({
         />
       ) : null}
 
-      {!reentryBlocking && view === 'cancelFailed' ? (
+      {!reentryBlocking && screenState === 'cancelFailed' ? (
         <LobbyNoticeLayer
           title={translate(locale, 'lobby.cancelFailedTitle')}
           actions={
@@ -325,7 +325,7 @@ export default function LobbyScreen({
         </LobbyNoticeLayer>
       ) : null}
 
-      {!reentryBlocking && view === 'createFailed' ? (
+      {!reentryBlocking && screenState === 'createFailed' ? (
         <LobbyNoticeLayer
           title={translate(locale, 'lobby.createFailedTitle')}
           actions={<Button label={translate(locale, 'common.close')} onClick={dismissNotice} />}
@@ -334,7 +334,7 @@ export default function LobbyScreen({
         </LobbyNoticeLayer>
       ) : null}
 
-      {!reentryBlocking && view === 'connectionFailed' ? (
+      {!reentryBlocking && screenState === 'connectionFailed' ? (
         <LobbyNoticeLayer
           title={translate(locale, 'lobby.connectionFailedTitle')}
           actions={
@@ -348,7 +348,8 @@ export default function LobbyScreen({
         </LobbyNoticeLayer>
       ) : null}
 
-      {!reentryBlocking && (view === 'expired' || view === 'notice' || view === 'createNotice') ? (
+      {!reentryBlocking &&
+      (screenState === 'expired' || screenState === 'notice' || screenState === 'createNotice') ? (
         <LobbyNoticeLayer
           title={translate(locale, 'common.noticeTitle')}
           actions={<Button label={translate(locale, 'common.confirm')} onClick={dismissNotice} />}

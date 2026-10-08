@@ -1,6 +1,6 @@
 import type { GameClient, GameSession, GameSessionSnapshot } from '@repo/game-client-sdk';
 import { parseJoinRoomResponse, parseResumeRoomResponse } from '@repo/game-protocol/http';
-import { parsePresenceSnapshot, parseRoomView } from '@repo/game-protocol/socket';
+import { parsePresenceSnapshot, parseRoomView } from '@repo/game-protocol/state';
 import { GAME_PROTOCOL_VERSION } from '@repo/game-protocol/version';
 import { expect, test, vi } from 'vitest';
 import { createActor, waitFor } from 'xstate';
@@ -9,7 +9,7 @@ import {
   createLobbyMachine,
   type LobbyEvent,
   type LobbyServices,
-  selectLobbyView,
+  selectLobbyScreenState,
 } from '@/features/lobby/lobby-machine';
 import { createServerReadiness } from '@/runtime/network/server-readiness';
 import { createProfileSelectionStore } from '@/runtime/profile/profile-selection-store';
@@ -485,7 +485,7 @@ test('allows fresh admission after confirming a permanently unavailable recovery
 test('owns creation through waiting without storing room authority in form context', async () => {
   const { actor, session } = setup();
   actor.send({ type: 'CREATE_REQUESTED' });
-  expect(selectLobbyView(actor.getSnapshot())).toBe('creating');
+  expect(selectLobbyScreenState(actor.getSnapshot())).toBe('creating');
   await waitFor(actor, (state) => state.matches({ admitted: 'waiting' }));
   expect(actor.getSnapshot().context.waitingRoom).toEqual({
     roomCode: '001234',
@@ -567,7 +567,7 @@ test('normalizes a join code and preserves it after an invoked retryable failure
   actor.send({ type: 'OPEN_JOIN_ROOM' });
   actor.send({ type: 'JOIN_CODE_CHANGED', code: '0a0123456' });
   actor.send({ type: 'JOIN_REQUESTED' });
-  expect(selectLobbyView(actor.getSnapshot())).toBe('joining');
+  expect(selectLobbyScreenState(actor.getSnapshot())).toBe('joining');
   await waitFor(actor, (state) => state.matches('joinRoom'));
   expect(actor.getSnapshot().context).toMatchObject({
     joinCode: '001234',
@@ -625,12 +625,12 @@ test('closes waiting immediately while cancellation runs and offers retry only a
   actor.send({ type: 'CREATE_REQUESTED' });
   await waitFor(actor, (state) => state.matches({ admitted: 'waiting' }));
   actor.send({ type: 'CANCEL_REQUESTED' });
-  expect(selectLobbyView(actor.getSnapshot())).toBe('cancelling');
+  expect(selectLobbyScreenState(actor.getSnapshot())).toBe('cancelling');
   await waitFor(actor, (state) => state.matches({ admitted: 'cancelFailed' }));
   actor.send({ type: 'OPEN_PROFILE' });
-  expect(selectLobbyView(actor.getSnapshot())).toBe('cancelFailed');
+  expect(selectLobbyScreenState(actor.getSnapshot())).toBe('cancelFailed');
   actor.send({ type: 'RETRY_CANCEL' });
-  expect(selectLobbyView(actor.getSnapshot())).toBe('cancelling');
+  expect(selectLobbyScreenState(actor.getSnapshot())).toBe('cancelling');
   actor.stop();
 });
 
@@ -662,7 +662,7 @@ test('only accepts six ASCII digits for join submission', () => {
   expect(actor.getSnapshot().matches('joinRoom')).toBe(true);
   actor.send({ type: 'JOIN_CODE_CHANGED', code: '000001' });
   actor.send({ type: 'JOIN_REQUESTED' });
-  expect(selectLobbyView(actor.getSnapshot())).toBe('joining');
+  expect(selectLobbyScreenState(actor.getSnapshot())).toBe('joining');
   actor.stop();
 });
 
@@ -718,7 +718,7 @@ test('a same-tick authoritative game wins over the local expiry timer', async ()
   await waitFor(actor, (state) => state.matches({ admitted: 'waiting' }));
   publishGame();
   actor.send({ type: 'WAIT_EXPIRED' });
-  expect(selectLobbyView(actor.getSnapshot())).not.toBe('expired');
+  expect(selectLobbyScreenState(actor.getSnapshot())).not.toBe('expired');
   await waitFor(actor, (state) => state.status === 'done');
   expect(navigate).toHaveBeenCalledOnce();
   expect(
@@ -804,7 +804,7 @@ test.each([
   await waitFor(actor, (state) => state.matches({ admitted: 'waiting' }));
   if (origin === 'resumed') expect(session.connect).not.toHaveBeenCalled();
   actor.send({ type: notice === 'expired' ? 'WAIT_EXPIRED' : 'CANCEL_REQUESTED' });
-  await waitFor(actor, (state) => selectLobbyView(state) === notice);
+  await waitFor(actor, (state) => selectLobbyScreenState(state) === notice);
   const replacement = { ...session };
   createSession.mockReturnValueOnce(replacement);
   services.sessions.installAuthority({
@@ -965,7 +965,7 @@ test.each<{
         actor.send({ type: 'JOIN_REQUESTED' });
       } else actor.send({ type: 'CREATE_REQUESTED' });
       await waitFor(actor, (state) => state.context.error !== null);
-      expect(selectLobbyView(actor.getSnapshot())).toBe(view);
+      expect(selectLobbyScreenState(actor.getSnapshot())).toBe(view);
       if (operation === 'join') expect(actor.getSnapshot().context.joinCode).toBe('001234');
       expect(client.createRoom).not.toHaveBeenCalled();
       expect(client.joinRoom).not.toHaveBeenCalled();

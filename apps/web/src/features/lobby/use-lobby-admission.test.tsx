@@ -88,12 +88,12 @@ test('uses the owned actor to reject stale layer and duplicate create intents', 
     expect.anything(),
   );
   expect(onIntent).toHaveBeenCalledOnce();
-  expect(result.current.view).toBe('createFailed');
+  expect(result.current.screenState).toBe('createFailed');
   await act(async () => create());
   expect(createRoom).toHaveBeenCalledOnce();
   expect(onIntent).toHaveBeenCalledOnce();
   act(() => result.current.dismissNotice());
-  expect(result.current.view).toBe('home');
+  expect(result.current.screenState).toBe('home');
   await act(async () => create());
   expect(createRoom).toHaveBeenCalledTimes(2);
 });
@@ -103,7 +103,7 @@ test('keeps admission unavailable from profile and reads current normalized join
   act(() => result.current.openProfile());
   await act(async () => result.current.createRoom());
   expect(createRoom).not.toHaveBeenCalled();
-  expect(result.current.view).toBe('profile');
+  expect(result.current.screenState).toBe('profile');
   act(() => {
     result.current.closeProfile();
     result.current.openJoinRoom();

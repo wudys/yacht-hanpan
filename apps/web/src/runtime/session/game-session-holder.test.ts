@@ -1,5 +1,5 @@
 import type { GameSession, GameSessionSnapshot, RoomAuthority } from '@repo/game-client-sdk';
-import { parsePublicRoom, type PublicRoom } from '@repo/game-protocol/socket';
+import { parsePublicRoom, type PublicRoom } from '@repo/game-protocol/state';
 import { describe, expect, test, vi } from 'vitest';
 
 import { createGameSessionHolder } from '@/runtime/session/game-session-holder';

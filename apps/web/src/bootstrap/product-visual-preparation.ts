@@ -4,7 +4,7 @@ import {
   createRendererReadiness,
   type RendererReadiness,
 } from '@/runtime/dice/canvas/renderer-readiness';
-import type { DicePresentation } from '@/runtime/dice/dice-presentation';
+import type { DicePresentationController } from '@/runtime/dice/dice-presentation-controller';
 
 export interface ProductVisualPreparation {
   readonly renderer: RendererReadiness;
@@ -18,7 +18,7 @@ export function createProductVisualPreparation({
   onRuntimeFailure,
 }: Readonly<{
   activity: AbortSignal;
-  presentation: Pick<DicePresentation, 'prepare' | 'setResources'>;
+  presentation: Pick<DicePresentationController, 'prepare' | 'setResources'>;
   onRuntimeFailure: (error: unknown) => void;
 }>): ProductVisualPreparation {
   const renderer = createRendererReadiness(onRuntimeFailure);

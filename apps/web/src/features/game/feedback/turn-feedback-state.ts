@@ -1,5 +1,5 @@
 import type { GamePresentation, ScoreRecord } from '@repo/game-client-sdk/session';
-import type { GameSnapshot } from '@repo/game-protocol/socket';
+import type { GameSnapshot } from '@repo/game-protocol/state';
 import { type SeatIndex, summarizeScorecard, UPPER_CATEGORY_IDS } from '@repo/yacht-rules';
 
 import {
@@ -7,7 +7,7 @@ import {
   RECORD_FADE_OUT_MS,
   RECORD_SWAP_MS,
   TURN_CUE_MS,
-} from '@/features/game/view/feedback-timing';
+} from '@/features/game/ui/feedback-timing';
 
 export interface TurnFeedbackInput {
   readonly session: object | null;
@@ -19,8 +19,8 @@ export interface TurnFeedbackInput {
   readonly suspended: boolean;
   readonly surfaceExposed: boolean;
   /** Local score-layer eligibility also determines whether a final record confirms. */
-  readonly scoreVisible: boolean;
-  readonly boardVisible: boolean;
+  readonly localScoreVisible: boolean;
+  readonly localBoardVisible: boolean;
   readonly commandPresentationReady: boolean;
   readonly rollPending: boolean;
 }
@@ -84,8 +84,8 @@ export function advanceTurnFeedback(
       : { ...createTurnFeedbackState(), session: input.session };
   let { consumedVersion, record, pendingTurn, turnCue, tabRequest } = initial;
   const { game, presentation, now, serverNow } = input;
-  const scoreExposed = input.surfaceExposed && input.scoreVisible;
-  const boardExposed = input.surfaceExposed && input.boardVisible;
+  const scoreExposed = input.surfaceExposed && input.localScoreVisible;
+  const boardExposed = input.surfaceExposed && input.localBoardVisible;
   const turn = game?.match.status === 'playing' ? game.match.currentTurn : null;
   const sourceVersion =
     presentation?.kind === 'score'
@@ -123,7 +123,7 @@ export function advanceTurnFeedback(
         const final =
           game.match.status === 'finished' && game.match.result.reason === 'scoresCompleted';
         const fresh =
-          (final && input.scoreVisible) ||
+          (final && input.localScoreVisible) ||
           (turn !== null && serverNow !== null && serverNow < turn.startedAt);
         if (fresh) {
           record = {

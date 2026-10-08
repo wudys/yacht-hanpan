@@ -3,14 +3,14 @@ import { useLayoutEffect, useSyncExternalStore } from 'react';
 
 import {
   DICE_REVEAL_DURATION_MS,
-  type DicePresentationView,
-} from '@/runtime/dice/dice-presentation';
+  type DicePresentationRenderPort,
+} from '@/runtime/dice/dice-presentation-controller';
 import { GAME_ROLL_LAYOUT } from '@/runtime/dice/game-dice-layout';
 import { DiceRollScene, DiceSettledScene } from '@/runtime/dice/renderer';
 
 export function DicePresentationScene({
   presentation,
-}: Readonly<{ presentation: DicePresentationView }>) {
+}: Readonly<{ presentation: DicePresentationRenderPort }>) {
   const snapshot = useSyncExternalStore(presentation.subscribe, presentation.getSnapshot);
   const { invalidate, setFrameloop } = useThree();
   const animating =

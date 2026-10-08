@@ -1,12 +1,12 @@
 import type { CommandResult } from '@repo/game-client-sdk';
 import { safeParseRoomAuthority } from '@repo/game-protocol/http';
+import { parseCommandAck } from '@repo/game-protocol/socket';
 import {
   type GameSnapshot,
   type GameSnapshotInput,
-  parseCommandAck,
   parseGameSnapshot,
   parsePublicRoom,
-} from '@repo/game-protocol/socket';
+} from '@repo/game-protocol/state';
 import { GAME_PROTOCOL_VERSION } from '@repo/game-protocol/version';
 
 function parseAuthority(value: unknown) {

@@ -4,6 +4,7 @@ import type {
   GameSessionSnapshot,
   RoomAuthority,
 } from '@repo/game-client-sdk';
+import { type ResolvedRollArtifact } from '@repo/game-protocol/socket';
 import {
   type GameSnapshot,
   type GameSnapshotInput,
@@ -11,12 +12,14 @@ import {
   parsePresenceSnapshot,
   parseRoomView,
   type PublicRoom,
-  type ResolvedRollArtifact,
-} from '@repo/game-protocol/socket';
+} from '@repo/game-protocol/state';
 import { vi } from 'vitest';
 
 import type { BrowserAudioRuntime } from '@/runtime/audio/browser-audio-runtime';
-import type { DicePresentation, DicePresentationSnapshot } from '@/runtime/dice/dice-presentation';
+import type {
+  DicePresentationController,
+  DicePresentationSnapshot,
+} from '@/runtime/dice/dice-presentation-controller';
 import type {
   GameSessionHolder,
   GameSessionHolderSnapshot,
@@ -106,16 +109,13 @@ export function createPresentationFake() {
         listeners.delete(listener);
       };
     },
-    prepare: vi.fn<DicePresentation['prepare']>(async () => {}),
-    start: vi.fn<DicePresentation['start']>(),
-    setResources: vi.fn<DicePresentation['setResources']>(),
-    completePlayback: vi.fn<DicePresentation['completePlayback']>(),
-    dispose: vi.fn<DicePresentation['dispose']>(),
     publish(next: DicePresentationSnapshot) {
       snapshot = next;
       listeners.forEach((listener) => listener());
     },
-  } satisfies DicePresentation & { publish(next: DicePresentationSnapshot): void };
+  } satisfies Pick<DicePresentationController, 'getSnapshot' | 'subscribe'> & {
+    publish(next: DicePresentationSnapshot): void;
+  };
 }
 
 function gameRoomView(game: GameSnapshotInput | GameSnapshot, presentedRoom: PublicRoom) {

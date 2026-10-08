@@ -1,6 +1,6 @@
 import { expect, test, vi } from 'vitest';
 
-import { createCueRuntime, PRODUCT_CUE } from '@/runtime/audio/cue-runtime';
+import { AUDIO_CUE, createCueRuntime } from '@/runtime/audio/cue-runtime';
 import type { CueRecipeId } from '@/runtime/audio/render-cue-buffers';
 function harness() {
   const sources: {
@@ -51,9 +51,9 @@ test('prepares once on the shared context, selection and roll alias click, one s
   await Promise.all([runtime.prepare(h.context), runtime.prepare(h.context)]);
   expect(h.render).toHaveBeenCalledTimes(1);
   expect(h.setContext).toHaveBeenCalledWith(h.context);
-  runtime.play(PRODUCT_CUE.CLICK);
-  runtime.play(PRODUCT_CUE.ROLL_CLICK);
-  runtime.play(PRODUCT_CUE.SELECT);
+  runtime.play(AUDIO_CUE.CLICK);
+  runtime.play(AUDIO_CUE.ROLL_CLICK);
+  runtime.play(AUDIO_CUE.SELECT);
   expect(h.sources).toHaveLength(3);
   expect(h.sources[0]?.buffer).toBe(h.sources[1]?.buffer);
   expect(h.sources[2]?.buffer).toBe(h.sources[0]?.buffer);
@@ -68,23 +68,23 @@ test('OFF cancels every pending voice immediately and ON never replays it', asyn
   const h = harness(),
     runtime = createCueRuntime(h);
   await runtime.prepare(h.context);
-  runtime.play(PRODUCT_CUE.ACHIEVEMENT_YACHT);
+  runtime.play(AUDIO_CUE.ACHIEVEMENT_YACHT);
   runtime.setEnabled(false);
   expect(h.sources[0]?.stop).toHaveBeenCalledTimes(1);
-  runtime.play(PRODUCT_CUE.CLICK);
+  runtime.play(AUDIO_CUE.CLICK);
   runtime.setEnabled(true);
   expect(h.sources).toHaveLength(1);
-  runtime.play(PRODUCT_CUE.CLICK);
+  runtime.play(AUDIO_CUE.CLICK);
   expect(h.sources).toHaveLength(2);
 });
 test('suppression stops active and scheduled sources, drops every cue, and resumes without a queue', async () => {
   const h = harness(),
     runtime = createCueRuntime(h);
   await runtime.prepare(h.context);
-  runtime.play(PRODUCT_CUE.ACHIEVEMENT_YACHT);
+  runtime.play(AUDIO_CUE.ACHIEVEMENT_YACHT);
   expect(h.sources[0]?.start).toHaveBeenCalledWith(4.012);
   Object.defineProperty(h.context, 'currentTime', { value: 5 });
-  runtime.play(PRODUCT_CUE.CLICK);
+  runtime.play(AUDIO_CUE.CLICK);
   expect(h.sources[1]?.start).toHaveBeenCalledWith(5.012);
 
   runtime.setSuppressed(true);
@@ -93,17 +93,17 @@ test('suppression stops active and scheduled sources, drops every cue, and resum
     expect(source.stop).toHaveBeenCalledExactlyOnceWith();
     expect(source.disconnect).toHaveBeenCalledOnce();
   }
-  for (const cue of Object.values(PRODUCT_CUE)) runtime.play(cue);
+  for (const cue of Object.values(AUDIO_CUE)) runtime.play(cue);
   expect(h.sources).toHaveLength(2);
   runtime.setSuppressed(false);
   runtime.setSuppressed(false);
   expect(h.sources).toHaveLength(2);
-  for (const cue of Object.values(PRODUCT_CUE)) runtime.play(cue);
-  expect(h.sources).toHaveLength(2 + Object.values(PRODUCT_CUE).length);
+  for (const cue of Object.values(AUDIO_CUE)) runtime.play(cue);
+  expect(h.sources).toHaveLength(2 + Object.values(AUDIO_CUE).length);
   await runtime.dispose();
   runtime.setSuppressed(false);
-  runtime.play(PRODUCT_CUE.CLICK);
-  expect(h.sources).toHaveLength(2 + Object.values(PRODUCT_CUE).length);
+  runtime.play(AUDIO_CUE.CLICK);
+  expect(h.sources).toHaveLength(2 + Object.values(AUDIO_CUE).length);
 });
 test('temporary suppression does not overwrite the SFX preference', async () => {
   const h = harness(),
@@ -111,15 +111,15 @@ test('temporary suppression does not overwrite the SFX preference', async () => 
   await runtime.prepare(h.context);
   runtime.setSuppressed(true);
   expect(runtime.setEnabled(true)).toBe(true);
-  runtime.play(PRODUCT_CUE.SUCCESS);
+  runtime.play(AUDIO_CUE.SUCCESS);
   expect(h.sources).toHaveLength(0);
   runtime.setSuppressed(false);
-  runtime.play(PRODUCT_CUE.CLICK);
+  runtime.play(AUDIO_CUE.CLICK);
   expect(h.sources).toHaveLength(1);
   runtime.setSuppressed(true);
   runtime.setEnabled(false);
   runtime.setSuppressed(false);
-  runtime.play(PRODUCT_CUE.CLICK);
+  runtime.play(AUDIO_CUE.CLICK);
   expect(h.sources).toHaveLength(1);
   await runtime.dispose();
 });
@@ -127,9 +127,9 @@ test('warning cancellation leaves other cues alone', async () => {
   const h = harness(),
     runtime = createCueRuntime(h);
   await runtime.prepare(h.context);
-  runtime.play(PRODUCT_CUE.ACHIEVEMENT_YACHT);
-  runtime.play(PRODUCT_CUE.TIMER_WARNING);
-  runtime.stop(PRODUCT_CUE.TIMER_WARNING);
+  runtime.play(AUDIO_CUE.ACHIEVEMENT_YACHT);
+  runtime.play(AUDIO_CUE.TIMER_WARNING);
+  runtime.stop(AUDIO_CUE.TIMER_WARNING);
   expect(h.sources[0]?.stop).not.toHaveBeenCalled();
   expect(h.sources[1]?.stop).toHaveBeenCalledTimes(1);
 });
@@ -143,7 +143,7 @@ test('failed preparation retries without rewrapping context and rejects a differ
   expect(h.setContext).toHaveBeenCalledTimes(1);
   await expect(runtime.prepare({} as AudioContext)).rejects.toThrow('another AudioContext');
   await runtime.dispose();
-  runtime.play(PRODUCT_CUE.CLICK);
+  runtime.play(AUDIO_CUE.CLICK);
   expect(h.sources).toHaveLength(0);
 });
 
@@ -162,6 +162,6 @@ test('dispose waits for in-flight rendering and never publishes its late buffers
   const disposing = runtime.dispose();
   complete(new Map([['click', h.buffer]]));
   await Promise.all([preparation, disposing]);
-  runtime.play(PRODUCT_CUE.CLICK);
+  runtime.play(AUDIO_CUE.CLICK);
   expect(h.sources).toHaveLength(0);
 });

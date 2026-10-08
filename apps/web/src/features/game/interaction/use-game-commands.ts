@@ -5,8 +5,11 @@ import { PUBLIC_ERROR_CODE } from '@repo/game-protocol';
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
 import type { BrowserAudioRuntime } from '@/runtime/audio/browser-audio-runtime';
-import { PRODUCT_CUE, type ProductCue } from '@/runtime/audio/cue-runtime';
-import type { GameAudioFeedback } from '@/runtime/audio/game-audio-feedback';
+import { AUDIO_CUE } from '@/runtime/audio/cue-runtime';
+import type {
+  HoldReceiptObservation,
+  SessionAudioFeedback,
+} from '@/runtime/audio/session-audio-feedback';
 import type {
   GameSessionHolder,
   GameSessionHolderSnapshot,
@@ -23,14 +26,14 @@ type CommandRetryNotice = Readonly<{
   error: ClientError;
   kind: PendingCommandKind;
   retry: CommandRetry;
-  cue?: ProductCue;
+  cue?: HoldReceiptObservation['cue'];
   session: GameSession;
 }>;
 export function useGameCommands(
   sessions: GameSessionHolder,
   recovery: SessionRecovery,
-  audio: BrowserAudioRuntime,
-  feedback: Pick<GameAudioFeedback, 'observeCommand'>,
+  audio: Pick<BrowserAudioRuntime, 'playCue'>,
+  feedback: Pick<SessionAudioFeedback, 'observeHoldReceipt'>,
 ) {
   const telemetry = useTelemetry();
   const holderSnapshot = useSyncExternalStore(sessions.subscribe, sessions.getSnapshot);
@@ -76,7 +79,7 @@ export function useGameCommands(
     (
       kind: PendingCommandKind,
       command: (session: GameSession) => Promise<CommandResult> | null,
-      cue?: ProductCue,
+      cue?: HoldReceiptObservation['cue'],
     ): boolean => {
       const finishCommand = (): void => {
         pendingRef.current = false;
@@ -101,7 +104,7 @@ export function useGameCommands(
         return false;
       }
       if (cue)
-        feedback.observeCommand({
+        feedback.observeHoldReceipt({
           session,
           result: operation,
           cue,
@@ -170,11 +173,11 @@ export function useGameCommands(
       runCommand(notice.kind, () => notice.retry.run(), notice.cue) &&
       (notice.kind === 'roll' || notice.kind === 'forfeit')
     )
-      audio.playCue(PRODUCT_CUE.CLICK);
+      audio.playCue(AUDIO_CUE.CLICK);
   }
 
   function roll(): void {
-    if (runCommand('roll', (session) => session.rollDice())) audio.playCue(PRODUCT_CUE.ROLL_CLICK);
+    if (runCommand('roll', (session) => session.rollDice())) audio.playCue(AUDIO_CUE.ROLL_CLICK);
   }
 
   const setDieHeld = useCallback(
@@ -182,7 +185,7 @@ export function useGameCommands(
       runCommand(
         'hold',
         (session) => session.setDieHeld(slot, isHeld),
-        isHeld ? PRODUCT_CUE.HOLD : PRODUCT_CUE.RELEASE,
+        isHeld ? AUDIO_CUE.HOLD : AUDIO_CUE.RELEASE,
       );
     },
     [runCommand],
@@ -196,8 +199,7 @@ export function useGameCommands(
   );
 
   function forfeit(): void {
-    if (runCommand('forfeit', (session) => session.forfeitMatch()))
-      audio.playCue(PRODUCT_CUE.CLICK);
+    if (runCommand('forfeit', (session) => session.forfeitMatch())) audio.playCue(AUDIO_CUE.CLICK);
   }
 
   return {

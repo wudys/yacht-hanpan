@@ -8,7 +8,7 @@ import { ProductSurfaceBoundary } from '@/app/ProductSurfaceBoundary';
 import { translate } from '@/i18n';
 import type { BrowserAudioRuntime } from '@/runtime/audio/browser-audio-runtime';
 import type { RendererReadiness } from '@/runtime/dice/canvas/renderer-readiness';
-import type { DicePresentation } from '@/runtime/dice/dice-presentation';
+import type { DicePresentationRenderPort } from '@/runtime/dice/dice-presentation-controller';
 import { PersistentDiceCanvas } from '@/runtime/dice/PersistentDiceCanvas';
 import type { PreferencesStore } from '@/runtime/preferences/preferences-store';
 import type { SessionCredentialStore } from '@/runtime/session/session-credential-store';
@@ -37,7 +37,7 @@ export function AppShell({
   globalActor: ActorRefFrom<typeof appLifecycleMachine>;
   preferences: PreferencesStore;
   renderer: RendererReadiness;
-  presentation: DicePresentation;
+  presentation: DicePresentationRenderPort;
   sessionCredentialStore: SessionCredentialStore;
   routePath: string;
   onPlayableAreaRestored: () => void;

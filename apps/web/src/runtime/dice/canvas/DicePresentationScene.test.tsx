@@ -5,9 +5,9 @@ import { afterEach, expect, test, vi } from 'vitest';
 
 import { DicePresentationScene } from '@/runtime/dice/canvas/DicePresentationScene';
 import type {
+  DicePresentationRenderPort,
   DicePresentationSnapshot,
-  DicePresentationView,
-} from '@/runtime/dice/dice-presentation';
+} from '@/runtime/dice/dice-presentation-controller';
 import type { RollPlayback } from '@/runtime/dice/replay';
 import type { ProceduralDiceResources } from '@/runtime/dice/resources';
 
@@ -61,7 +61,7 @@ test('runs frames only for verified playback and renders all static states on de
       snapshot = next;
       listeners.forEach((listener) => listener());
     },
-  } satisfies DicePresentationView & { publish(next: DicePresentationSnapshot): void };
+  } satisfies DicePresentationRenderPort & { publish(next: DicePresentationSnapshot): void };
   render(<DicePresentationScene presentation={presentation} />);
   expect(setFrameloop).toHaveBeenLastCalledWith('demand');
   expect(invalidate).toHaveBeenCalledTimes(1);

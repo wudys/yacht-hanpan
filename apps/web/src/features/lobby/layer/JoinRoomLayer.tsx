@@ -32,7 +32,7 @@ export function JoinRoomLayer({
   onCodeFocus: () => void;
 }>) {
   return (
-    <LobbyLayer admission='join'>
+    <LobbyLayer kind='join'>
       <ScrollablePanel
         className='web-lobby-surface'
         title={translate(locale, 'lobby.joinRoom')}

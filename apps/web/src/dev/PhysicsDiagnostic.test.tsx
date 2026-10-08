@@ -10,7 +10,7 @@ import { createProductVisualResources } from '@/bootstrap/product-visual-resourc
 import { runPhysicsDiagnostic } from '@/dev/physics-diagnostic-simulation';
 import { PhysicsDiagnostic } from '@/dev/PhysicsDiagnostic';
 import type { RendererReadiness } from '@/runtime/dice/canvas/renderer-readiness';
-import type { DicePresentationView } from '@/runtime/dice/dice-presentation';
+import type { DicePresentationRenderPort } from '@/runtime/dice/dice-presentation-controller';
 import type { ProceduralDiceResources } from '@/runtime/dice/resources';
 
 vi.mock('@/dev/physics-diagnostic-simulation', () => ({ runPhysicsDiagnostic: vi.fn() }));
@@ -18,7 +18,7 @@ vi.mock('@/bootstrap/product-visual-resources', () => ({ createProductVisualReso
 
 interface CanvasPorts {
   renderer: RendererReadiness;
-  presentation: DicePresentationView;
+  presentation: DicePresentationRenderPort;
 }
 const canvases = new Map<RendererReadiness, CanvasPorts>();
 vi.mock('@/runtime/dice/canvas/DiceCanvasHost', () => ({

@@ -2,7 +2,7 @@ import type { ServerClock } from '@repo/game-client-sdk';
 import { useLayoutEffect } from 'react';
 
 import { useDeadlineSeconds } from '@/features/game/hud/game-deadline-hooks';
-import { GameTimer } from '@/features/game/view/board';
+import { GameTimer } from '@/features/game/ui/board';
 import { type Locale, translate } from '@/i18n';
 
 export function GameDeadlineDisplay({

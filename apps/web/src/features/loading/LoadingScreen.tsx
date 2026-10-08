@@ -5,7 +5,7 @@ import type { ActorRefFrom } from 'xstate';
 
 import { appLifecycleMachine } from '@/app/app-lifecycle-machine';
 import { APP_SCREEN_PATH } from '@/app/screen-paths';
-import { LoadingView } from '@/features/loading/view/LoadingView';
+import { LoadingView } from '@/features/loading/ui/LoadingView';
 import { type Locale, translate } from '@/i18n';
 import type { BrowserAudioRuntime } from '@/runtime/audio/browser-audio-runtime';
 import { useScreenTelemetry } from '@/runtime/telemetry/TelemetryContext';

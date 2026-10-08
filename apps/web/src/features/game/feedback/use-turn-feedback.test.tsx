@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { parseGameSnapshot } from '@repo/game-protocol/socket';
+import { parseGameSnapshot } from '@repo/game-protocol/state';
 import { act, renderHook } from '@testing-library/react';
 import { StrictMode } from 'react';
 import { afterEach, expect, test, vi } from 'vitest';
@@ -38,8 +38,8 @@ function finalOptions() {
     viewerSeat: 0 as const,
     suspended: false,
     surfaceExposed: true,
-    scoreVisible: true,
-    boardVisible: true,
+    localScoreVisible: true,
+    localBoardVisible: true,
     commandPresentationReady: false,
     rollPending: false,
   };

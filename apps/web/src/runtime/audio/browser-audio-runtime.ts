@@ -1,6 +1,6 @@
 import { requireGameAsset } from '@repo/game-assets';
 
-import { createCueRuntime, PRODUCT_CUE, type ProductCue } from '@/runtime/audio/cue-runtime';
+import { AUDIO_CUE, type AudioCue, createCueRuntime } from '@/runtime/audio/cue-runtime';
 
 const SCENE_AUDIO_URL = {
   lobby: requireGameAsset('audio.bgm.lobby').url,
@@ -22,7 +22,7 @@ export interface BrowserAudioRuntime {
   readonly supported: boolean;
   readonly activate: () => Promise<void>;
   readonly prepareCues: () => Promise<void>;
-  readonly playCue: (cue: ProductCue) => void;
+  readonly playCue: (cue: AudioCue) => void;
   /** The first request owns each shared scene prefetch until it settles. */
   readonly prefetchScenes: (
     scenes: readonly ProductAudioScene[],
@@ -32,7 +32,7 @@ export interface BrowserAudioRuntime {
   readonly setScene: (scene: ProductAudioScene | null) => Promise<void>;
   readonly setSfxEnabled: (enabled: boolean, feedback?: boolean) => void;
   readonly setSurfaceExposed: (exposed: boolean) => void;
-  readonly stopCue: (cue?: ProductCue) => void;
+  readonly stopCue: (cue?: AudioCue) => void;
   readonly dispose: () => Promise<void>;
 }
 
@@ -164,7 +164,7 @@ export function createBrowserAudioRuntime(
       if (!context) return Promise.reject(new Error('Audio runtime is not activated'));
       return cues.prepare(context);
     },
-    playCue(cue: ProductCue) {
+    playCue(cue: AudioCue) {
       cues.play(cue);
     },
     async prefetchScenes(scenes: readonly ProductAudioScene[], signal?: AbortSignal) {
@@ -213,7 +213,7 @@ export function createBrowserAudioRuntime(
     },
     setSfxEnabled(nextEnabled: boolean, feedback: boolean = false) {
       const changed = cues.setEnabled(nextEnabled);
-      if (changed && nextEnabled && feedback) cues.play(PRODUCT_CUE.SUCCESS);
+      if (changed && nextEnabled && feedback) cues.play(AUDIO_CUE.SUCCESS);
     },
     async dispose() {
       if (disposed) return;

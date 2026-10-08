@@ -34,27 +34,29 @@
   max-height: 100%;
 }
 
-.web-lobby-layer:has(.settings-view),
-.web-lobby-layer:has(.character-choice-grid) {
+.web-lobby-layer[data-lobby-layer='settings'],
+.web-lobby-layer[data-lobby-layer='profile'] {
   align-items: start;
   padding-top: 118px;
   padding-bottom: 18px;
 }
 
-.web-lobby-layer[data-admission] {
+.web-lobby-layer[data-lobby-layer='join'],
+.web-lobby-layer[data-lobby-layer='waiting'] {
   align-items: start;
   padding: 142px 30px 20px;
 }
 
-.web-lobby-layer[data-admission] > .web-lobby-surface {
+.web-lobby-layer[data-lobby-layer='join'] > .web-lobby-surface,
+.web-lobby-layer[data-lobby-layer='waiting'] > .web-lobby-surface {
   width: 280px;
 }
 
-.web-lobby-layer[data-admission='join'] > .web-lobby-surface {
+.web-lobby-layer[data-lobby-layer='join'] > .web-lobby-surface {
   height: auto;
 }
 
-.web-lobby-layer[data-admission='waiting'] > .web-lobby-surface {
+.web-lobby-layer[data-lobby-layer='waiting'] > .web-lobby-surface {
   height: auto;
 }
 
@@ -373,7 +375,7 @@
   transition-duration: 0s;
 }
 
-.web-lobby-layer[role='alertdialog'] {
+.web-lobby-layer[data-lobby-layer='notice'] {
   padding: 24px;
 }
 

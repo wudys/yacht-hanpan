@@ -1,7 +1,7 @@
 import { createGameClient, type RawGameSocket } from '@repo/game-client-sdk';
 import { CLIENT_ERROR_CODE } from '@repo/game-client-sdk/errors';
 import { PUBLIC_ERROR_CODE } from '@repo/game-protocol';
-import { parseGameSnapshot } from '@repo/game-protocol/socket';
+import { parseGameSnapshot } from '@repo/game-protocol/state';
 import { GAME_PROTOCOL_VERSION } from '@repo/game-protocol/version';
 import { afterEach, expect, test, vi } from 'vitest';
 

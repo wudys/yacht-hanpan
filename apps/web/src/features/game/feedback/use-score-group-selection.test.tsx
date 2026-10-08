@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { parseGameSnapshot } from '@repo/game-protocol/socket';
+import { parseGameSnapshot } from '@repo/game-protocol/state';
 import { act, renderHook } from '@testing-library/react';
 import { StrictMode } from 'react';
 import { expect, test } from 'vitest';

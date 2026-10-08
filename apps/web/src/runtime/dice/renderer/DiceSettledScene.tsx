@@ -11,8 +11,8 @@ import {
   type SettledDie,
   type SettledDieLayout,
 } from '@/runtime/dice/game-dice-layout';
+import { DiceStage } from '@/runtime/dice/renderer/parts/DiceStage';
 import { TOP_FACE_QUATERNION } from '@/runtime/dice/renderer/parts/die-display-pose';
-import { RollStage } from '@/runtime/dice/renderer/parts/RollStage';
 import { projectPhysicalDieToSettled } from '@/runtime/dice/renderer/parts/settled-dice-transition';
 import type { ProceduralDiceResources } from '@/runtime/dice/resources/procedural-resources';
 
@@ -33,7 +33,7 @@ export function DiceSettledScene({ dice, resources, transition }: DiceSettledSce
   const layout = layoutSettledDice(dice, size);
   return (
     <group name='dice-settled-scene'>
-      <RollStage rollArea={SETTLED_STAGE_AREA} layout={SETTLED_STAGE_LAYOUT}>
+      <DiceStage rollArea={SETTLED_STAGE_AREA} layout={SETTLED_STAGE_LAYOUT}>
         {layout.map((die) => (
           <SettledDieMesh
             key={`${die.slot}:${die.value}`}
@@ -42,7 +42,7 @@ export function DiceSettledScene({ dice, resources, transition }: DiceSettledSce
             transition={transition}
           />
         ))}
-      </RollStage>
+      </DiceStage>
     </group>
   );
 }

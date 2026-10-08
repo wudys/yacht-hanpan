@@ -1,6 +1,6 @@
 import type { DieSlot } from '@repo/yacht-rules';
 
-import type { DiceViewModel } from '@/features/game/view/game-view-model';
+import type { DiceViewModel } from '@/features/game/ui/game-view-model';
 import { DICE_CANVAS_VIEWPORT_SIZE, layoutSettledDice } from '@/runtime/dice/game-dice-layout';
 
 export function SettledDiceControls({

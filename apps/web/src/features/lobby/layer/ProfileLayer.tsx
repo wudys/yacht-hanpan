@@ -2,7 +2,7 @@ import type { CharacterId } from '@repo/game-assets/characters';
 
 import { LobbyLayer } from '@/features/lobby/layer/LobbyLayer';
 import { characterChoices, LOBBY_ICONS } from '@/features/lobby/lobby-assets';
-import { CharacterChoiceGrid } from '@/features/lobby/view/CharacterChoiceGrid';
+import { CharacterChoiceGrid } from '@/features/lobby/ui/CharacterChoiceGrid';
 import { type Locale, translate } from '@/i18n';
 import { IconButton } from '@/ui/button';
 import { ScrollablePanel } from '@/ui/panel';
@@ -25,7 +25,7 @@ export function ProfileLayer({
   onClose: () => void;
 }>) {
   return (
-    <LobbyLayer>
+    <LobbyLayer kind='profile'>
       <ScrollablePanel
         className='web-lobby-surface'
         title={translate(locale, 'profile.title')}

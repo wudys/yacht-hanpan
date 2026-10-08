@@ -1,5 +1,5 @@
 import type { GamePresentation } from '@repo/game-client-sdk/session';
-import { parseGameSnapshot } from '@repo/game-protocol/socket';
+import { parseGameSnapshot } from '@repo/game-protocol/state';
 import { expect, test } from 'vitest';
 
 import {
@@ -53,8 +53,8 @@ function input(overrides: Partial<TurnFeedbackInput> = {}): TurnFeedbackInput {
     serverNow: 300,
     suspended: false,
     surfaceExposed: true,
-    scoreVisible: true,
-    boardVisible: true,
+    localScoreVisible: true,
+    localBoardVisible: true,
     commandPresentationReady: true,
     rollPending: false,
     ...overrides,
@@ -145,7 +145,7 @@ test('opening the scoreboard discards visual effects without extending the local
   const active = advanceTurnFeedback(createTurnFeedbackState(), input());
   const obscured = advanceTurnFeedback(
     active,
-    input({ now: 500, scoreVisible: false, boardVisible: false }),
+    input({ now: 500, localScoreVisible: false, localBoardVisible: false }),
   );
   expect(obscured.record?.visible).toBe(false);
   const reopened = advanceTurnFeedback(obscured, input({ now: 700 }));

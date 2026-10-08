@@ -28,7 +28,7 @@ import {
 import { GameRecoveryFrame } from '@/features/game/GameRecoveryFrame';
 import { isTurnReady, useDeadlineReadiness } from '@/features/game/hud/game-deadline-hooks';
 import { GameDeadlineDisplay } from '@/features/game/hud/GameDeadlineDisplay';
-import { GamePresenceNotice, GamePresenceProvider } from '@/features/game/hud/GamePresenceNotice';
+import { GamePresenceProvider, GameStatusNotice } from '@/features/game/hud/GameStatusNotice';
 import {
   deriveGameInputReadiness,
   deriveGameInputScopes,
@@ -39,22 +39,22 @@ import {
 import { useDelayedRollSpinner } from '@/features/game/interaction/use-delayed-roll-spinner';
 import { useGameCommands } from '@/features/game/interaction/use-game-commands';
 import { SettledDiceControls } from '@/features/game/SettledDiceControls';
-import { useGameResultLifecycle } from '@/features/game/use-game-result-lifecycle';
 import {
   BonusInfoPopover,
   deriveGameViewModel,
   GameBoard,
   GameResultView,
   ScoreTable,
-} from '@/features/game/view';
-import { AchievementSequence } from '@/features/game/view/AchievementSequence';
-import { GameRollSpinner } from '@/features/game/view/board/GameRollSpinner';
-import { SettingsLayer } from '@/features/settings/SettingsLayer';
+} from '@/features/game/ui';
+import { AchievementSequence } from '@/features/game/ui/AchievementSequence';
+import { GameRollSpinner } from '@/features/game/ui/board/GameRollSpinner';
+import { useGameResultLifecycle } from '@/features/game/use-game-result-lifecycle';
+import { SettingsPanel } from '@/features/settings/SettingsPanel';
 import { type Locale, translate } from '@/i18n';
 import type { BrowserAudioRuntime } from '@/runtime/audio/browser-audio-runtime';
-import { PRODUCT_CUE } from '@/runtime/audio/cue-runtime';
-import type { GameAudioFeedback } from '@/runtime/audio/game-audio-feedback';
-import type { DicePresentation } from '@/runtime/dice/dice-presentation';
+import { AUDIO_CUE } from '@/runtime/audio/cue-runtime';
+import type { SessionAudioFeedback } from '@/runtime/audio/session-audio-feedback';
+import type { DicePresentationController } from '@/runtime/dice/dice-presentation-controller';
 import { gamePhysicsAreaBounds } from '@/runtime/dice/game-dice-layout';
 import type { PreferencesStore } from '@/runtime/preferences/preferences-store';
 import type { GameSessionHolder } from '@/runtime/session/game-session-holder';
@@ -66,14 +66,14 @@ import { ScrollablePanel } from '@/ui/panel';
 
 type GameScreenProps = Readonly<{
   audio: BrowserAudioRuntime;
-  feedback: Pick<GameAudioFeedback, 'observeCommand'>;
+  feedback: Pick<SessionAudioFeedback, 'observeHoldReceipt'>;
   locale: Locale;
   clock: Pick<ServerClock, 'now'>;
   sessions: GameSessionHolder;
   recovery: SessionRecovery;
   sessionCredentialStore: SessionCredentialStore;
   preferences: PreferencesStore;
-  presentation: DicePresentation;
+  presentation: Pick<DicePresentationController, 'getSnapshot' | 'subscribe'>;
   surfaceExposed: boolean;
 }>;
 
@@ -179,7 +179,7 @@ export default function GameScreen({
     sessions,
     sessionCredentialStore,
     holderSnapshot,
-    () => audio.playCue(PRODUCT_CUE.CLICK),
+    () => audio.playCue(AUDIO_CUE.CLICK),
     pendingCommandKind !== null,
   );
 
@@ -217,7 +217,7 @@ export default function GameScreen({
     [phase, connected, hasPendingCommand, recoveryBlocked],
   );
   const onRecordStart = useCallback(() => {
-    if (preferences.getSnapshot().sfxEnabled) audio.playCue(PRODUCT_CUE.SCORE);
+    if (preferences.getSnapshot().sfxEnabled) audio.playCue(AUDIO_CUE.SCORE);
   }, [audio, preferences]);
   const turnFeedback = useTurnFeedback(
     {
@@ -227,8 +227,8 @@ export default function GameScreen({
       viewerSeat: viewerSeatIndex ?? null,
       suspended: recoveryActive || (!connected && !finished),
       surfaceExposed,
-      scoreVisible: (layer === 'board' || layer === 'bonus') && !hasCommandNotice,
-      boardVisible: layer === 'board' && !hasCommandNotice && !recordedCategoryNoticeOpen,
+      localScoreVisible: (layer === 'board' || layer === 'bonus') && !hasCommandNotice,
+      localBoardVisible: layer === 'board' && !hasCommandNotice && !recordedCategoryNoticeOpen,
       commandPresentationReady: readiness.requestReady && readiness.presentationReady,
       rollPending,
     },
@@ -343,25 +343,25 @@ export default function GameScreen({
     (group: 'upper' | 'lower') => {
       if (inputScopes.canNavigateBoardLayers) {
         selectGroup(group);
-        if (group !== activeGroup) audio.playCue(PRODUCT_CUE.SELECT);
+        if (group !== activeGroup) audio.playCue(AUDIO_CUE.SELECT);
       }
     },
     [activeGroup, audio, inputScopes.canNavigateBoardLayers, selectGroup],
   );
   const onOpenScoreboard = useCallback(() => {
     if (inputScopes.canNavigateBoardLayers) {
-      audio.playCue(PRODUCT_CUE.CLICK);
+      audio.playCue(AUDIO_CUE.CLICK);
       setLayer('scoreboard');
     }
   }, [audio, inputScopes.canNavigateBoardLayers]);
   const onOpenBonus = useCallback(() => {
     if (inputScopes.canToggleBonus) {
-      audio.playCue(PRODUCT_CUE.CLICK);
+      audio.playCue(AUDIO_CUE.CLICK);
       setLayer(layer === 'bonus' ? 'board' : 'bonus');
     }
   }, [audio, inputScopes.canToggleBonus, layer]);
 
-  const click = () => audio.playCue(PRODUCT_CUE.CLICK);
+  const click = () => audio.playCue(AUDIO_CUE.CLICK);
   const closeLayer = () => {
     if (inputScopes.recoveryBlocked) return;
     click();
@@ -384,7 +384,7 @@ export default function GameScreen({
         locale={locale}
         presentation={recoveryPresentation}
         onDismissRateLimit={() => {
-          audio.playCue(PRODUCT_CUE.CLICK);
+          audio.playCue(AUDIO_CUE.CLICK);
           dismissRateLimit();
         }}
         onPermanentFailure={returnToLobby}
@@ -540,10 +540,9 @@ export default function GameScreen({
               onReadinessSample={recheckDeadline}
             />
           }
-          presenceContent={<GamePresenceNotice />}
+          presenceContent={<GameStatusNotice />}
           labels={{
             ...boardPresentation.labels,
-            timer: '',
             total: `${translate(locale, 'game.total')} ${summaryScore.total}`,
             bonus: translate(locale, 'game.bonus'),
             bonusStatus: translate(
@@ -593,7 +592,7 @@ export default function GameScreen({
       ) : null}
       {layer === 'settings' ? (
         <div className='web-settings-overlay'>
-          <SettingsLayer
+          <SettingsPanel
             audio={audio}
             preferences={preferences}
             onClose={closeLayer}

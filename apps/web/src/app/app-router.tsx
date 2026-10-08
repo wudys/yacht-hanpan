@@ -19,9 +19,9 @@ import { APP_SCREEN_PATH } from '@/app/screen-paths';
 import { EntryScreen } from '@/features/entry/EntryScreen';
 import { LoadingScreen } from '@/features/loading/LoadingScreen';
 import type { BrowserAudioRuntime } from '@/runtime/audio/browser-audio-runtime';
-import type { GameAudioFeedback } from '@/runtime/audio/game-audio-feedback';
+import type { SessionAudioFeedback } from '@/runtime/audio/session-audio-feedback';
 import type { RendererReadiness } from '@/runtime/dice/canvas/renderer-readiness';
-import type { DicePresentation } from '@/runtime/dice/dice-presentation';
+import type { DicePresentationRenderPort } from '@/runtime/dice/dice-presentation-controller';
 import type { PreferencesStore } from '@/runtime/preferences/preferences-store';
 import type { ProfileSelectionStore } from '@/runtime/profile/profile-selection-store';
 import type { RoomAccess } from '@/runtime/room-access/room-access';
@@ -36,7 +36,7 @@ export interface AppRouterContext {
   readonly activity: AbortSignal;
   readonly access: RoomAccess;
   readonly audio: BrowserAudioRuntime;
-  readonly feedback: Pick<GameAudioFeedback, 'observeCommand'>;
+  readonly feedback: Pick<SessionAudioFeedback, 'observeHoldReceipt'>;
   readonly preferences: PreferencesStore;
   readonly profile: ProfileSelectionStore;
   readonly globalActor: ActorRefFrom<typeof appLifecycleMachine>;
@@ -45,7 +45,7 @@ export interface AppRouterContext {
   readonly sessions: GameSessionHolder;
   readonly sessionCredentialStore: SessionCredentialStore;
   readonly recovery: SessionRecovery;
-  readonly presentation: DicePresentation;
+  readonly presentation: DicePresentationRenderPort;
   readonly setSurfaceExposed: (exposed: boolean) => void;
 }
 

@@ -1,7 +1,7 @@
 import type { ClientError } from '@repo/game-client-sdk/errors';
 
-import type { GameViewModel } from '@/features/game/view/game-view-model';
-import type { DicePresentationSnapshot } from '@/runtime/dice/dice-presentation';
+import type { GameViewModel } from '@/features/game/ui/game-view-model';
+import type { DicePresentationSnapshot } from '@/runtime/dice/dice-presentation-controller';
 import type { SessionRecoverySnapshot } from '@/runtime/session/session-recovery';
 
 export type GameLayer = 'board' | 'bonus' | 'scoreboard' | 'settings';

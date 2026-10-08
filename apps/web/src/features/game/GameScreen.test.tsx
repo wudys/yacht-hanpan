@@ -3,14 +3,14 @@
 
 import type { ClientError } from '@repo/game-client-sdk/errors';
 import type { CommandResult } from '@repo/game-client-sdk/session';
+import { type ResolvedRollArtifact } from '@repo/game-protocol/socket';
 import {
   CATEGORY_ID,
   type GameSnapshot,
   type GameSnapshotInput,
   parsePresenceSnapshot,
   type PublicRoom,
-  type ResolvedRollArtifact,
-} from '@repo/game-protocol/socket';
+} from '@repo/game-protocol/state';
 import { createCompatibilityContract } from '@repo/game-protocol/version';
 import { CATEGORY_IDS } from '@repo/yacht-rules';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
@@ -19,9 +19,9 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 
 import GameScreen from '@/features/game/GameScreen';
 import { LOCALE, translate } from '@/i18n';
-import { PRODUCT_CUE } from '@/runtime/audio/cue-runtime';
-import { startGameAudioFeedback } from '@/runtime/audio/game-audio-feedback';
-import { createDicePresentation } from '@/runtime/dice/dice-presentation';
+import { AUDIO_CUE } from '@/runtime/audio/cue-runtime';
+import { startSessionAudioFeedback } from '@/runtime/audio/session-audio-feedback';
+import { createDicePresentationController } from '@/runtime/dice/dice-presentation-controller';
 import type { RollPlayback } from '@/runtime/dice/replay';
 import { createPreferencesStore } from '@/runtime/preferences/preferences-store';
 import {
@@ -137,7 +137,7 @@ function createHarness(
     },
   };
   harness.preferences.setLocale(LOCALE.EN);
-  const feedback = startGameAudioFeedback(harness);
+  const feedback = startSessionAudioFeedback(harness);
   feedbackDisposers.add(feedback.dispose);
   return { ...harness, feedback };
 }
@@ -437,7 +437,7 @@ test('retries an eligible failure only through its captured SDK capability', asy
   vi.mocked(harness.audio.playCue).mockClear();
   fireEvent.click(firstRetryButton);
   fireEvent.click(firstRetryButton);
-  expect(harness.audio.playCue).toHaveBeenCalledExactlyOnceWith(PRODUCT_CUE.CLICK);
+  expect(harness.audio.playCue).toHaveBeenCalledExactlyOnceWith(AUDIO_CUE.CLICK);
   expect(firstRetry).toHaveBeenCalledOnce();
   expect(harness.session.rollDice).toHaveBeenCalledOnce();
 
@@ -585,7 +585,7 @@ test('projects authoritative dice and sends guarded roll, hold, and score comman
   fireEvent.click(rollButton);
   expect(harness.session.rollDice).toHaveBeenCalledOnce();
   expect(harness.audio.playCue).toHaveBeenCalledOnce();
-  expect(harness.audio.playCue).toHaveBeenCalledWith(PRODUCT_CUE.ROLL_CLICK);
+  expect(harness.audio.playCue).toHaveBeenCalledWith(AUDIO_CUE.ROLL_CLICK);
 
   fireEvent.click(screen.getByRole('button', { name: 'Dice area 1: 2' }));
   expect(harness.session.setDieHeld).not.toHaveBeenCalled();
@@ -674,7 +674,7 @@ test.each([false, true])(
       },
     };
     const harness = createHarness(restored ? allHeld : playingGame);
-    const presentation = createDicePresentation({
+    const presentation = createDicePresentationController({
       sessions: harness.sessions,
       playCue: vi.fn(),
       requestSynchronization: vi.fn(),
@@ -980,7 +980,7 @@ test('warns on own-turn seconds while the screen stays mounted and excludes oppo
     harness.sessions.publish(playingGame);
   });
   expect(harness.audio.playCue).toHaveBeenCalledOnce();
-  expect(harness.audio.playCue).toHaveBeenLastCalledWith(PRODUCT_CUE.TIMER_WARNING);
+  expect(harness.audio.playCue).toHaveBeenLastCalledWith(AUDIO_CUE.TIMER_WARNING);
   expect(screen.getByText('5s').getAttribute('data-timer-warning')).toBe('true');
 
   act(() => {
@@ -1013,7 +1013,7 @@ test('warns on own-turn seconds while the screen stays mounted and excludes oppo
     } satisfies GameSnapshotInput);
   });
   expect(harness.audio.playCue).toHaveBeenCalledTimes(2);
-  expect(harness.audio.playCue).toHaveBeenLastCalledWith(PRODUCT_CUE.TIMER_WARNING);
+  expect(harness.audio.playCue).toHaveBeenLastCalledWith(AUDIO_CUE.TIMER_WARNING);
   harness.feedback.dispose();
 });
 
@@ -1610,7 +1610,7 @@ test.each([
   async ({ cover, openBefore, returnAt }) => {
     vi.useFakeTimers();
     const harness = createHarness();
-    const presentation = createDicePresentation({
+    const presentation = createDicePresentationController({
       sessions: harness.sessions,
       playCue: harness.audio.playCue,
       requestSynchronization: vi.fn(),
@@ -1752,7 +1752,7 @@ test.each([
       fireEvent.click(screen.getByRole('button', { name: 'Close' }));
       expect(screen.getByRole('status')).toBe(next);
       expect(
-        harness.audio.playCue.mock.calls.filter(([cue]) => cue === PRODUCT_CUE.ACHIEVEMENT_YACHT),
+        harness.audio.playCue.mock.calls.filter(([cue]) => cue === AUDIO_CUE.ACHIEVEMENT_YACHT),
       ).toHaveLength(2);
     } finally {
       cleanup();

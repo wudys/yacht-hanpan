@@ -5,8 +5,8 @@ import { act, cleanup, renderHook } from '@testing-library/react';
 import { afterEach, expect, test, vi } from 'vitest';
 
 import { useGameCommands } from '@/features/game/interaction/use-game-commands';
-import { PRODUCT_CUE } from '@/runtime/audio/cue-runtime';
-import { startGameAudioFeedback } from '@/runtime/audio/game-audio-feedback';
+import { AUDIO_CUE } from '@/runtime/audio/cue-runtime';
+import { startSessionAudioFeedback } from '@/runtime/audio/session-audio-feedback';
 import { createPreferencesStore } from '@/runtime/preferences/preferences-store';
 import { observeSessionTelemetry } from '@/runtime/telemetry/session-telemetry-observer';
 import { inactiveTelemetry } from '@/runtime/telemetry/telemetry';
@@ -35,7 +35,7 @@ function setup() {
   const audio = createAudioMock();
   const recovery = createRecoveryFake();
   const preferences = createPreferencesStore({ getItem: () => null, setItem: () => {} });
-  const feedback = startGameAudioFeedback({
+  const feedback = startSessionAudioFeedback({
     audio,
     sessions: harness.sessions,
     recovery,
@@ -91,12 +91,7 @@ test('reports a contract failure once when the SDK publishes the command error f
     recovery: harness.recovery,
     reentry: {
       getSnapshot: () => ({ status: 'idle' }),
-      subscribe: () => () => {},
       subscribeAttempt: () => () => {},
-      check() {},
-      dispose() {},
-      completeHandoff() {},
-      confirmPermanentFailure() {},
     },
   });
   feedbackDisposers.add(stop);
@@ -152,7 +147,7 @@ test('submits an intent retained across renders to the current session until its
   expect(harness.session.rollDice).not.toHaveBeenCalled();
   expect(replacement.rollDice).toHaveBeenCalledOnce();
   expect(harness.result.current.pendingCommandKind).toBe('roll');
-  expect(harness.audio.playCue).toHaveBeenCalledWith(PRODUCT_CUE.ROLL_CLICK);
+  expect(harness.audio.playCue).toHaveBeenCalledWith(AUDIO_CUE.ROLL_CLICK);
   await act(async () => {
     harness.sessions.publish({ ...playingGame, stateVersion: 8 });
     response.resolve(commandSuccess());
@@ -284,7 +279,7 @@ test.each(['roll', 'hold'] as const)(
   async (kind) => {
     const harness = setup();
     const run = vi.fn(() => null);
-    const observe = vi.spyOn(harness.feedback, 'observeCommand');
+    const observe = vi.spyOn(harness.feedback, 'observeHoldReceipt');
     const command = kind === 'roll' ? harness.session.rollDice : harness.session.setDieHeld;
     command.mockResolvedValueOnce({
       ok: false,

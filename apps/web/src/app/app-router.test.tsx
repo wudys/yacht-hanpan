@@ -20,7 +20,7 @@ import { LOCALE, translate } from '@/i18n';
 import type { BrowserAudioRuntime } from '@/runtime/audio/browser-audio-runtime';
 import DiceCanvasHost from '@/runtime/dice/canvas/DiceCanvasHost';
 import { createRendererReadiness as createReadiness } from '@/runtime/dice/canvas/renderer-readiness';
-import { createDicePresentation } from '@/runtime/dice/dice-presentation';
+import { createDicePresentationController } from '@/runtime/dice/dice-presentation-controller';
 import {
   createPreferencesStore,
   type PreferencesStorage,
@@ -219,7 +219,7 @@ function renderApp(
     activity,
     access,
     audio,
-    feedback: { observeCommand: () => {} },
+    feedback: { observeHoldReceipt: () => {} },
     globalActor,
     profile,
     preferences,
@@ -228,7 +228,7 @@ function renderApp(
     sessions,
     sessionCredentialStore,
     recovery,
-    presentation: createDicePresentation({
+    presentation: createDicePresentationController({
       sessions,
       requestSynchronization: recovery.requestSynchronization,
       requireRefreshAfterSynchronization: recovery.requireRefreshAfterSynchronization,

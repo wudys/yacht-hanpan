@@ -350,7 +350,7 @@ for (const locale of ['ko', 'en'] as const) {
     await page.setViewportSize({ width: 320, height: 568 });
     await enterLobby(page, locale);
     await page.locator('[data-room-action="create"] button').click();
-    const layer = page.locator('[data-admission="waiting"]');
+    const layer = page.locator('[data-lobby-layer="waiting"]');
     await expect(layer.locator('[data-room-code]')).toBeVisible();
     await expect(layer.locator('.web-lobby-countdown')).toHaveText(/^\d{2}:\d{2}$/u);
     await expect(layer.locator('.dice-loader__die').first()).toBeVisible();

@@ -53,17 +53,17 @@ export function isInlineJoinError(error: ClientError): boolean {
     PUBLIC_ERROR_CODE.RATE_LIMITED,
   ].some((code) => isServerError(error, code));
 }
-export function createFailureDisposition(error: ClientError): 'retry' | 'refresh' | 'notice' {
+export function createFailureDisposition(error: ClientError): 'dismiss' | 'refresh' | 'notice' {
   if (error.kind === 'protocol') return 'refresh';
   if (error.kind === 'transport')
-    return error.code === CLIENT_ERROR_CODE.NETWORK_UNAVAILABLE ? 'retry' : 'refresh';
+    return error.code === CLIENT_ERROR_CODE.NETWORK_UNAVAILABLE ? 'dismiss' : 'refresh';
   if (error.error.code === PUBLIC_ERROR_CODE.PROTOCOL_MISMATCH) return 'refresh';
   if (
     [PUBLIC_ERROR_CODE.INTERNAL_ERROR, PUBLIC_ERROR_CODE.ROOM_CODE_EXHAUSTED].some(
       (code) => code === error.error.code,
     )
   )
-    return 'retry';
+    return 'dismiss';
   return 'notice';
 }
 export function readinessFailureDisposition(result: ReadinessFailure): 'retry' | 'refresh' {

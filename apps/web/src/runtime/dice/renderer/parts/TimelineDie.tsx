@@ -3,7 +3,7 @@ import { DIE_GEOMETRY, type DieTimeline } from '@repo/dice-simulation/contract';
 import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
 
-import { DieMesh } from '@/runtime/dice/renderer/parts/DieVisual';
+import { DieMesh } from '@/runtime/dice/renderer/parts/DieMesh';
 import { useRollPlaybackClock } from '@/runtime/dice/renderer/parts/playback-clock';
 import { createDieFrameSampler } from '@/runtime/dice/renderer/parts/timeline-sampling';
 import type { ProceduralDiceResources } from '@/runtime/dice/resources/procedural-resources';

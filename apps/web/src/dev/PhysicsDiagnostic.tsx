@@ -16,7 +16,7 @@ import {
 } from '@/dev/physics-diagnostic-simulation';
 import DiceCanvasHost from '@/runtime/dice/canvas/DiceCanvasHost';
 import { createRendererReadiness } from '@/runtime/dice/canvas/renderer-readiness';
-import type { DicePresentationView } from '@/runtime/dice/dice-presentation';
+import type { DicePresentationRenderPort } from '@/runtime/dice/dice-presentation-controller';
 import type { ProceduralDiceResources } from '@/runtime/dice/resources';
 import { GameFrame } from '@/ui/layout';
 
@@ -215,7 +215,7 @@ function DiagnosticCanvas({
   );
   const renderer = useMemo(() => createRendererReadiness(reportFailure), [reportFailure]);
   const rendererState = useSyncExternalStore(renderer.subscribe, renderer.getSnapshot);
-  const presentation = useMemo<DicePresentationView>(() => {
+  const presentation = useMemo<DicePresentationRenderPort>(() => {
     const hidden = { phase: 'hidden' as const, resources };
     const snapshot = {
       phase: 'rolling' as const,

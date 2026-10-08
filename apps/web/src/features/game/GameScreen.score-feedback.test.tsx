@@ -2,13 +2,13 @@
 /* eslint-disable testing-library/no-manual-cleanup -- external stores and timers are disposed before the next test. */
 
 import { createGameSession, type RawGameSocket } from '@repo/game-client-sdk/session';
+import { parseResolvedRollArtifact } from '@repo/game-protocol/socket';
 import {
   CATEGORY_ID,
   type GameSnapshotInput,
-  parseResolvedRollArtifact,
   parseRoomView,
   type RoomView,
-} from '@repo/game-protocol/socket';
+} from '@repo/game-protocol/state';
 import { createCompatibilityContract, GAME_PROTOCOL_VERSION } from '@repo/game-protocol/version';
 import { type CategoryId, type Dice, scoreCategory } from '@repo/yacht-rules';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
@@ -17,8 +17,8 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 
 import GameScreen from '@/features/game/GameScreen';
 import { LOCALE, translate } from '@/i18n';
-import { PRODUCT_CUE } from '@/runtime/audio/cue-runtime';
-import { startGameAudioFeedback } from '@/runtime/audio/game-audio-feedback';
+import { AUDIO_CUE } from '@/runtime/audio/cue-runtime';
+import { startSessionAudioFeedback } from '@/runtime/audio/session-audio-feedback';
 import { createPreferencesStore } from '@/runtime/preferences/preferences-store';
 import { createGameSessionHolder } from '@/runtime/session/game-session-holder';
 import {
@@ -200,7 +200,7 @@ async function createHarness(
   const preferences = createPreferencesStore({ getItem: () => null, setItem: () => {} });
   preferences.setLocale(LOCALE.EN);
   const clock = { now: () => 10_000 + performance.now() };
-  const feedback = startGameAudioFeedback({ audio, sessions, recovery, preferences, clock });
+  const feedback = startSessionAudioFeedback({ audio, sessions, recovery, preferences, clock });
   disposers.add(feedback.dispose);
   disposers.add(sessions.dispose);
   const harness = {
@@ -273,7 +273,7 @@ test.each([0, 1] as const)(
         (_text, element) => element?.getAttribute('data-yacht-ring') === 'recorded',
       ),
     ).toBeNull();
-    expect(harness.audio.playCue).toHaveBeenCalledExactlyOnceWith(PRODUCT_CUE.SCORE);
+    expect(harness.audio.playCue).toHaveBeenCalledExactlyOnceWith(AUDIO_CUE.SCORE);
   },
 );
 
@@ -300,7 +300,7 @@ test.each([0, 1] as const)(
     expect(screen.getByRole('button', { name: /Twos/u }).getAttribute('data-value-state')).toBe(
       'recorded',
     );
-    expect(harness.audio.playCue).toHaveBeenCalledExactlyOnceWith(PRODUCT_CUE.SCORE);
+    expect(harness.audio.playCue).toHaveBeenCalledExactlyOnceWith(AUDIO_CUE.SCORE);
     expectScorePreviewsHidden();
     advance(899);
     expect(summary().getAttribute('data-player-summary')).toBe(owner);
@@ -361,7 +361,7 @@ test('synchronizing newer settled dice cancels confirmation and restores the cur
   expect(screen.getByRole('button', { name: 'Twos · 0' }).getAttribute('data-value-state')).toBe(
     'preview',
   );
-  expect(harness.audio.playCue).toHaveBeenCalledExactlyOnceWith(PRODUCT_CUE.SCORE);
+  expect(harness.audio.playCue).toHaveBeenCalledExactlyOnceWith(AUDIO_CUE.SCORE);
 });
 
 test('input waits for 1000ms while YOUR TURN starts at readiness and clears on the first roll request', async () => {
@@ -422,7 +422,7 @@ test.each([false, true])(
       }),
     ).toBeNull();
     expect(
-      harness.audio.playCue.mock.calls.filter(([cue]) => cue === PRODUCT_CUE.SCORE),
+      harness.audio.playCue.mock.calls.filter(([cue]) => cue === AUDIO_CUE.SCORE),
     ).toHaveLength(1);
   },
 );
@@ -441,9 +441,9 @@ test('a score moves both seats once to its group and preserves later manual sele
   view.rerender(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.KO} />);
   advance(700);
   expect(tab('upper').getAttribute('aria-selected')).toBe('true');
-  expect(
-    harness.audio.playCue.mock.calls.filter(([cue]) => cue === PRODUCT_CUE.SCORE),
-  ).toHaveLength(1);
+  expect(harness.audio.playCue.mock.calls.filter(([cue]) => cue === AUDIO_CUE.SCORE)).toHaveLength(
+    1,
+  );
 });
 
 test.each([
@@ -472,7 +472,7 @@ test.each([
     );
     advance(100);
     expect(tab(previousGroup).getAttribute('aria-selected')).toBe('true');
-    expect(harness.audio.playCue).toHaveBeenCalledExactlyOnceWith(PRODUCT_CUE.SCORE);
+    expect(harness.audio.playCue).toHaveBeenCalledExactlyOnceWith(AUDIO_CUE.SCORE);
   },
 );
 
@@ -486,7 +486,7 @@ test('reselecting the automatically displayed tab keeps that choice without anot
   harness.publish(recorded);
   view.rerender(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.KO} />);
   expect(tab('lower').getAttribute('aria-selected')).toBe('true');
-  expect(harness.audio.playCue).toHaveBeenCalledExactlyOnceWith(PRODUCT_CUE.SCORE);
+  expect(harness.audio.playCue).toHaveBeenCalledExactlyOnceWith(AUDIO_CUE.SCORE);
 });
 
 function finalViews() {
@@ -554,7 +554,7 @@ test.each(['ack-first', 'live-first'] as const)(
     expect(screen.queryByRole('heading', { name: 'Game result' })).toBeNull();
     expect(summary().getAttribute('aria-label')).toBe('Total 55 · Bonus not earned');
     expect(harness.sessionCredentialStore.removeRoom).toHaveBeenCalledOnce();
-    expect(harness.audio.playCue).toHaveBeenCalledExactlyOnceWith(PRODUCT_CUE.SCORE);
+    expect(harness.audio.playCue).toHaveBeenCalledExactlyOnceWith(AUDIO_CUE.SCORE);
     expect(harness.audio.setScene).toHaveBeenLastCalledWith('game');
     expect(resultCommits).not.toHaveBeenCalled();
     if (order !== 'ack-first') {
@@ -615,7 +615,7 @@ test.each([
     expect(screen.getByRole('heading', { name: 'Game result' })).not.toBeNull();
     expect(harness.audio.setScene).toHaveBeenLastCalledWith('result');
     expect(
-      harness.audio.playCue.mock.calls.filter(([cue]) => cue === PRODUCT_CUE.SCORE),
+      harness.audio.playCue.mock.calls.filter(([cue]) => cue === AUDIO_CUE.SCORE),
     ).toHaveLength(coverBefore ? 0 : 1);
   },
 );
@@ -657,7 +657,7 @@ test('a live final score under global cover shows Result at 1000ms while its ori
   expect(screen.getByRole('heading', { name: 'Game result' })).toBe(result);
   advance(1000);
   expect(screen.getByRole('heading', { name: 'Game result' })).toBe(result);
-  expect(harness.audio.playCue).toHaveBeenCalledExactlyOnceWith(PRODUCT_CUE.SCORE);
+  expect(harness.audio.playCue).toHaveBeenCalledExactlyOnceWith(AUDIO_CUE.SCORE);
   expect(harness.sessionCredentialStore.removeRoom).toHaveBeenCalledOnce();
 });
 
@@ -687,7 +687,7 @@ test.each(['explicitForfeit', 'connectionEnded'] as const)(
     advance(2000);
     expect(screen.getByRole('heading', { name: 'Game result' })).toBe(result);
     expect(screen.queryByText('YOUR TURN')).toBeNull();
-    expect(harness.audio.playCue).toHaveBeenCalledExactlyOnceWith(PRODUCT_CUE.SCORE);
+    expect(harness.audio.playCue).toHaveBeenCalledExactlyOnceWith(AUDIO_CUE.SCORE);
     expect(harness.sessionCredentialStore.removeRoom).toHaveBeenCalledOnce();
   },
 );
@@ -762,7 +762,7 @@ test.each(['hidden', 'recovery', 'restore'] as const)(
     harness.publish(recorded);
     advance(1000);
     expect(tab('upper').getAttribute('aria-selected')).toBe('true');
-    expect(harness.audio.playCue).toHaveBeenCalledExactlyOnceWith(PRODUCT_CUE.SCORE);
+    expect(harness.audio.playCue).toHaveBeenCalledExactlyOnceWith(AUDIO_CUE.SCORE);
   },
 );
 
@@ -824,7 +824,7 @@ test.each([0, 1] as const)(
     advance(600);
     expect(tab('upper').getAttribute('aria-selected')).toBe('true');
     expect(screen.queryByText('YOUR TURN')).toBeNull();
-    expect(harness.audio.playCue).toHaveBeenCalledExactlyOnceWith(PRODUCT_CUE.SCORE);
+    expect(harness.audio.playCue).toHaveBeenCalledExactlyOnceWith(AUDIO_CUE.SCORE);
   },
 );
 
@@ -906,7 +906,7 @@ test.each(['settings', 'scoreboard'] as const)(
     expect(tab('lower').getAttribute('aria-selected')).toBe('true');
     expect(screen.queryByText('YOUR TURN')).toBeNull();
     expect(
-      harness.audio.playCue.mock.calls.filter(([cue]) => cue === PRODUCT_CUE.SCORE),
+      harness.audio.playCue.mock.calls.filter(([cue]) => cue === AUDIO_CUE.SCORE),
     ).toHaveLength(0);
   },
 );
@@ -929,7 +929,7 @@ test.each(['settings', 'scoreboard'] as const)(
     advance(1000);
     expect(tab('upper').getAttribute('aria-selected')).toBe('true');
     expect(
-      harness.audio.playCue.mock.calls.filter(([cue]) => cue === PRODUCT_CUE.SCORE),
+      harness.audio.playCue.mock.calls.filter(([cue]) => cue === AUDIO_CUE.SCORE),
     ).toHaveLength(1);
   },
 );
@@ -960,7 +960,7 @@ test('the open bonus popover follows the same summary owner at the 900ms handoff
   expect(tab('lower').getAttribute('aria-selected')).toBe('true');
   expect(screen.getByRole('dialog', { name: 'Bonus rule' })).toBe(popover);
   expect(within(popover).getByText('1/63')).not.toBeNull();
-  expect(harness.audio.playCue).toHaveBeenCalledExactlyOnceWith(PRODUCT_CUE.SCORE);
+  expect(harness.audio.playCue).toHaveBeenCalledExactlyOnceWith(AUDIO_CUE.SCORE);
 });
 
 test('a live final score sounds once, then ACK timeout recovery cancels confirmation and displays Result immediately', async () => {
@@ -973,7 +973,7 @@ test('a live final score sounds once, then ACK timeout recovery cancels confirma
   fireEvent.click(screen.getByRole('button', { name: /Yacht/u }));
   harness.publish(finished);
   expect(screen.queryByRole('heading', { name: 'Game result' })).toBeNull();
-  expect(harness.audio.playCue).toHaveBeenCalledExactlyOnceWith(PRODUCT_CUE.SCORE);
+  expect(harness.audio.playCue).toHaveBeenCalledExactlyOnceWith(AUDIO_CUE.SCORE);
   await act(async () => {
     await vi.advanceTimersByTimeAsync(100);
   });
@@ -1011,7 +1011,7 @@ test.each([1000, 1100])(
     harness.publish(recorded);
     expect(tab('upper').getAttribute('aria-selected')).toBe('true');
     expect(
-      harness.audio.playCue.mock.calls.filter(([cue]) => cue === PRODUCT_CUE.SCORE),
+      harness.audio.playCue.mock.calls.filter(([cue]) => cue === AUDIO_CUE.SCORE),
     ).toHaveLength(0);
   },
 );
@@ -1207,7 +1207,7 @@ test.each([undefined, 0, 50] as const)(
     if (recorded === undefined) expect(yachtRing()).not.toBeNull();
     else expect(yachtRing()).toBeNull();
     expect(
-      harness.audio.playCue.mock.calls.filter(([cue]) => cue === PRODUCT_CUE.ACHIEVEMENT_YACHT),
+      harness.audio.playCue.mock.calls.filter(([cue]) => cue === AUDIO_CUE.ACHIEVEMENT_YACHT),
     ).toHaveLength(0);
   },
 );
@@ -1443,7 +1443,7 @@ test.each(['ready', 'expired'] as const)(
       expect(harness.socket.emitCommand).toHaveBeenCalledOnce();
     }
     expect(
-      harness.audio.playCue.mock.calls.filter(([cue]) => cue === PRODUCT_CUE.SCORE),
+      harness.audio.playCue.mock.calls.filter(([cue]) => cue === AUDIO_CUE.SCORE),
     ).toHaveLength(2);
   },
 );

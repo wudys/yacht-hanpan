@@ -8,7 +8,7 @@ import {
   createLobbyMachine,
   type LobbyEvent,
   type LobbyServices,
-  selectLobbyView,
+  selectLobbyScreenState,
 } from '@/features/lobby/lobby-machine';
 import { useTelemetry } from '@/runtime/telemetry/TelemetryContext';
 
@@ -29,20 +29,20 @@ export function useLobbyAdmission({
   const [state, send, actor] = useMachine(machine);
   const [showDelayedProgress, setShowDelayedProgress] = useState(false);
   const [remainingSeconds, setRemainingSeconds] = useState(0);
-  const view = selectLobbyView(state);
+  const screenState = selectLobbyScreenState(state);
   const { waitingRoom, error, joinRetryAfterMs } = state.context;
   const accessState = useSyncExternalStore(access.subscribe, access.getSnapshot);
   const readinessOperation = accessState.status === 'preparing' ? accessState.operation : null;
   useEffect(() => {
-    const pending = view === 'creating' || view === 'joining';
+    const pending = screenState === 'creating' || screenState === 'joining';
     setShowDelayedProgress(false);
     if (!pending) return;
     const timer = setTimeout(() => setShowDelayedProgress(true), 250);
     return () => clearTimeout(timer);
-  }, [view]);
+  }, [screenState]);
 
   useEffect(() => {
-    if (view !== 'waiting' || !waitingRoom) return;
+    if (screenState !== 'waiting' || !waitingRoom) return;
     const update = () => {
       const serverNow = clock.now();
       if (serverNow === null) return;
@@ -53,7 +53,7 @@ export function useLobbyAdmission({
     update();
     const timer = setInterval(update, 1_000);
     return () => clearInterval(timer);
-  }, [clock, send, view, waitingRoom]);
+  }, [clock, send, screenState, waitingRoom]);
 
   useEffect(() => {
     if (joinRetryAfterMs === 0) return;
@@ -67,7 +67,7 @@ export function useLobbyAdmission({
     if (sound) onIntent();
   };
   return {
-    view,
+    screenState,
     waitingRoom,
     error,
     joinCode: state.context.joinCode,

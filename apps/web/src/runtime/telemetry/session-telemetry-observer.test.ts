@@ -6,7 +6,6 @@ import { createGameSessionHolder } from '@/runtime/session/game-session-holder';
 import type { RecoveryAttemptEvent } from '@/runtime/session/recovery-attempt';
 import { createSessionRecovery, type SessionRecovery } from '@/runtime/session/session-recovery';
 import { observeSessionTelemetry } from '@/runtime/telemetry/session-telemetry-observer';
-import { inactiveTelemetry } from '@/runtime/telemetry/telemetry';
 import { authority, finishedGame, playingGame } from '@/testing/game-fixtures';
 
 it('records cancellation when live finished arrives before the pending full sync completes', () => {
@@ -19,7 +18,7 @@ it('records cancellation when live finished arrives before the pending full sync
   });
   const event = vi.fn();
   const stop = observeSessionTelemetry({
-    telemetry: { ...inactiveTelemetry, trackEvent: event },
+    telemetry: { reportUnexpected: vi.fn(), trackEvent: event },
     sessions: fixture.sessions,
     recovery,
     reentry: idleReentry(),
@@ -41,15 +40,10 @@ it('records cancellation when live finished arrives before the pending full sync
   ]);
 });
 
-function idleReentry(): StoredRoomReentry {
+function idleReentry(): Pick<StoredRoomReentry, 'getSnapshot' | 'subscribeAttempt'> {
   return {
     getSnapshot: () => ({ status: 'idle' }),
-    subscribe: () => () => {},
     subscribeAttempt: () => () => {},
-    check() {},
-    dispose() {},
-    completeHandoff() {},
-    confirmPermanentFailure() {},
   };
 }
 
@@ -127,30 +121,18 @@ it.each(['new', 'resumed'] as const)(
       forfeitMatch: unused,
     };
     const sessions = createGameSessionHolder({ createSession: () => session });
-    const recovery: SessionRecovery = {
-      getSnapshot: () => ({ status: 'idle' }),
-      subscribe: () => () => {},
+    const recovery: Pick<SessionRecovery, 'subscribeAttempt'> = {
       subscribeAttempt: () => () => {},
-      start() {},
-      dispose() {},
-      requestSynchronization() {},
-      requireRefreshAfterSynchronization() {},
-      reportCommandError() {},
     };
     let reentrySnapshot: ReturnType<StoredRoomReentry['getSnapshot']> =
       entry === 'new' ? { status: 'idle' } : { status: 'checking' };
-    const reentry: StoredRoomReentry = {
+    const reentry: Pick<StoredRoomReentry, 'getSnapshot' | 'subscribeAttempt'> = {
       getSnapshot: () => reentrySnapshot,
-      subscribe: () => () => {},
       subscribeAttempt: () => () => {},
-      check() {},
-      dispose() {},
-      completeHandoff() {},
-      confirmPermanentFailure() {},
     };
     const event = vi.fn();
     const stop = observeSessionTelemetry({
-      telemetry: { ...inactiveTelemetry, trackEvent: event },
+      telemetry: { reportUnexpected: vi.fn(), trackEvent: event },
       sessions,
       recovery,
       reentry: reentry,
@@ -178,34 +160,21 @@ it.each(['new', 'resumed'] as const)(
 );
 
 it('counts and diagnoses failed reentry once even after a later snapshot changes', () => {
-  let recoverySnapshot: ReturnType<SessionRecovery['getSnapshot']> = { status: 'idle' };
   let reentrySnapshot: ReturnType<StoredRoomReentry['getSnapshot']> = { status: 'idle' };
-  let publishRecovery = () => {};
+  let publishRecoveryAttempt = (_event: RecoveryAttemptEvent) => {};
   let publishAttempt = (_event: RecoveryAttemptEvent) => {};
-  const recovery: SessionRecovery = {
-    getSnapshot: () => recoverySnapshot,
-    subscribe(listener: () => void) {
-      publishRecovery = listener;
+  const recovery: Pick<SessionRecovery, 'subscribeAttempt'> = {
+    subscribeAttempt(listener: (event: RecoveryAttemptEvent) => void) {
+      publishRecoveryAttempt = listener;
       return () => {};
     },
-    subscribeAttempt: () => () => {},
-    start() {},
-    dispose() {},
-    requestSynchronization() {},
-    requireRefreshAfterSynchronization() {},
-    reportCommandError() {},
   };
-  const reentry: StoredRoomReentry = {
+  const reentry: Pick<StoredRoomReentry, 'getSnapshot' | 'subscribeAttempt'> = {
     getSnapshot: () => reentrySnapshot,
-    subscribe: () => () => {},
     subscribeAttempt(listener: (event: RecoveryAttemptEvent) => void) {
       publishAttempt = listener;
       return () => {};
     },
-    check() {},
-    dispose() {},
-    completeHandoff() {},
-    confirmPermanentFailure() {},
   };
   const sessions = createGameSessionHolder({
     createSession: () => {
@@ -215,17 +184,15 @@ it('counts and diagnoses failed reentry once even after a later snapshot changes
   const event = vi.fn();
   const reportUnexpected = vi.fn();
   const stop = observeSessionTelemetry({
-    telemetry: { ...inactiveTelemetry, trackEvent: event, reportUnexpected },
+    telemetry: { trackEvent: event, reportUnexpected },
     sessions,
     recovery,
     reentry: reentry,
   });
   reentrySnapshot = { status: 'checking' };
   publishAttempt({ phase: 'started' });
-  recoverySnapshot = { status: 'synchronizing' };
-  publishRecovery();
-  recoverySnapshot = { status: 'refreshRequired', error: null };
-  publishRecovery();
+  publishRecoveryAttempt({ phase: 'started' });
+  publishRecoveryAttempt({ phase: 'finished', outcome: 'failure', durationMs: 0 });
   reentrySnapshot = { status: 'refreshRequired', error: null };
   publishAttempt({
     phase: 'finished',
@@ -267,7 +234,7 @@ it('diagnoses each session error once without losing the first playing event aft
   const reportUnexpected = vi.fn();
   const trackEvent = vi.fn();
   const stop = observeSessionTelemetry({
-    telemetry: { ...inactiveTelemetry, reportUnexpected, trackEvent },
+    telemetry: { reportUnexpected, trackEvent },
     sessions: fixture.sessions,
     recovery,
     reentry: idleReentry(),
@@ -293,7 +260,7 @@ it('does not count a finished baseline as a new participation', () => {
   const recovery = createSessionRecovery({ sessions: fixture.sessions });
   const trackEvent = vi.fn();
   const stop = observeSessionTelemetry({
-    telemetry: { ...inactiveTelemetry, trackEvent },
+    telemetry: { reportUnexpected: vi.fn(), trackEvent },
     sessions: fixture.sessions,
     recovery,
     reentry: idleReentry(),
@@ -312,7 +279,7 @@ it('counts one reentry pair while its owner includes the lower connection recove
     subscribeForeground: () => () => {},
   });
   let attempt = (_event: RecoveryAttemptEvent) => {};
-  const reentry: StoredRoomReentry = {
+  const reentry: Pick<StoredRoomReentry, 'getSnapshot' | 'subscribeAttempt'> = {
     ...idleReentry(),
     getSnapshot: () => ({ status: 'checking' }),
     subscribeAttempt(listener: (event: RecoveryAttemptEvent) => void) {
@@ -322,7 +289,7 @@ it('counts one reentry pair while its owner includes the lower connection recove
   };
   const trackEvent = vi.fn();
   const stop = observeSessionTelemetry({
-    telemetry: { ...inactiveTelemetry, trackEvent },
+    telemetry: { reportUnexpected: vi.fn(), trackEvent },
     sessions: fixture.sessions,
     recovery,
     reentry: reentry,
@@ -350,7 +317,7 @@ it('keeps a reentry error under the attempt owner across failure and handoff sna
   const recovery = createSessionRecovery({ sessions: fixture.sessions });
   let snapshot: ReturnType<StoredRoomReentry['getSnapshot']> = { status: 'checking' };
   let attempt = (_event: RecoveryAttemptEvent) => {};
-  const reentry: StoredRoomReentry = {
+  const reentry: Pick<StoredRoomReentry, 'getSnapshot' | 'subscribeAttempt'> = {
     ...idleReentry(),
     getSnapshot: () => snapshot,
     subscribeAttempt(listener: (event: RecoveryAttemptEvent) => void) {
@@ -360,7 +327,7 @@ it('keeps a reentry error under the attempt owner across failure and handoff sna
   };
   const reportUnexpected = vi.fn();
   const stop = observeSessionTelemetry({
-    telemetry: { ...inactiveTelemetry, reportUnexpected },
+    telemetry: { reportUnexpected, trackEvent: vi.fn() },
     sessions: fixture.sessions,
     recovery,
     reentry: reentry,

@@ -7,7 +7,7 @@ import {
   deriveGameInteraction,
   deriveGameRecoveryPresentation,
 } from '@/features/game/interaction/game-interaction';
-import { deriveGameViewModel } from '@/features/game/view/game-view-model';
+import { deriveGameViewModel } from '@/features/game/ui/game-view-model';
 import type { SessionRecoverySnapshot } from '@/runtime/session/session-recovery';
 import { playingGame } from '@/testing/game-fixtures';
 

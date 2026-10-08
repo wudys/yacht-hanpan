@@ -357,7 +357,7 @@ export function createLobbyMachine(
               guard: ({ event }: AdmissionDone) =>
                 event.output.status === 'failure' &&
                 event.output.stage === 'response' &&
-                createFailureDisposition(event.output.error) === 'retry',
+                createFailureDisposition(event.output.error) === 'dismiss',
               target: 'createFailed',
               actions: {
                 type: 'createFailure',
@@ -667,7 +667,7 @@ export function createLobbyMachine(
   });
 }
 export type LobbySnapshot = SnapshotFrom<ReturnType<typeof createLobbyMachine>>;
-export type LobbyViewState =
+export type LobbyScreenState =
   | 'replaced'
   | 'home'
   | 'profile'
@@ -687,7 +687,7 @@ export type LobbyViewState =
   | 'createNotice'
   | 'connectionFailed';
 
-export function selectLobbyView({ value }: Pick<LobbySnapshot, 'value'>): LobbyViewState {
+export function selectLobbyScreenState({ value }: Pick<LobbySnapshot, 'value'>): LobbyScreenState {
   if (typeof value === 'string') return value === 'handoff' ? 'matching' : value;
   if ('admitted' in value) return value.admitted;
   const unhandled: never = value;

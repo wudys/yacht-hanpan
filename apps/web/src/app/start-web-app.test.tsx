@@ -70,11 +70,14 @@ vi.mock('@/runtime/audio/browser-audio-runtime', () => ({
     dispose: fixture.audioDispose,
   }),
 }));
-vi.mock('@/runtime/audio/game-audio-feedback', () => ({
-  startGameAudioFeedback: () => ({ dispose: vi.fn(), setSurfaceExposed: vi.fn() }),
+vi.mock('@/runtime/audio/session-audio-feedback', () => ({
+  startSessionAudioFeedback: () => ({ dispose: vi.fn(), setSurfaceExposed: vi.fn() }),
 }));
-vi.mock('@/runtime/dice/dice-presentation', () => ({
-  createDicePresentation: () => ({ start: vi.fn(), dispose: fixture.presentationDispose }),
+vi.mock('@/runtime/dice/dice-presentation-controller', () => ({
+  createDicePresentationController: () => ({
+    start: vi.fn(),
+    dispose: fixture.presentationDispose,
+  }),
 }));
 vi.mock('@/runtime/network/server-readiness', () => ({ createServerReadiness: () => ({}) }));
 vi.mock('@/runtime/room-access/room-access', () => ({

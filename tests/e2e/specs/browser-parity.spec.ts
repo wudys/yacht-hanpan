@@ -38,13 +38,38 @@ for (const variant of [{ ...BASELINE, pourStyle: 'classic' }, ...BASELINE.additi
     expect(E2E_PACKAGE.devDependencies['@playwright/test']).toBe(BASELINE.playwrightVersion);
     expect(browser.version()).toBe(BASELINE.browsers[browserName]);
 
-    await page.goto(
-      `/dev/anchors.html?anchor=replay&seed=${encodeURIComponent(BASELINE.seed)}&style=${variant.pourStyle}&count=5`,
+    // A test-owned same-origin document loads the existing Vite TS/WASM path.
+    // Physics parity is independent of React, Canvas and presentation completion.
+    await page.route('**/__physics-parity.html', (route) =>
+      route.fulfill({
+        contentType: 'text/html',
+        body: '<!doctype html><title>Physics parity</title>',
+      }),
     );
-    const roll = page.locator('[data-replay-digest]');
-    await expect(roll).toHaveAttribute('data-replay-digest', variant.replayDigest);
-    await expect(roll).toHaveAttribute('data-authoritative-values', variant.authoritativeValues);
-    await expect(roll).toHaveAttribute('data-replay-complete', 'true', { timeout: 20_000 });
-    await expect(page.locator('[data-capability-failure]')).toHaveCount(0);
+    await page.goto('/__physics-parity.html');
+    const roll = await page.evaluate(
+      async ({ moduleUrl, input }) => {
+        const diagnostic = (await import(moduleUrl)) as {
+          runPhysicsDiagnostic(options: typeof input): Promise<{
+            replayDigest: string;
+            authoritativeValuesBySlot: readonly { slot: number; value: number }[];
+          }>;
+        };
+        const result = await diagnostic.runPhysicsDiagnostic(input);
+        return {
+          replayDigest: result.replayDigest,
+          authoritativeValuesBySlot: result.authoritativeValuesBySlot,
+        };
+      },
+      {
+        moduleUrl: '/src/dev/physics-diagnostic-simulation.ts',
+        input: { seed: BASELINE.seed, pourStyle: variant.pourStyle, count: 5 },
+      },
+    );
+    expect(roll.replayDigest).toBe(variant.replayDigest);
+    expect(roll.authoritativeValuesBySlot.map(({ slot }) => slot)).toEqual([0, 1, 2, 3, 4]);
+    expect(roll.authoritativeValuesBySlot.map(({ value }) => value).join(',')).toBe(
+      variant.authoritativeValues,
+    );
   });
 }

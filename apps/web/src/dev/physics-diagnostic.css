@@ -1,0 +1,89 @@
+.physics-diagnostic {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  height: 100dvh;
+  color: #fff4dc;
+}
+
+.physics-diagnostic__stage {
+  min-width: 0;
+  min-height: 0;
+}
+
+.physics-diagnostic .game-frame-wrapper {
+  height: 100%;
+}
+
+.physics-diagnostic .game-logical-canvas {
+  background: #7e562f;
+}
+
+.physics-diagnostic__playfield {
+  position: absolute;
+  top: var(--dice-board-top);
+  left: var(--dice-board-left);
+  width: var(--dice-board-width);
+  height: var(--dice-board-height);
+  overflow: hidden;
+  border-radius: var(--dice-board-radius);
+  background: #032717;
+}
+
+.physics-diagnostic__controls {
+  min-height: 0;
+  overflow: auto;
+  padding: 20px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.physics-diagnostic__controls h1 {
+  margin-top: 0;
+  font-size: 20px;
+}
+
+.physics-diagnostic__controls h2 {
+  font-size: 16px;
+}
+
+.physics-diagnostic__form,
+.physics-diagnostic__form label {
+  display: grid;
+  gap: 8px;
+}
+
+.physics-diagnostic__form {
+  gap: 12px;
+}
+
+.physics-diagnostic__form input,
+.physics-diagnostic__form select,
+.physics-diagnostic__controls button {
+  min-width: 0;
+  min-height: 36px;
+  font: inherit;
+}
+
+.physics-diagnostic__result dd {
+  margin: 0 0 8px;
+  overflow-wrap: anywhere;
+}
+
+.physics-diagnostic__eyes {
+  padding-left: 24px;
+}
+
+.physics-diagnostic__controls code {
+  overflow-wrap: anywhere;
+}
+
+.physics-diagnostic__controls a {
+  color: #ffdd87;
+}
+
+@media (max-width: 720px) {
+  .physics-diagnostic {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(320px, 60svh) minmax(0, 1fr);
+  }
+}

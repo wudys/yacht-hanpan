@@ -2,7 +2,7 @@ import * as v from 'valibot';
 
 import { parseWith } from '../internal/parse';
 import { roomIdSchema, seatTokenSchema } from '../internal/primitives';
-import { httpResponseSchema } from './room-bootstrap';
+import { httpResponseSchema } from './room-http-schemas';
 
 const cancelRoomBodySchema = v.strictObject({
   seatToken: seatTokenSchema,

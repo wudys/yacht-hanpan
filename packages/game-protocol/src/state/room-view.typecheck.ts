@@ -6,7 +6,7 @@ import type {
   parseRoomView,
   PresenceSnapshotInput,
   PublicRoomInput,
-} from './room-view';
+} from '@repo/game-protocol/state';
 
 // Producers can build and revise inputs before publishing the parsed read-only output.
 export function buildPublicState(

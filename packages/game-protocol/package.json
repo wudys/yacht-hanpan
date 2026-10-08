@@ -21,6 +21,10 @@
       "types": "./src/socket/index.ts",
       "default": "./src/socket/index.ts"
     },
+    "./state": {
+      "types": "./src/state/index.ts",
+      "default": "./src/state/index.ts"
+    },
     "./version": {
       "types": "./src/version/index.ts",
       "default": "./src/version/index.ts"

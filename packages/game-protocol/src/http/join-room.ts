@@ -3,7 +3,7 @@ import * as v from 'valibot';
 import { parseWith } from '../internal/parse';
 import { clientIdSchema, operationIdSchema, roomCodeSchema } from '../internal/primitives';
 import { playingRoomViewSchema, profileSelectionSchema } from '../state/room-view';
-import { authoritySchema, httpResponseSchema } from './room-bootstrap';
+import { authoritySchema, httpResponseSchema } from './room-http-schemas';
 
 const joinRoomBodySchema = v.strictObject({
   clientId: clientIdSchema,

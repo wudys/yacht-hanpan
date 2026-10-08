@@ -3,7 +3,7 @@ import * as v from 'valibot';
 import { parseWith } from '../internal/parse';
 import { roomIdSchema, seatIndexSchema, seatTokenSchema } from '../internal/primitives';
 import { roomViewSchema } from '../state/room-view';
-import { httpResponseSchema } from './room-bootstrap';
+import { httpResponseSchema } from './room-http-schemas';
 
 const resumeRoomBodySchema = v.strictObject({
   seatToken: seatTokenSchema,

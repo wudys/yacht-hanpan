@@ -1,9 +1,10 @@
 import { DICE_SIMULATION_CONTRACT, POUR_STYLE } from '@repo/dice-simulation/contract';
+import { parseGameSnapshot } from '@repo/game-protocol/state';
 import { describe, expect, test } from 'bun:test';
 
 import { GameApiParseError } from '../internal/parse';
 import { GAME_PROTOCOL_VERSION } from '../version';
-import { parseCommittedRoomUpdate, parseGameSnapshot, ROOM_UPDATE_TYPE } from './index';
+import { parseCommittedRoomUpdate, ROOM_UPDATE_TYPE } from './index';
 
 const TURN_ID = 'c847f81e-8ee0-43ef-b09a-f8ef14612246';
 const ROOM_ID = '018f47f2-c2d8-7f4a-8bf4-3f559c39843e';

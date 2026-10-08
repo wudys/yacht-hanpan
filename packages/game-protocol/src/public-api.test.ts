@@ -23,7 +23,7 @@ describe('package entry points', () => {
     ).toBeTruthy();
   });
 
-  test('exposes common state through the new entry and compatible root and socket entries', () => {
+  test('exposes common state through state and root while keeping socket transport-specific', () => {
     const stateExports = { ...state };
     const rootExports = { ...root };
     const socketExports = { ...socket };
@@ -41,7 +41,8 @@ describe('package entry points', () => {
     ] as const;
     expect(Object.keys(state).sort()).toEqual([...names].sort());
     for (const name of names) {
-      expect(socketExports[name]).toBe(stateExports[name]);
+      expect(rootExports[name]).toBe(stateExports[name]);
+      expect(Object.hasOwn(socketExports, name)).toBe(false);
     }
     for (const [name, value] of Object.entries(socketExports)) {
       expect(rootExports[name as keyof typeof socket]).toBe(value);

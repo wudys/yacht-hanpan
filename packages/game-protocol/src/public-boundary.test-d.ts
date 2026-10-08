@@ -28,6 +28,34 @@ type RoomViewSchema = typeof import('@repo/game-protocol/state').roomViewSchema;
 // @ts-expect-error raw view schemas are intentionally absent from the public root entry.
 type RootRoomViewSchema = typeof import('@repo/game-protocol').roomViewSchema;
 
+// @ts-expect-error Common state DTOs are exposed through State, not Socket.
+type SocketGameSnapshot = import('@repo/game-protocol/socket').GameSnapshot;
+// @ts-expect-error Common state DTO inputs are exposed through State, not Socket.
+type SocketGameSnapshotInput = import('@repo/game-protocol/socket').GameSnapshotInput;
+// @ts-expect-error Common state DTOs are exposed through State, not Socket.
+type SocketPresenceSnapshot = import('@repo/game-protocol/socket').PresenceSnapshot;
+// @ts-expect-error Common state DTO inputs are exposed through State, not Socket.
+type SocketPresenceSnapshotInput = import('@repo/game-protocol/socket').PresenceSnapshotInput;
+// @ts-expect-error Common state DTOs are exposed through State, not Socket.
+type SocketPublicRoom = import('@repo/game-protocol/socket').PublicRoom;
+// @ts-expect-error Common state DTO inputs are exposed through State, not Socket.
+type SocketPublicRoomInput = import('@repo/game-protocol/socket').PublicRoomInput;
+// @ts-expect-error Common state DTOs are exposed through State, not Socket.
+type SocketRoomView = import('@repo/game-protocol/socket').RoomView;
+// @ts-expect-error Common state DTO inputs are exposed through State, not Socket.
+type SocketRoomViewInput = import('@repo/game-protocol/socket').RoomViewInput;
+
+export type SocketStateDtoLeakCheck = [
+  SocketGameSnapshot,
+  SocketGameSnapshotInput,
+  SocketPresenceSnapshot,
+  SocketPresenceSnapshotInput,
+  SocketPublicRoom,
+  SocketPublicRoomInput,
+  SocketRoomView,
+  SocketRoomViewInput,
+];
+
 export type PublicStateDtoCheck = [
   GameSnapshot,
   GameSnapshotInput,

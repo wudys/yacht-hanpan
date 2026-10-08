@@ -1,4 +1,8 @@
-import type { GameSnapshotInput, PresenceSnapshotInput, PublicRoomInput } from './index';
+import type {
+  GameSnapshotInput,
+  PresenceSnapshotInput,
+  PublicRoomInput,
+} from '@repo/game-protocol/state';
 
 type Player = GameSnapshotInput['match']['players'][number];
 

@@ -7,10 +7,9 @@ import {
   DEFAULT_CUP_GEOMETRY,
 } from '../../contract/cup-geometry';
 import type { CupTransform, SimulatedCupMotion } from './cup-motion';
-import { quatFromEuler } from './cup-motion';
 import type { PhysicsDie } from './physics-environment';
-import { rotateVectorByQuat } from './result-recognition';
 import { DIE_COLLIDER_RADIUS, DIE_SIZE, STEP } from './roll-simulation-constants';
+import { quatFromEuler, rotateVectorByQuat } from './simulation-math';
 
 export interface PhysicsCup {
   readonly geometry: CupGeometry;

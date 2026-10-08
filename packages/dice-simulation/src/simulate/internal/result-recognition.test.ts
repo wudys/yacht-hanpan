@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 
-import { type QuaternionTuple, recognizeTopFace } from './result-recognition';
+import { recognizeTopFace } from './result-recognition';
+import { type QuaternionTuple } from './simulation-math';
 
 describe('dice result recognition', () => {
   it('recognizes canonical display poses as their intended faces', () => {

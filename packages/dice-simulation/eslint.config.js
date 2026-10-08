@@ -48,7 +48,7 @@ export default [
     },
   },
   {
-    files: ['src/simulate/simulate-timeline.ts'],
+    files: ['src/simulate/simulate-physics.ts'],
     rules: {
       '@typescript-eslint/consistent-type-definitions': 'off',
       '@typescript-eslint/typedef': 'off',

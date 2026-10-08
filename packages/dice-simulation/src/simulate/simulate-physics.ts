@@ -29,9 +29,9 @@ import {
 import { createDieInCup, createRollWorld, createTray } from './internal/physics-environment';
 import { runPhysicsRest } from './internal/physics-rest';
 import {
-  areDiceReadablySettled,
   createSettlingAssistance,
-  hasPhysicalYStack,
+  hasElevatedNearbyPair,
+  hasReadableHandoffPose,
 } from './internal/physics-settling';
 import { recognizeTopFace } from './internal/result-recognition';
 import { createRollPhysicsConfig } from './internal/roll-physics';
@@ -245,8 +245,8 @@ export function simulateRollPhysics(
         ((cupRemoved && t - cup.releaseAtMs > (diceCount >= 5 ? 1400 : 1100) && observation.flat) ||
           (t - cup.releaseAtMs > minRolloutMs && rolloutStableSamples >= ROLLOUT_STABLE_SAMPLES) ||
           (t - cup.releaseAtMs > maxVisualRolloutMs &&
-            areDiceReadablySettled(dice, DIE_SIZE * 0.3, 0.88) &&
-            !hasPhysicalYStack(dice)))
+            hasReadableHandoffPose(dice, DIE_SIZE * 0.3, 0.88) &&
+            !hasElevatedNearbyPair(dice)))
       ) {
         simulationMs = t;
         break;

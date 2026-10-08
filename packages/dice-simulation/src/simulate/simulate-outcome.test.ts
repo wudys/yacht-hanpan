@@ -6,13 +6,13 @@ import { DEFAULT_CUP_GEOMETRY } from '../contract/cup-geometry';
 import { initializeDeterministicRapierForBun } from '../rapier/bun';
 import * as cupMotion from './internal/cup-motion';
 import * as recording from './internal/roll-simulation-constants';
-import { simulateRoll, simulateRollOutcome, simulateRollReplay } from './simulate-roll';
 import {
   CupReleaseError,
   type PhysicsCompletionSnapshot,
   simulateRollPhysics,
   simulateRollTimeline,
-} from './simulate-timeline';
+} from './simulate-physics';
+import { simulateRoll, simulateRollOutcome, simulateRollReplay } from './simulate-roll';
 
 beforeAll(async () => {
   await initializeDeterministicRapierForBun();

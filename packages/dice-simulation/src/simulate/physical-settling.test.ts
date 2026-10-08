@@ -14,7 +14,7 @@ import {
 } from './internal/physics-settling';
 import { topFaceAlignment } from './internal/result-recognition';
 import { STEP } from './internal/roll-simulation-constants';
-import { type PhysicsCompletionSnapshot, simulateRollTimeline } from './simulate-timeline';
+import { type PhysicsCompletionSnapshot, simulateRollTimeline } from './simulate-physics';
 
 beforeAll(initializeDeterministicRapierForBun);
 

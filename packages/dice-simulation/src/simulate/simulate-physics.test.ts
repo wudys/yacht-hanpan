@@ -6,12 +6,12 @@ import { DEFAULT_CUP_GEOMETRY } from '../contract/cup-geometry';
 import { measurePhysicsCompletion } from '../quality/physical-roll-audit';
 import { initializeDeterministicRapierForBun } from '../rapier/bun/initialize-rapier';
 import { recognizeTopFace } from './internal/result-recognition';
-import { simulateRoll } from './simulate-roll';
 import {
   CupReleaseError,
   type PhysicsCompletionSnapshot,
   simulateRollTimeline,
-} from './simulate-timeline';
+} from './simulate-physics';
+import { simulateRoll } from './simulate-roll';
 
 beforeAll(async () => {
   await initializeDeterministicRapierForBun();
@@ -19,7 +19,7 @@ beforeAll(async () => {
 
 describe('deterministic physics roll', () => {
   test('fails clearly in a fresh process before runtime initialization', async () => {
-    const moduleUrl = new URL('./simulate-timeline.ts', import.meta.url).href;
+    const moduleUrl = new URL('./simulate-physics.ts', import.meta.url).href;
     const script = [
       `import { simulateRollTimeline } from ${JSON.stringify(moduleUrl)};`,
       "try { simulateRollTimeline({ rollId: 'roll', seed: 'seed', rolledSlots: [0], pourStyle: 'classic' }); }",

@@ -10,10 +10,10 @@ import {
   TRAY_FLOOR_TOP_Y,
   TRAY_GEOMETRY,
 } from '../../contract';
-import { createCupFrame, createCupMotion, cupTransformAt, quatFromEuler } from './cup-motion';
+import { createCupFrame, createCupMotion, cupTransformAt } from './cup-motion';
 import { CUP_GATHER_MS } from './cup-motion-progress';
-import { rotateVectorByQuat } from './result-recognition';
 import { rollAreaMeta } from './roll-simulation-constants';
+import { quatFromEuler, rotateVectorByQuat } from './simulation-math';
 
 // Both sides and preparation-time boundaries; count is not a motion input.
 const motionCases = [

@@ -4,7 +4,7 @@ import {
   CupReleaseError,
   type PhysicsCompletionSnapshot,
   simulateRollPhysics,
-} from '../simulate/simulate-timeline';
+} from '../simulate/simulate-physics';
 import { measurePhysicsCompletion, physicsCompletionIssues } from './physical-roll-audit';
 
 const REGRESSIONS: readonly SimulationInput[] = [

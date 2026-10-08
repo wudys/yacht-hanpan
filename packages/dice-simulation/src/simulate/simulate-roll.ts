@@ -7,7 +7,7 @@ import {
   type SimulationReplay,
   type SimulationResult,
 } from '../contract';
-import { simulateRollPhysics } from './simulate-timeline';
+import { simulateRollPhysics } from './simulate-physics';
 import { SimulationRejectedError } from './simulation-rejected-error';
 
 export async function evaluateRollCandidate(

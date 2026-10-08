@@ -2,7 +2,7 @@ import type { Collider, Rotation, Vector, World } from '@dimforge/rapier3d-deter
 
 import { hasLowerSupportContact, hasTouchingWallContact } from './contact-query';
 import type { PhysicsDie, TrayWall } from './physics-environment';
-import { rotateVectorByQuat, topFaceAlignment } from './result-recognition';
+import { topFaceAlignment } from './result-recognition';
 import { DIE_SIZE, FLOOR_TOP_Y } from './roll-simulation-constants';
 import {
   POSE_POSITION_TOLERANCE,
@@ -10,7 +10,12 @@ import {
   SLOW_ANGULAR_SPEED,
   SLOW_LINEAR_SPEED,
 } from './settling-criteria';
-import { quatDistance, type QuaternionTuple, type VectorTuple } from './simulation-math';
+import {
+  quatDistance,
+  type QuaternionTuple,
+  rotateVectorByQuat,
+  type VectorTuple,
+} from './simulation-math';
 
 export interface GroundEdgeReleaseState {
   stationarySinceMs: number | null;
@@ -332,7 +337,7 @@ function notifyAppliedAssist(
   });
 }
 
-export function areDiceReadablySettled(
+export function hasReadableHandoffPose(
   dice: PhysicsDie[],
   maxLift: number,
   minAlignment: number,
@@ -340,7 +345,7 @@ export function areDiceReadablySettled(
   return maxDieLift(dice) < maxLift && minTopFaceAlignment(dice) > minAlignment;
 }
 
-export function hasPhysicalYStack(dice: PhysicsDie[]): boolean {
+export function hasElevatedNearbyPair(dice: PhysicsDie[]): boolean {
   for (let a = 0; a < dice.length; a += 1) {
     const positionA = dice[a].body.translation();
     for (let b = a + 1; b < dice.length; b += 1) {

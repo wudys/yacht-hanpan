@@ -2,7 +2,7 @@ import { type RollTimeline, TRAY_GEOMETRY } from '../contract';
 import { recognizeTopFace, topFaceAlignment } from '../simulate/internal/result-recognition';
 import { DIE_SIZE, FLOOR_TOP_Y } from '../simulate/internal/roll-simulation-constants';
 import { REST_ANGULAR_SPEED, REST_LINEAR_SPEED } from '../simulate/internal/settling-criteria';
-import type { PhysicsCompletionSnapshot } from '../simulate/simulate-timeline';
+import type { PhysicsCompletionSnapshot } from '../simulate/simulate-physics';
 
 /** Offline quality measurements, not acceptance/rejection criteria for authoritative rolls. */
 export function measurePhysicsCompletion(

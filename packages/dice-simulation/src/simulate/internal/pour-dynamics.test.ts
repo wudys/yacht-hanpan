@@ -3,13 +3,13 @@ import { beforeAll, expect, test } from 'bun:test';
 
 import { DEFAULT_CUP_GEOMETRY } from '../../contract/cup-geometry';
 import { initializeDeterministicRapierForBun } from '../../rapier/bun';
-import { simulateRollTimeline } from '../simulate-timeline';
+import { simulateRollTimeline } from '../simulate-physics';
 import { createCupMotion, cupTransformAt } from './cup-motion';
 import { applyCupPourAssist, createPhysicsCup } from './physics-cup';
 import { createDieInCup } from './physics-environment';
-import { rotateVectorByQuat } from './result-recognition';
 import { createRollPhysicsConfig } from './roll-physics';
 import { STEP } from './roll-simulation-constants';
+import { rotateVectorByQuat } from './simulation-math';
 
 beforeAll(initializeDeterministicRapierForBun);
 

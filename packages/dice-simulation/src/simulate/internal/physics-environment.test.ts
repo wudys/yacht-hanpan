@@ -3,7 +3,7 @@ import { beforeAll, expect, test } from 'bun:test';
 
 import { DEFAULT_CUP_GEOMETRY } from '../../contract/cup-geometry';
 import { initializeDeterministicRapierForBun } from '../../rapier/bun';
-import { type PhysicsCompletionSnapshot, simulateRollTimeline } from '../simulate-timeline';
+import { type PhysicsCompletionSnapshot, simulateRollTimeline } from '../simulate-physics';
 import { createCupFrame, createCupMotion, cupTransformAt } from './cup-motion';
 import {
   areDiceOutsideCup,
@@ -12,9 +12,9 @@ import {
   updatePhysicsCup,
 } from './physics-cup';
 import { createDieInCup, createRollWorld, createTray } from './physics-environment';
-import { rotateVectorByQuat } from './result-recognition';
 import { createRollPhysicsConfig } from './roll-physics';
 import { DIE_COLLIDER_RADIUS, DIE_SIZE, trayGeometry } from './roll-simulation-constants';
+import { rotateVectorByQuat } from './simulation-math';
 
 beforeAll(initializeDeterministicRapierForBun);
 

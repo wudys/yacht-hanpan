@@ -13,9 +13,10 @@ import { DIE_GEOMETRY } from '../contract/roll-geometry';
 import { initializeDeterministicRapierForBun } from '../rapier/bun';
 import { createCupMotion, cupTransformAt } from './internal/cup-motion';
 import { haveDiceClearedCup } from './internal/physics-cup';
-import { recognizeTopFace, rotateVectorByQuat } from './internal/result-recognition';
+import { recognizeTopFace } from './internal/result-recognition';
 import { STEP } from './internal/roll-simulation-constants';
-import { simulateRollTimeline } from './simulate-timeline';
+import { rotateVectorByQuat } from './internal/simulation-math';
+import { simulateRollTimeline } from './simulate-physics';
 
 beforeAll(initializeDeterministicRapierForBun);
 

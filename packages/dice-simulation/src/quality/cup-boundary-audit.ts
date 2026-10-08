@@ -1,6 +1,6 @@
 import RAPIER, { type Collider } from '@dimforge/rapier3d-deterministic';
 
-import { rotateVectorByQuat } from '../simulate/internal/result-recognition';
+import { rotateVectorByQuat } from '../simulate/internal/simulation-math';
 
 // Rotated/translated Float32 collider fixtures bound world-coordinate roundoff to
 // less than 2e-6. This is numerical contact tolerance, not allowed base penetration.

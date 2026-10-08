@@ -8,7 +8,7 @@ import {
   type SimulationInput,
 } from '../contract';
 import { initializeDeterministicRapierForBun } from '../rapier/bun';
-import { simulateRollPhysics } from '../simulate/simulate-timeline';
+import { simulateRollPhysics } from '../simulate/simulate-physics';
 
 export type RollSample = Readonly<{
   attemptSequence: number;

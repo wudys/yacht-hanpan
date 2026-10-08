@@ -1,15 +1,5 @@
 import type { DieFace } from '../../contract/types';
-
-export type VectorTuple = [number, number, number];
-export type QuaternionTuple = [number, number, number, number];
-export type QuaternionLike =
-  | QuaternionTuple
-  | {
-      x: number;
-      y: number;
-      z: number;
-      w: number;
-    };
+import { type QuaternionLike, rotateVectorByQuat, type VectorTuple } from './simulation-math';
 
 type FaceByNormal = {
   value: DieFace;
@@ -40,25 +30,4 @@ export function recognizeTopFace(q: QuaternionLike): DieFace {
 
 export function topFaceAlignment(q: QuaternionLike): number {
   return Math.max(...FACE_BY_NORMAL.map((face) => rotateVectorByQuat(face.n, q)[1]));
-}
-
-export function rotateVectorByQuat(v: VectorTuple, q: QuaternionLike): VectorTuple {
-  const [qx, qy, qz, qw] = quaternionToTuple(q);
-  const x = v[0],
-    y = v[1],
-    z = v[2];
-  const ix = qw * x + qy * z - qz * y;
-  const iy = qw * y + qz * x - qx * z;
-  const iz = qw * z + qx * y - qy * x;
-  const iw = -qx * x - qy * y - qz * z;
-  return [
-    ix * qw + iw * -qx + iy * -qz - iz * -qy,
-    iy * qw + iw * -qy + iz * -qx - ix * -qz,
-    iz * qw + iw * -qz + ix * -qy - iy * -qx,
-  ];
-}
-
-function quaternionToTuple(q: QuaternionLike): QuaternionTuple {
-  if (Array.isArray(q)) return q;
-  return [q.x, q.y, q.z, q.w];
 }

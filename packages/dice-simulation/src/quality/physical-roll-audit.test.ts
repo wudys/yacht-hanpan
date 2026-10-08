@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { type RollTimeline, TRAY_GEOMETRY } from '../contract';
 import { DIE_SIZE, FLOOR_TOP_Y } from '../simulate/internal/roll-simulation-constants';
-import type { PhysicsCompletionSnapshot } from '../simulate/simulate-timeline';
+import type { PhysicsCompletionSnapshot } from '../simulate/simulate-physics';
 import { measurePhysicsCompletion, physicsCompletionIssues } from './physical-roll-audit';
 
 describe('physical completion audit', () => {

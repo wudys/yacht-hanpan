@@ -6,13 +6,13 @@ import { DEFAULT_CUP_GEOMETRY as CUP } from '../contract/cup-geometry';
 import { DIE_GEOMETRY } from '../contract/roll-geometry';
 import { measureCupBottomBoundary } from '../quality/cup-boundary-audit';
 import { initializeDeterministicRapierForBun } from '../rapier/bun';
-import { createCupMotion, quatFromEuler } from './internal/cup-motion';
+import { createCupMotion } from './internal/cup-motion';
 import { createPhysicsCup, haveDiceClearedCup } from './internal/physics-cup';
 import { createDieInCup } from './internal/physics-environment';
-import { rotateVectorByQuat } from './internal/result-recognition';
 import { createRollPhysicsConfig } from './internal/roll-physics';
 import { FLOOR_Y } from './internal/roll-simulation-constants';
-import { simulateRollTimeline } from './simulate-timeline';
+import { quatFromEuler, rotateVectorByQuat } from './internal/simulation-math';
+import { simulateRollTimeline } from './simulate-physics';
 
 beforeAll(initializeDeterministicRapierForBun);
 

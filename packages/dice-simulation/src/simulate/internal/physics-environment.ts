@@ -9,8 +9,7 @@ import RAPIER from '@dimforge/rapier3d-deterministic';
 
 import { DEFAULT_CUP_GEOMETRY } from '../../contract/cup-geometry';
 import type { SimulatedCupMotion } from './cup-motion';
-import { cupTransformAt, quatFromEuler } from './cup-motion';
-import { rotateVectorByQuat } from './result-recognition';
+import { cupTransformAt } from './cup-motion';
 import type { RollPhysicsConfig } from './roll-physics';
 import {
   DIE_COLLIDER_RADIUS,
@@ -20,6 +19,7 @@ import {
   trayGeometry,
 } from './roll-simulation-constants';
 import { seededNumber } from './seed-expander';
+import { quatFromEuler, rotateVectorByQuat } from './simulation-math';
 
 export interface TrayWall {
   collider: Collider;

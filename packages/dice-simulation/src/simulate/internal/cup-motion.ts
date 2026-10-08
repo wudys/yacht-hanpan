@@ -1,5 +1,3 @@
-import type { Rotation } from '@dimforge/rapier3d-deterministic';
-
 import { CUP_EXIT_HOLD_MS, type CupFrame, type PourStyle } from '../../contract';
 import { cupLowerSupport } from '../../contract/cup-geometry';
 import { TRAY_FLOOR_TOP_Y } from '../../contract/roll-geometry';
@@ -7,7 +5,7 @@ import { CUP_EXIT_TAIL_MS, CUP_GATHER_MS, cupPourProgress } from './cup-motion-p
 import { createCupPourProfile } from './cup-pour-profile';
 import { rollAreaMeta, trayGeometry } from './roll-simulation-constants';
 import { seededNumber } from './seed-expander';
-import { round } from './simulation-math';
+import { quatFromEuler, round } from './simulation-math';
 
 export interface CupTransform {
   x: number;
@@ -170,20 +168,5 @@ export function createCupFrame(cup: SimulatedCupMotion, timeMs: number): CupFram
     q: [round(q.x), round(q.y), round(q.z), round(q.w)],
     visible: timeMs < cup.exitAtMs,
     mode,
-  };
-}
-
-export function quatFromEuler(x: number, y: number, z: number): Rotation {
-  const c1 = Math.cos(x / 2),
-    c2 = Math.cos(y / 2),
-    c3 = Math.cos(z / 2);
-  const s1 = Math.sin(x / 2),
-    s2 = Math.sin(y / 2),
-    s3 = Math.sin(z / 2);
-  return {
-    x: s1 * c2 * c3 + c1 * s2 * s3,
-    y: c1 * s2 * c3 - s1 * c2 * s3,
-    z: c1 * c2 * s3 + s1 * s2 * c3,
-    w: c1 * c2 * c3 - s1 * s2 * s3,
   };
 }

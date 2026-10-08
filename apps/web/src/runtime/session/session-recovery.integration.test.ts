@@ -1,4 +1,4 @@
-import { createGameClient, type CreateGameClientOptions } from '@repo/game-client-sdk';
+import { createGameClient, type RawGameSocket } from '@repo/game-client-sdk';
 import { CLIENT_ERROR_CODE } from '@repo/game-client-sdk/errors';
 import { PUBLIC_ERROR_CODE } from '@repo/game-protocol';
 import { parseGameSnapshot } from '@repo/game-protocol/socket';
@@ -9,7 +9,6 @@ import { createGameSessionHolder } from '@/runtime/session/game-session-holder';
 import { createSessionRecovery } from '@/runtime/session/session-recovery';
 import { authority, playingGame, room } from '@/testing/game-fixtures';
 
-type Socket = ReturnType<NonNullable<CreateGameClientOptions['socketFactory']>['create']>;
 const view = {
   room,
   game: playingGame,
@@ -35,7 +34,7 @@ test('real SDK ignores a late confirmation, coalesces foreground, and confirms l
   let update = (_value: unknown) => {};
   let foreground = () => {};
   const acknowledgements: ((value: unknown) => void)[] = [];
-  const socket: Socket = {
+  const socket: RawGameSocket = {
     connect: vi.fn(async () => connected()),
     disconnect: vi.fn(() => disconnected()),
     dispose: vi.fn(),

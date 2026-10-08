@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /* eslint-disable testing-library/no-manual-cleanup -- external stores and timers are disposed before the next test. */
 
-import { createGameSession, type CreateGameSessionOptions } from '@repo/game-client-sdk/session';
+import { createGameSession, type RawGameSocket } from '@repo/game-client-sdk/session';
 import {
   CATEGORY_ID,
   type GameSnapshotInput,
@@ -161,7 +161,6 @@ async function createHarness(
   initial: RoomView = beforeScore,
   acknowledgementTimeoutMs: number = 100,
 ) {
-  type Socket = ReturnType<NonNullable<CreateGameSessionOptions['socketFactory']>['create']>;
   const meta = {
     requestId: '11111111-1111-4111-8111-000000000003',
     gameProtocolVersion: GAME_PROTOCOL_VERSION,
@@ -169,21 +168,21 @@ async function createHarness(
   };
   let synchronizationView = initial;
   const socket = {
-    connect: vi.fn<Socket['connect']>(async () => {
+    connect: vi.fn<RawGameSocket['connect']>(async () => {
       socket.onConnected.mock.lastCall?.[0]();
     }),
-    disconnect: vi.fn<Socket['disconnect']>(),
-    dispose: vi.fn<Socket['dispose']>(),
-    emitSync: vi.fn<Socket['emitSync']>((ack) =>
+    disconnect: vi.fn<RawGameSocket['disconnect']>(),
+    dispose: vi.fn<RawGameSocket['dispose']>(),
+    emitSync: vi.fn<RawGameSocket['emitSync']>((ack) =>
       ack({ ok: true, data: synchronizationView, meta }),
     ),
-    emitCommand: vi.fn<Socket['emitCommand']>(),
-    onConnected: vi.fn<Socket['onConnected']>(() => () => {}),
-    onDisconnected: vi.fn<Socket['onDisconnected']>(() => () => {}),
-    onReplaced: vi.fn<Socket['onReplaced']>(() => () => {}),
-    onRoomUpdate: vi.fn<Socket['onRoomUpdate']>(() => () => {}),
-    onConnectionError: vi.fn<Socket['onConnectionError']>(() => () => {}),
-  } satisfies Socket;
+    emitCommand: vi.fn<RawGameSocket['emitCommand']>(),
+    onConnected: vi.fn<RawGameSocket['onConnected']>(() => () => {}),
+    onDisconnected: vi.fn<RawGameSocket['onDisconnected']>(() => () => {}),
+    onReplaced: vi.fn<RawGameSocket['onReplaced']>(() => () => {}),
+    onRoomUpdate: vi.fn<RawGameSocket['onRoomUpdate']>(() => () => {}),
+    onConnectionError: vi.fn<RawGameSocket['onConnectionError']>(() => () => {}),
+  } satisfies RawGameSocket;
   const sessions = createGameSessionHolder({
     createSession: (credentials) =>
       createGameSession({

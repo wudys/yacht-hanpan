@@ -1,4 +1,43 @@
-import type { GameSession } from './session';
+import type {
+  CreateGameClientOptions,
+  GameSocketFactory as RootGameSocketFactory,
+  RawGameSocket as RootRawGameSocket,
+  RetryPolicy as RootRetryPolicy,
+} from '@repo/game-client-sdk';
+import type {
+  CreateGameSessionOptions,
+  GameSession,
+  GameSocketFactory as SessionGameSocketFactory,
+  RawGameSocket as SessionRawGameSocket,
+  RetryPolicy as SessionRetryPolicy,
+} from '@repo/game-client-sdk/session';
+
+export function publicInjectionOptions(
+  rootSocket: RootRawGameSocket,
+  sessionSocket: SessionRawGameSocket,
+  rootRetryPolicy: RootRetryPolicy,
+  sessionRetryPolicy: SessionRetryPolicy,
+  clientOptions: CreateGameClientOptions,
+  sessionOptions: CreateGameSessionOptions,
+): readonly [CreateGameClientOptions, CreateGameSessionOptions] {
+  const rootFactory: RootGameSocketFactory = {
+    create: (): RootRawGameSocket => rootSocket,
+  };
+  const sessionFactory: SessionGameSocketFactory = {
+    create: (): SessionRawGameSocket => sessionSocket,
+  };
+  const client: CreateGameClientOptions = {
+    ...clientOptions,
+    socketFactory: sessionFactory,
+    retryPolicy: sessionRetryPolicy,
+  };
+  const session: CreateGameSessionOptions = {
+    ...sessionOptions,
+    socketFactory: rootFactory,
+    retryPolicy: rootRetryPolicy,
+  };
+  return [client, session];
+}
 
 export function assertSnapshotIsBorrowed(session: GameSession): void {
   const snapshot = session.getSnapshot();

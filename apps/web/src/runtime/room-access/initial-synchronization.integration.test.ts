@@ -1,4 +1,4 @@
-import { createGameClient, type CreateGameClientOptions } from '@repo/game-client-sdk';
+import { createGameClient, type RawGameSocket } from '@repo/game-client-sdk';
 import { CLIENT_ERROR_CODE } from '@repo/game-client-sdk/errors';
 import { PUBLIC_ERROR_CODE } from '@repo/game-protocol';
 import { parseGameSnapshot } from '@repo/game-protocol/socket';
@@ -12,7 +12,6 @@ import { createSessionCredentialStore } from '@/runtime/session/session-credenti
 import { createSessionRecovery } from '@/runtime/session/session-recovery';
 import { authority, playingGame, room, waitingRoom } from '@/testing/game-fixtures';
 
-type Socket = ReturnType<NonNullable<CreateGameClientOptions['socketFactory']>['create']>;
 const waitingView = {
   room: waitingRoom,
   game: null,
@@ -34,7 +33,7 @@ function setup(saved: boolean, controlRecovery: boolean = false) {
   let disconnected = () => {};
   let update = (_value: unknown) => {};
   let acknowledge: ((value: unknown) => void) | undefined;
-  const socket: Socket = {
+  const socket: RawGameSocket = {
     connect: vi.fn(async () => connected()),
     disconnect: vi.fn(() => disconnected()),
     dispose: vi.fn(),

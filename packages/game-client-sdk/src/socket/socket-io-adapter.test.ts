@@ -56,7 +56,7 @@ describe('Socket.IO authentication boundary', () => {
   test('an error subscriber reconnect keeps its cancellation and cannot time out a later connection', async () => {
     // Module substitution stays in a separate process so other adapter tests use real Socket.IO.
     const subprocess = Bun.spawn(
-      [process.execPath, new URL('./socket-io-reentry.test-fixtures.ts', import.meta.url).pathname],
+      [process.execPath, new URL('./socket-io-reentry.test-harness.ts', import.meta.url).pathname],
       { stdout: 'pipe', stderr: 'pipe' },
     );
     const [exitCode, stderr] = await Promise.all([

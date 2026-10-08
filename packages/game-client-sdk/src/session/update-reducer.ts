@@ -8,9 +8,9 @@ import {
   type RoomView,
 } from '@repo/game-protocol/socket';
 
-import { freshScoreRecord, isFreshTimeoutTurn, type ScoreRecord } from './score-transition';
+import { freshScoreRecord, isFreshTimeoutTurn, type ScoreRecord } from './presentation-transitions';
 
-export type { ScoreRecord } from './score-transition';
+export type { ScoreRecord } from './presentation-transitions';
 
 /**
  * Provenance for the current game version, retained across duplicate and presence-only views.

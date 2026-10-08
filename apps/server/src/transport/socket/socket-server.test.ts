@@ -5,7 +5,7 @@ import {
   type RollCandidateEvaluation,
   type SimulationInput,
 } from '@repo/dice-simulation/contract';
-import { createGameClient, type CreateGameClientOptions } from '@repo/game-client-sdk';
+import { createGameClient, type RawGameSocket } from '@repo/game-client-sdk';
 import { CLIENT_ERROR_CODE } from '@repo/game-client-sdk/errors';
 import { PUBLIC_ERROR_CODE } from '@repo/game-protocol/errors';
 import { parseCreateRoomResponse, parseJoinRoomResponse } from '@repo/game-protocol/http';
@@ -581,11 +581,10 @@ describe('authoritative Socket server', () => {
       contract: createCompatibilityContract(RELEASE_ID),
     });
     // Only the network port is adapted; room FIFO, authority and Socket admission stay real.
-    type RawSocket = ReturnType<NonNullable<CreateGameClientOptions['socketFactory']>['create']>;
     let connected = () => {};
     const commandAcks: ReturnType<typeof parseCommandAck>[] = [];
     const syncAcks: ReturnType<typeof parseSyncAck>[] = [];
-    const raw: RawSocket = {
+    const raw: RawGameSocket = {
       connect: async () => connected(),
       disconnect: () => {
         creator.disconnect();

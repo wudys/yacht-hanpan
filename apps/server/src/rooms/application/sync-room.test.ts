@@ -12,7 +12,7 @@ import { RoomStateCommitter } from '@/rooms/application/room-state-committer';
 import { InMemoryRoomTaskQueue } from '@/rooms/application/scheduling/room-task-queue';
 import { executeSyncRoom } from '@/rooms/application/sync-room';
 import { forfeitMatch, MATCH_END_REASON } from '@/rooms/domain/match';
-import { markGameFinished } from '@/rooms/domain/room-match-lifecycle';
+import { markRoomFinished } from '@/rooms/domain/room-match-lifecycle';
 import { roomId } from '@/rooms/domain/room-model';
 import { isPlayingRoomState } from '@/rooms/domain/room-state';
 
@@ -220,7 +220,7 @@ describe('executeSyncRoom', () => {
     const transition = forfeitMatch(current.match, {
       forfeitingSeatIndex: JOINER_SEAT_INDEX,
     });
-    const finishedRoom = markGameFinished(current.room, { finishedAt: 3_000 });
+    const finishedRoom = markRoomFinished(current.room, { finishedAt: 3_000 });
     if (!transition.ok || transition.match.status !== 'finished') {
       throw new Error('match finish fixture failed');
     }
@@ -276,7 +276,7 @@ describe('executeSyncRoom', () => {
   test('observes a queued replacement before projecting the sync snapshot', async () => {
     const state = await seedPlaying();
     const barrier = Promise.withResolvers<void>();
-    const replacement = state.queue.run(roomId(ROOM_ID), async () => {
+    const replacement = state.queue.runInternal(roomId(ROOM_ID), async () => {
       await barrier.promise;
       const current = state.repository.getById(roomId(ROOM_ID));
       if (current === undefined) throw new Error('playing fixture missing');

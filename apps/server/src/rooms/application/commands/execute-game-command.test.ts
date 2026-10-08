@@ -332,7 +332,7 @@ describe('executeGameCommand', () => {
     const state = await capturedFixture();
     installFinalScoreRecord(state.repository);
     const gate = Promise.withResolvers<void>();
-    const blocker = state.queue.run(roomId(ROOM_ID), () => gate.promise);
+    const blocker = state.queue.runInternal(roomId(ROOM_ID), () => gate.promise);
     const forfeit = executeGameCommand(
       {
         roomId: roomId(ROOM_ID),
@@ -432,7 +432,7 @@ describe('executeGameCommand', () => {
       { roomId: input.roomId, seatIndex: input.seatIndex },
       state.dependencies,
     );
-    await state.queue.run(roomId('other-room'), () => undefined);
+    await state.queue.runInternal(roomId('other-room'), () => undefined);
     expect(acknowledged).toBeFalse();
     expect(playingRecord(state.repository).stateVersion).toBe(1);
     expect(state.queue.pendingRequestCount).toBe(2);
@@ -463,7 +463,7 @@ describe('executeGameCommand', () => {
       const gate = Promise.withResolvers<void>();
       const entered = Promise.withResolvers<void>();
       const blocker = blocked
-        ? state.queue.run(roomId(ROOM_ID), async () => {
+        ? state.queue.runInternal(roomId(ROOM_ID), async () => {
             entered.resolve();
             await gate.promise;
           })
@@ -1339,7 +1339,7 @@ describe('executeGameCommand', () => {
       expect(playingRecord(state.repository).stateVersion).toBe(before.stateVersion);
       expect(state.published).toHaveLength(0);
       expect(dependencies.pending.count(ROOM_ID)).toBe(1);
-      const laterWork = dependencies.queue.run(input.roomId, () => {
+      const laterWork = dependencies.queue.runInternal(input.roomId, () => {
         laterWorkRan = true;
         return playingRecord(state.repository);
       });
@@ -1527,7 +1527,7 @@ describe('executeGameCommand', () => {
     const duplicate = executeGameCommand(input, dependencies);
     await entered.promise;
     let laterWorkRan = false;
-    const laterWork = dependencies.queue.run(input.roomId, () => {
+    const laterWork = dependencies.queue.runInternal(input.roomId, () => {
       laterWorkRan = true;
       return playingRecord(state.repository);
     });

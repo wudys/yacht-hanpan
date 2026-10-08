@@ -251,7 +251,7 @@ export class RoomApplication {
       this.#dependencies.clock.now() + 30_000,
       async () => {
         try {
-          await this.cleanupRooms();
+          await this.runMaintenance();
         } finally {
           this.startMaintenance();
         }
@@ -259,7 +259,7 @@ export class RoomApplication {
     );
   }
 
-  public cleanupRooms() {
+  public runMaintenance() {
     this.#admissionOperations.prune();
     this.#dependencies.rateLimiter.prune(this.#dependencies.clock.now());
     return this.#maintenance.execute();

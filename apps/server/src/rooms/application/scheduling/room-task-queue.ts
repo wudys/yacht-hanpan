@@ -8,7 +8,10 @@ export type RoomRequestResult<Value> =
   | { readonly ok: false; readonly reason: 'capacity' | 'waitExpired' | 'closed' };
 
 export interface RoomTaskQueue {
-  readonly run: <Value>(roomId: RoomId, operation: () => Value | Promise<Value>) => Promise<Value>;
+  readonly runInternal: <Value>(
+    roomId: RoomId,
+    operation: () => Value | Promise<Value>,
+  ) => Promise<Value>;
   readonly runRequest: <Value>(
     roomId: RoomId,
     operation: () => Value | Promise<Value>,
@@ -59,7 +62,10 @@ export class InMemoryRoomTaskQueue implements RoomTaskQueue {
     return this.#pendingRequestCount;
   }
 
-  public run<Value>(roomId: RoomId, operation: () => Value | Promise<Value>): Promise<Value> {
+  public runInternal<Value>(
+    roomId: RoomId,
+    operation: () => Value | Promise<Value>,
+  ): Promise<Value> {
     return this.#enqueue(roomId, operation);
   }
 

@@ -1,8 +1,8 @@
 import { type GameSnapshot, parseRoomView, type RoomView } from '@repo/game-protocol/socket';
 
-import { projectGameSnapshot } from '@/rooms/application/projection/match';
-import { projectPresenceSnapshot } from '@/rooms/application/projection/presence';
-import { projectPublicRoom } from '@/rooms/application/projection/room';
+import { projectGameSnapshot } from '@/rooms/application/projection/game-snapshot';
+import { projectPresenceSnapshot } from '@/rooms/application/projection/presence-snapshot';
+import { projectPublicRoom } from '@/rooms/application/projection/public-room';
 import type {
   FinishedRoomRecord,
   PlayingRoomRecord,

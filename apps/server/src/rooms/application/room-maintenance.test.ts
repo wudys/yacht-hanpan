@@ -199,7 +199,7 @@ describe('RoomMaintenance', () => {
       room: { ...firstRecord.room, id: secondId, code: secondRecord.room.code },
     });
     const gate = Promise.withResolvers<void>();
-    const prior = queue.run(secondId, () => gate.promise);
+    const prior = queue.runInternal(secondId, () => gate.promise);
     const failure = new Error('cleanup failed');
     const failed = Promise.withResolvers<void>();
     const commits = new RoomStateCommitter({
@@ -269,7 +269,7 @@ describe('RoomMaintenance', () => {
     repository.createExclusive({ ...firstRecord, room: second.room });
     const queue = new InMemoryRoomTaskQueue();
     const gate = Promise.withResolvers<void>();
-    const prior = queue.run(ROOM_ID, () => gate.promise);
+    const prior = queue.runInternal(ROOM_ID, () => gate.promise);
     const earlierFailure = new Error('second candidate failed first');
     const laterFailure = new Error('first candidate failed later');
     const failed = Promise.withResolvers<void>();
@@ -308,11 +308,11 @@ describe('RoomMaintenance', () => {
     const queue = new InMemoryRoomTaskQueue();
     const secondId = roomId('018f47f2-c2d8-7f4a-8bf4-3f559c39844a');
     const gate = Promise.withResolvers<void>();
-    const prior = queue.run(secondId, () => gate.promise);
-    const run = queue.run.bind(queue);
+    const prior = queue.runInternal(secondId, () => gate.promise);
+    const run = queue.runInternal.bind(queue);
     const registered: RoomId[] = [];
     const failure: unknown = undefined;
-    const registration = spyOn(queue, 'run').mockImplementation((id, operation) => {
+    const registration = spyOn(queue, 'runInternal').mockImplementation((id, operation) => {
       registered.push(id);
       if (id === ROOM_ID) throw failure;
       return run(id, operation);
@@ -401,7 +401,7 @@ describe('RoomMaintenance', () => {
     const waiting = waitingRecord();
     repository.createExclusive(waiting);
     const gate = Promise.withResolvers<void>();
-    const prior = queue.run(ROOM_ID, () => gate.promise);
+    const prior = queue.runInternal(ROOM_ID, () => gate.promise);
     const joined = executeJoinRoom(
       parseJoinRoomRequest({
         clientId: '018f47f2-c2d8-7f4a-8bf4-3f559c39843d',

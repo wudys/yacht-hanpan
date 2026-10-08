@@ -10,7 +10,7 @@ import type { FinishedRoomState, PlayingRoomState } from '@/rooms/domain/room-st
 import { roomRejected, roomUnchanged } from '@/rooms/domain/room-transition-result';
 import { epochMilliseconds, isValidTimestamp } from '@/rooms/domain/time';
 
-export interface MarkGameFinishedInput {
+export interface MarkRoomFinishedInput {
   readonly finishedAt: unknown;
 }
 
@@ -27,25 +27,25 @@ export function finishRoomMatch(
   match: FinishedMatch,
   committedAt: number,
 ): FinishRoomMatchResult {
-  const finished = markGameFinished(current.room, { finishedAt: committedAt });
+  const finished = markRoomFinished(current.room, { finishedAt: committedAt });
   if (!finished.ok) return { ok: false, reason: 'roomRejected', code: finished.code };
   return { ok: true, state: { room: finished.room, match } };
 }
 
-export function markGameFinished(
+export function markRoomFinished(
   room: PlayingRoom,
-  input: MarkGameFinishedInput,
+  input: MarkRoomFinishedInput,
 ): Exclude<
   RoomTransition<FinishedRoom, PlayingRoom>,
   { readonly ok: true; readonly changed: false }
 >;
-export function markGameFinished(
+export function markRoomFinished(
   room: Room,
-  input: MarkGameFinishedInput,
+  input: MarkRoomFinishedInput,
 ): RoomTransition<FinishedRoom, Room>;
-export function markGameFinished(
+export function markRoomFinished(
   room: Room,
-  input: MarkGameFinishedInput,
+  input: MarkRoomFinishedInput,
 ): RoomTransition<FinishedRoom, Room> {
   if (!isValidTimestamp(input.finishedAt)) {
     return roomRejected(room, ROOM_REJECTION_CODE.INVALID_TIMESTAMP);

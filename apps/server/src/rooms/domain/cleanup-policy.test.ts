@@ -5,7 +5,7 @@ import { createRoom } from '@/rooms/domain/create-room';
 import { joinRoom } from '@/rooms/domain/join-room';
 import { resumeSeat } from '@/rooms/domain/presence';
 import { ROOM_CLEANUP_REASON, ROOM_REJECTION_CODE } from '@/rooms/domain/room-constants';
-import { markGameFinished } from '@/rooms/domain/room-match-lifecycle';
+import { markRoomFinished } from '@/rooms/domain/room-match-lifecycle';
 import {
   type FinishedRoom,
   type PlayingRoom,
@@ -36,7 +36,7 @@ function playingRoom(): PlayingRoom {
 }
 
 function finishedRoom(): FinishedRoom {
-  const result = markGameFinished(playingRoom(), { finishedAt: 10_000 });
+  const result = markRoomFinished(playingRoom(), { finishedAt: 10_000 });
   if (!result.ok || !result.changed) throw new Error('fixture finish failed');
   return result.room;
 }

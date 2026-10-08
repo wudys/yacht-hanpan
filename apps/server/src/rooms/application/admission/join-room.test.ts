@@ -156,7 +156,7 @@ describe('executeJoinRoom', () => {
     };
     const gate = Promise.withResolvers<void>();
     const entered = Promise.withResolvers<void>();
-    const blocker = queue.run(roomId(ROOM_ID), () => {
+    const blocker = queue.runInternal(roomId(ROOM_ID), () => {
       entered.resolve();
       return gate.promise;
     });

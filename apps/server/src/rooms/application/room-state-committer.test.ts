@@ -18,7 +18,7 @@ import { createRoom } from '@/rooms/domain/create-room';
 import { joinRoom } from '@/rooms/domain/join-room';
 import { applyRollResult, createMatch, forfeitMatch, turnId } from '@/rooms/domain/match';
 import { resumeSeat } from '@/rooms/domain/presence';
-import { markGameFinished } from '@/rooms/domain/room-match-lifecycle';
+import { finishRoomMatch, markRoomFinished } from '@/rooms/domain/room-match-lifecycle';
 import { roomId } from '@/rooms/domain/room-model';
 import type { PlayingRoomState } from '@/rooms/domain/room-state';
 import { epochMilliseconds } from '@/rooms/domain/time';
@@ -83,6 +83,36 @@ function fixture() {
 }
 
 describe('RoomStateCommitter', () => {
+  test('game commit finalizes a finished aggregate and preserves authority without mutating input', () => {
+    const current = { ...playingRecord(), stateVersion: 16 };
+    const transition = forfeitMatch(current.match, { forfeitingSeatIndex: 0 });
+    if (!transition.ok || transition.match.status !== 'finished') {
+      throw new Error('forfeit fixture failed');
+    }
+    const actionLedger: PlayingRoomRecord['actionLedger'] = [];
+    const finishedState = finishRoomMatch(current, transition.match, 3_000);
+    if (!finishedState.ok) throw new Error('finish fixture failed');
+    const repository = new InMemoryRoomRepository();
+    expect(repository.createExclusive(current)).toEqual({ ok: true });
+    const committed = new RoomStateCommitter({
+      clock: { now: () => 3_000 },
+      repository,
+      publishRoomState: () => undefined,
+    }).commitGame({ current, state: finishedState.state, actionLedger });
+    expect(committed.ok).toBeTrue();
+    const finished = repository.getById(current.room.id);
+    if (finished?.room.status !== 'finished') throw new Error('finished commit missing');
+    expect(finished?.room.status).toBe('finished');
+    expect(Number(finished?.room.finishedAt)).toBe(3_000);
+    expect(finished?.match).toBe(transition.match);
+    expect(finished?.credentialHashes).toEqual(current.credentialHashes);
+    expect(finished?.actionLedger).toBe(actionLedger);
+    expect(finished?.stateVersion).toBe(17);
+    expect(finished?.presenceVersion).toBe(current.presenceVersion);
+    expect(current.room.status).toBe('playing');
+    expect(current.match.status).toBe('playing');
+  });
+
   test('starts with both seat credentials and advances both versions before publication', () => {
     const repository = new InMemoryRoomRepository();
     const current = waitingRecord();
@@ -188,7 +218,7 @@ describe('RoomStateCommitter', () => {
     'preserves credentials, presence, and ledger when %s state carries extra metadata',
     (status) => {
       const state = fixture();
-      const room = markGameFinished(state.current.room, { finishedAt: 3_000 });
+      const room = markRoomFinished(state.current.room, { finishedAt: 3_000 });
       const match = forfeitMatch(state.current.match, { forfeitingSeatIndex: 1 });
       if (!room.ok || !room.changed || !match.ok || match.match.status !== 'finished') {
         throw new Error('finish fixture failed');
@@ -239,7 +269,7 @@ describe('RoomStateCommitter', () => {
 
   test('rejects a lifecycle change through presence without replacing the active connection', () => {
     const state = fixture();
-    const finished = markGameFinished(state.current.room, { finishedAt: 3_000 });
+    const finished = markRoomFinished(state.current.room, { finishedAt: 3_000 });
     if (!finished.ok || !finished.changed) throw new Error('fixture finish failed');
     const connections = new ConnectionRegistry();
     const previous = { connectionId: 'old-socket', executionId: 'old-execution' };
@@ -312,13 +342,13 @@ describe('RoomStateCommitter', () => {
       },
     });
 
-    const first = queue.run(ROOM_ID, () =>
+    const first = queue.runInternal(ROOM_ID, () =>
       commits.commitGame({
         current: state.current,
         state: state.current,
       }),
     );
-    const second = queue.run(ROOM_ID, () => {
+    const second = queue.runInternal(ROOM_ID, () => {
       observations.push('next operation');
       expect(state.repository.getById(ROOM_ID)?.stateVersion).toBe(2);
     });
@@ -629,7 +659,7 @@ describe('RoomStateCommitter', () => {
 
   test('captures a finished view before removal and delivers it after the indexes are gone', () => {
     const state = fixture();
-    const room = markGameFinished(state.current.room, { finishedAt: 3_000 });
+    const room = markRoomFinished(state.current.room, { finishedAt: 3_000 });
     const match = forfeitMatch(state.current.match, { forfeitingSeatIndex: 1 });
     if (!room.ok || !room.changed || !match.ok || match.match.status !== 'finished') {
       throw new Error('finish fixture failed');

@@ -465,7 +465,7 @@ describe('game server lifecycle integration', () => {
     if (!isRoomCode(removedCode)) throw new Error('fixture produced an invalid room code');
     expect(repository.findRoomIdByCode(removedCode)).toBeUndefined();
     const pending = Promise.withResolvers<void>();
-    const cleanup = spyOn(RoomApplication.prototype, 'cleanupRooms').mockReturnValueOnce(
+    const cleanup = spyOn(RoomApplication.prototype, 'runMaintenance').mockReturnValueOnce(
       pending.promise,
     );
     try {

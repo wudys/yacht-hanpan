@@ -7,7 +7,7 @@ import { disconnectSeat, resumeSeat } from '@/rooms/domain/presence';
 import { ROOM_REJECTION_CODE, ROOM_STATUS } from '@/rooms/domain/room-constants';
 import {
   finishRoomMatch,
-  markGameFinished,
+  markRoomFinished,
   startRoomMatch,
 } from '@/rooms/domain/room-match-lifecycle';
 import { type PlayingRoom, roomId, type WaitingRoom } from '@/rooms/domain/room-model';
@@ -102,10 +102,10 @@ describe('room match lifecycle', () => {
   );
 });
 
-describe('markGameFinished', () => {
+describe('markRoomFinished', () => {
   it('preserves seats and records a trusted finish time', () => {
     const room = playingRoom();
-    const result = markGameFinished(room, { finishedAt: 10_000 });
+    const result = markRoomFinished(room, { finishedAt: 10_000 });
 
     expect(result.room.status).toBe(ROOM_STATUS.FINISHED);
     if (result.room.status !== ROOM_STATUS.FINISHED) throw new Error('room did not finish');
@@ -117,20 +117,20 @@ describe('markGameFinished', () => {
 
   it('rejects waiting rooms and keeps a finished room unchanged only for valid timestamps', () => {
     const waiting = waitingRoom();
-    expect(markGameFinished(waiting, { finishedAt: 3_000 })).toEqual({
+    expect(markRoomFinished(waiting, { finishedAt: 3_000 })).toEqual({
       ok: false,
       changed: false,
       room: waiting,
       code: ROOM_REJECTION_CODE.ROOM_NOT_PLAYING,
     });
-    const finished = markGameFinished(playingRoom(), { finishedAt: 10_000 });
+    const finished = markRoomFinished(playingRoom(), { finishedAt: 10_000 });
     if (!finished.ok) throw new Error('fixture finish failed');
-    expect(markGameFinished(finished.room, { finishedAt: 20_000 })).toEqual({
+    expect(markRoomFinished(finished.room, { finishedAt: 20_000 })).toEqual({
       ok: true,
       changed: false,
       room: finished.room,
     });
-    expect(markGameFinished(finished.room, { finishedAt: -1 })).toEqual({
+    expect(markRoomFinished(finished.room, { finishedAt: -1 })).toEqual({
       ok: false,
       changed: false,
       room: finished.room,
@@ -168,7 +168,7 @@ describe('markGameFinished', () => {
       throw new Error('joiner disconnect failed');
     }
 
-    expect(markGameFinished(bothDisconnected.room, { finishedAt: 10_000 }).room).toMatchObject({
+    expect(markRoomFinished(bothDisconnected.room, { finishedAt: 10_000 }).room).toMatchObject({
       status: ROOM_STATUS.FINISHED,
       finishedAt: 10_000,
       seats: bothDisconnected.room.seats,
@@ -178,7 +178,7 @@ describe('markGameFinished', () => {
   it.each([-1, 1_999])('rejects invalid finish time %d and preserves the room', (finishedAt) => {
     const room = playingRoom();
 
-    expect(markGameFinished(room, { finishedAt })).toEqual({
+    expect(markRoomFinished(room, { finishedAt })).toEqual({
       ok: false,
       changed: false,
       room,
@@ -189,7 +189,7 @@ describe('markGameFinished', () => {
 
 describe('terminal room recovery', () => {
   it('rejects resume after the game finishes', () => {
-    const finished = markGameFinished(playingRoom(), { finishedAt: 10_000 });
+    const finished = markRoomFinished(playingRoom(), { finishedAt: 10_000 });
     if (!finished.ok || !finished.changed) throw new Error('fixture finish failed');
 
     expect(resumeSeat(finished.room, { seatIndex: creatorIndex, resumedAt: 20_000 })).toEqual({

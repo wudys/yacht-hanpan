@@ -123,7 +123,7 @@ describe('score handoff command boundaries', () => {
     expect(replay.result).toEqual(score.result);
     expect(replay.committedStateVersion).toBeNull();
     const gate = Promise.withResolvers<void>();
-    const blocker = state.dependencies.queue.run(roomId(ROOM_ID), () => gate.promise);
+    const blocker = state.dependencies.queue.runInternal(roomId(ROOM_ID), () => gate.promise);
     await Promise.resolve();
     const input = {
       roomId: roomId(ROOM_ID),

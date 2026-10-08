@@ -39,7 +39,7 @@ export class RoomDeadlineScheduler {
   }
 
   async #run(roomId: RoomId): Promise<void> {
-    const committed = await this.#dependencies.queue.run(roomId, () => {
+    const committed = await this.#dependencies.queue.runInternal(roomId, () => {
       const record = this.#dependencies.repository.getById(roomId);
       if (record === undefined || !isPlayingRoomState(record)) return false;
       const committedAt = this.#dependencies.clock.now();

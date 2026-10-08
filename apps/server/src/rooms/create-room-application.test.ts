@@ -76,7 +76,7 @@ test('factory stats observe current room resources and removal clears their owne
       presence: { rooms: 0, connections: 0 },
     });
     now = 62_000;
-    await application.cleanupRooms();
+    await application.runMaintenance();
     expect(application.stats().retention).toEqual({
       roomRequests: 0,
       queueRooms: 0,

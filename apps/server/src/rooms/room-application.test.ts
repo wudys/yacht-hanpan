@@ -212,7 +212,7 @@ test('maintenance reclaims idle IP attempts without another create request', asy
   const state = await fixture();
   expect(state.rateLimiter.trackedAddressCount).toBe(1);
   state.setNow(61_000);
-  await state.service.cleanupRooms();
+  await state.service.runMaintenance();
   expect(state.rateLimiter.trackedAddressCount).toBe(0);
   expect(state.repository.counts().rooms).toBe(1);
   state.service.close();
@@ -335,7 +335,7 @@ test.each(['join', 'cancel', 'resume', 'connect', 'sync', 'command'] as const)(
 test('expires a waiting recovery request without changing room state', async () => {
   const state = await fixture(new InMemoryRoomTaskQueue({ requestWaitTimeoutMs: 10 }));
   const gate = Promise.withResolvers<void>();
-  const blocker = state.queue.run(ROOM_ID, () => gate.promise);
+  const blocker = state.queue.runInternal(ROOM_ID, () => gate.promise);
   const previous = state.repository.getById(ROOM_ID);
   try {
     expect(
@@ -356,7 +356,7 @@ test('expires a waiting recovery request without changing room state', async () 
 test('publishes game start before the next queued room operation', async () => {
   const state = await fixture();
   const gate = Promise.withResolvers<void>();
-  const blocker = state.queue.run(ROOM_ID, () => gate.promise);
+  const blocker = state.queue.runInternal(ROOM_ID, () => gate.promise);
   const joining = state.service.joinRoom(
     parseJoinRoomRequest({
       clientId: '018f47f2-c2d8-7f4a-8bf4-3f559c398445',
@@ -368,7 +368,7 @@ test('publishes game start before the next queued room operation', async () => {
   try {
     await Promise.resolve();
     expect(state.queue.pendingRequestCount).toBe(1);
-    const next = state.queue.run(ROOM_ID, () => [...state.started]);
+    const next = state.queue.runInternal(ROOM_ID, () => [...state.started]);
     gate.resolve();
     const [joined, publishedBeforeNext] = await Promise.all([joining, next]);
     if (!joined.ok) throw new Error('join failed');
@@ -412,7 +412,7 @@ test('publishes game commits with their next deadline already scheduled', async 
         categoryId: 'ones',
       }),
     });
-    const next = state.queue.run(ROOM_ID, () => state.scheduled.get(ROOM_ID)?.runAt);
+    const next = state.queue.runInternal(ROOM_ID, () => state.scheduled.get(ROOM_ID)?.runAt);
     expect((await score).result.ok).toBeTrue();
     expect(await next).toBe(94_001);
     expect(state.published.at(-1)).toMatchObject({
@@ -634,7 +634,7 @@ test('finished and removed rooms cancel their deadline and make an old wake harm
     await wake.task();
     expect(state.scheduled.has(ROOM_ID)).toBeFalse();
     expect(state.published).toHaveLength(2);
-    await state.service.cleanupRooms();
+    await state.service.runMaintenance();
     expect(state.repository.getById(ROOM_ID)).toBeUndefined();
     await wake.task();
     expect(state.scheduled.has(ROOM_ID)).toBeFalse();
@@ -698,7 +698,7 @@ test.each(['cancel', 'cleanup'] as const)(
       ).toBeTrue();
     } else {
       state.setNow(301_000);
-      await state.service.cleanupRooms();
+      await state.service.runMaintenance();
     }
     expect(state.repository.counts()).toEqual({ rooms: 0, codes: 0 });
     expect(state.connections.get(ROOM_ID, 0)).toBeUndefined();
@@ -732,7 +732,7 @@ test.each([false, true])(
     if (!second.ok) throw new Error('fixture create failed');
     state.repository.createExclusive({ ...firstRecord, room: second.room });
     const gate = Promise.withResolvers<void>();
-    const prior = state.queue.run(secondId, () => gate.promise);
+    const prior = state.queue.runInternal(secondId, () => gate.promise);
     const failure = new Error('maintenance removal failed');
     const failed = Promise.withResolvers<void>();
     const remove = spyOn(state.repository, 'remove').mockImplementationOnce(() => {

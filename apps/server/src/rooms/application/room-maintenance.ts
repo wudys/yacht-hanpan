@@ -42,7 +42,7 @@ export class RoomMaintenance {
     const candidates = roomIds.map((roomId: RoomId) => {
       try {
         return this.#dependencies.queue
-          .run(roomId, () => this.#cleanupOne(roomId, checkedAt))
+          .runInternal(roomId, () => this.#cleanupOne(roomId, checkedAt))
           .catch(recordFailure);
       } catch (error) {
         recordFailure(error);

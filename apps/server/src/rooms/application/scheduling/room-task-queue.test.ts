@@ -51,7 +51,7 @@ describe('in-memory room task queue', () => {
       ok: false,
       reason: 'capacity',
     });
-    const lifecycle = queue.run(id, () => order.push('lifecycle'));
+    const lifecycle = queue.runInternal(id, () => order.push('lifecycle'));
     expect(await queue.runRequest(roomId('b'), () => 42)).toEqual({ ok: true, value: 42 });
     expect(order).toEqual([]);
     expect(queue.pendingRequestCount).toBe(1);
@@ -151,7 +151,7 @@ describe('in-memory room task queue', () => {
     const queued = queue.runRequest(id, () => {
       queuedRan = true;
     });
-    const lifecycle = queue.run(id, () => 7);
+    const lifecycle = queue.runInternal(id, () => 7);
     queue.close();
     expect(await queued).toEqual({ ok: false, reason: 'closed' });
     expect(queue.pendingRequestCount).toBe(1);
@@ -194,15 +194,15 @@ describe('in-memory room task queue', () => {
       releaseFirst = resolve;
     });
 
-    const first = queue.run(roomId('room-a'), async () => {
+    const first = queue.runInternal(roomId('room-a'), async () => {
       order.push('a1:start');
       await gate;
       order.push('a1:end');
     });
-    const second = queue.run(roomId('room-a'), () => {
+    const second = queue.runInternal(roomId('room-a'), () => {
       order.push('a2');
     });
-    const other = queue.run(roomId('room-b'), () => {
+    const other = queue.runInternal(roomId('room-b'), () => {
       order.push('b1');
     });
 
@@ -220,11 +220,11 @@ describe('in-memory room task queue', () => {
     const gate = new Promise<void>((resolve) => {
       releaseFirst = resolve;
     });
-    const first = queue.run(roomId('room-a'), async () => {
+    const first = queue.runInternal(roomId('room-a'), async () => {
       await gate;
       throw new Error('expected fixture failure');
     });
-    const second = queue.run(roomId('room-a'), () => 42);
+    const second = queue.runInternal(roomId('room-a'), () => 42);
     releaseFirst();
     await expect(first).rejects.toThrow('expected fixture failure');
     await expect(second).resolves.toBe(42);
@@ -243,7 +243,7 @@ describe('in-memory room task queue', () => {
     });
     const second = queue.runRequest(id, () => order.push('second'));
     const rejected = await queue.runRequest(id, () => order.push('rejected'));
-    const cleanup = queue.run(id, () => order.push('cleanup'));
+    const cleanup = queue.runInternal(id, () => order.push('cleanup'));
     expect(rejected).toEqual({ ok: false, reason: 'capacity' });
     expect(queue.pendingRequestCount).toBe(2);
     gate.resolve();

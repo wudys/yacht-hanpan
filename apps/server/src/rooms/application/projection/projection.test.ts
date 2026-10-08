@@ -6,9 +6,9 @@ import {
 import { describe, expect, test } from 'bun:test';
 
 import { hashSeatToken } from '@/rooms/application/connections/seat-token';
-import { projectGameSnapshot } from '@/rooms/application/projection/match';
-import { projectPresenceSnapshot } from '@/rooms/application/projection/presence';
-import { projectPublicRoom } from '@/rooms/application/projection/room';
+import { projectGameSnapshot } from '@/rooms/application/projection/game-snapshot';
+import { projectPresenceSnapshot } from '@/rooms/application/projection/presence-snapshot';
+import { projectPublicRoom } from '@/rooms/application/projection/public-room';
 import { projectRoomView } from '@/rooms/application/projection/room-view';
 import type {
   FinishedRoomRecord,
@@ -20,7 +20,7 @@ import { createRoom } from '@/rooms/domain/create-room';
 import { joinRoom } from '@/rooms/domain/join-room';
 import { createMatch, forfeitMatch, turnId } from '@/rooms/domain/match';
 import { PRESENCE_STATUS } from '@/rooms/domain/room-constants';
-import { markGameFinished } from '@/rooms/domain/room-match-lifecycle';
+import { markRoomFinished } from '@/rooms/domain/room-match-lifecycle';
 import { type PlayingRoom, roomId, type WaitingRoom } from '@/rooms/domain/room-model';
 import { epochMilliseconds } from '@/rooms/domain/time';
 
@@ -111,7 +111,7 @@ function playingRecord(): PlayingRoomRecord {
 
 function finishedRecord(): FinishedRoomRecord {
   const current = playingRecord();
-  const finishedRoom = markGameFinished(current.room, { finishedAt: 3_000 });
+  const finishedRoom = markRoomFinished(current.room, { finishedAt: 3_000 });
   const finishedMatch = forfeitMatch(current.match, { forfeitingSeatIndex: 1 });
   if (!finishedRoom.ok || !finishedRoom.changed || !finishedMatch.ok) {
     throw new Error('fixture finish failed');

@@ -5,7 +5,7 @@ import { joinRoom } from '@/rooms/domain/join-room';
 import { disconnectSeat, resumeSeat } from '@/rooms/domain/presence';
 import { PRESENCE_STATUS, ROOM_STATUS } from '@/rooms/domain/room-constants';
 import { assertRoomInvariant } from '@/rooms/domain/room-invariants';
-import { markGameFinished } from '@/rooms/domain/room-match-lifecycle';
+import { markRoomFinished } from '@/rooms/domain/room-match-lifecycle';
 import { type Room, roomId } from '@/rooms/domain/room-model';
 
 const creatorIndex = 0 as const;
@@ -54,7 +54,7 @@ function roomSequence(): Room[] {
   if (!bothDisconnected.ok || !bothDisconnected.changed) {
     throw new Error('joiner disconnect failed');
   }
-  const finished = markGameFinished(joined.room, { finishedAt: 10_000 });
+  const finished = markRoomFinished(joined.room, { finishedAt: 10_000 });
   if (!finished.ok || !finished.changed) throw new Error('fixture finish failed');
 
   return [

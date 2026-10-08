@@ -26,7 +26,7 @@ export function executeDisconnectSeat(
   input: DisconnectSeatInput,
   dependencies: DisconnectSeatDependencies,
 ): Promise<boolean> {
-  return dependencies.queue.run(input.roomId, () => {
+  return dependencies.queue.runInternal(input.roomId, () => {
     if (!dependencies.connections.unbind(input.roomId, input.seatIndex, input.connectionId)) {
       return false;
     }

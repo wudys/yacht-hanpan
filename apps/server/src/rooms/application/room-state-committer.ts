@@ -1,10 +1,9 @@
 import {
   type CommittedRoomUpdate,
-  type GameSnapshot,
   parseCommittedRoomUpdate,
   ROOM_UPDATE_TYPE,
-  type RoomView,
 } from '@repo/game-protocol/socket';
+import { type GameSnapshot, type RoomView } from '@repo/game-protocol/state';
 import type { SeatIndex } from '@repo/yacht-rules';
 
 import {

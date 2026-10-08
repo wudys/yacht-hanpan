@@ -3,7 +3,7 @@ import {
   type GameSnapshotInput,
   MATCH_END_REASON,
   parseGameSnapshot,
-} from '@repo/game-protocol/socket';
+} from '@repo/game-protocol/state';
 
 import type { Match, MatchDie, MatchPlayer, MatchTurn } from '@/rooms/domain/match';
 

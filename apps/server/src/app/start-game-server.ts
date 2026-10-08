@@ -1,11 +1,8 @@
 import { createServer, type IncomingMessage, type Server as HttpServer } from 'node:http';
 import { isIPv6 } from 'node:net';
 
-import {
-  parseCommittedRoomUpdate,
-  ROOM_UPDATE_TYPE,
-  type RoomView,
-} from '@repo/game-protocol/socket';
+import { parseCommittedRoomUpdate, ROOM_UPDATE_TYPE } from '@repo/game-protocol/socket';
+import { type RoomView } from '@repo/game-protocol/state';
 import { createCompatibilityContract } from '@repo/game-protocol/version';
 
 import { closeGameServerResources } from '@/app/close-game-server-resources';

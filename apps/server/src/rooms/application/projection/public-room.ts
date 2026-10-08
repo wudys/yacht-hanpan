@@ -1,4 +1,4 @@
-import { parsePublicRoom, type PublicRoom, type PublicRoomInput } from '@repo/game-protocol/socket';
+import { parsePublicRoom, type PublicRoom, type PublicRoomInput } from '@repo/game-protocol/state';
 
 import { ROOM_STATUS } from '@/rooms/domain/room-constants';
 import { type Room, type Seat } from '@/rooms/domain/room-model';

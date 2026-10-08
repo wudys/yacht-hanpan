@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 
 import { type ClientError, createGameClient, type RoomAuthority } from '@repo/game-client-sdk';
-import { parseRoomView, type RoomView } from '@repo/game-protocol/socket';
+import { parseRoomView, type RoomView } from '@repo/game-protocol/state';
 import { CATEGORY_ID } from '@repo/yacht-rules';
 import { v7 as uuidV7 } from 'uuid';
 

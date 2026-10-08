@@ -4,7 +4,7 @@ import {
   PUBLIC_ERROR_CODE,
 } from '@repo/game-protocol/errors';
 import type { ResumeRoomRequest } from '@repo/game-protocol/http';
-import type { RoomView } from '@repo/game-protocol/socket';
+import type { RoomView } from '@repo/game-protocol/state';
 import type { SeatIndex } from '@repo/yacht-rules';
 
 import { resolveSeatIndexForToken } from '@/rooms/application/connections/seat-token';
@@ -12,8 +12,8 @@ import { projectRoomView } from '@/rooms/application/projection/room-view';
 import type { RoomRepositoryReader } from '@/rooms/application/room-repository';
 import type { RoomTaskQueue } from '@/rooms/application/scheduling/room-task-queue';
 import { runRoomRequest } from '@/rooms/application/scheduling/run-room-request';
-import { evaluateSeatResume } from '@/rooms/domain/resume';
 import { roomId } from '@/rooms/domain/room-model';
+import { evaluateSeatResume } from '@/rooms/domain/seat-resume';
 import type { Clock } from '@/runtime/clock';
 
 export interface ResumeRoomData {

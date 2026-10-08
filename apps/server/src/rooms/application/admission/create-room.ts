@@ -4,7 +4,7 @@ import {
   PUBLIC_ERROR_CODE,
 } from '@repo/game-protocol/errors';
 import type { CreateRoomRequest } from '@repo/game-protocol/http';
-import type { RoomView } from '@repo/game-protocol/socket';
+import type { RoomView } from '@repo/game-protocol/state';
 
 import { type CreateRoomRateLimiter } from '@/rooms/application/admission/create-room-rate-limiter';
 import { createSeatCredential } from '@/rooms/application/connections/seat-token';

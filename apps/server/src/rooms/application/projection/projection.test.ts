@@ -2,7 +2,7 @@ import {
   parseGameSnapshot,
   parsePresenceSnapshot,
   parsePublicRoom,
-} from '@repo/game-protocol/socket';
+} from '@repo/game-protocol/state';
 import { describe, expect, test } from 'bun:test';
 
 import { hashSeatToken } from '@/rooms/application/connections/seat-token';

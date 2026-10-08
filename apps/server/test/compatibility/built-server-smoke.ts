@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 
 import { createGameClient, type GameSession } from '@repo/game-client-sdk';
 import { PUBLIC_ERROR_CODE } from '@repo/game-protocol/errors';
-import { CATEGORY_ID, parseRoomView, type RoomView } from '@repo/game-protocol/socket';
+import { CATEGORY_ID, parseRoomView, type RoomView } from '@repo/game-protocol/state';
 import productRelease from '@repo/product-release';
 import { v7 as uuidV7 } from 'uuid';
 

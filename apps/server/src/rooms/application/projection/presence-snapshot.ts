@@ -2,7 +2,7 @@ import {
   parsePresenceSnapshot,
   type PresenceSnapshot,
   type PresenceSnapshotInput,
-} from '@repo/game-protocol/socket';
+} from '@repo/game-protocol/state';
 
 import { PRESENCE_STATUS } from '@/rooms/domain/room-constants';
 import { type Room, type Seat } from '@/rooms/domain/room-model';

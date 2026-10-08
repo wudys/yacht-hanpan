@@ -1,4 +1,4 @@
-import { type GameSnapshot, parseRoomView, type RoomView } from '@repo/game-protocol/socket';
+import { type GameSnapshot, parseRoomView, type RoomView } from '@repo/game-protocol/state';
 
 import { projectGameSnapshot } from '@/rooms/application/projection/game-snapshot';
 import { projectPresenceSnapshot } from '@/rooms/application/projection/presence-snapshot';

@@ -5,7 +5,8 @@ import {
   type PublicError,
   type PublicErrorCode,
 } from '@repo/game-protocol/errors';
-import { GAME_COMMAND_TYPE, type GameCommand, type RoomView } from '@repo/game-protocol/socket';
+import { GAME_COMMAND_TYPE, type GameCommand } from '@repo/game-protocol/socket';
+import { type RoomView } from '@repo/game-protocol/state';
 import type { SeatIndex } from '@repo/yacht-rules';
 
 import type { RollCommandExecutor } from '@/roll/roll-command-executor';

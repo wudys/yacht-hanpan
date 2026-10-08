@@ -14,8 +14,8 @@ import type { RoomRepositoryReader } from '@/rooms/application/room-repository';
 import type { RoomStateCommitter } from '@/rooms/application/room-state-committer';
 import type { RoomTaskQueue } from '@/rooms/application/scheduling/room-task-queue';
 import { runRoomRequest } from '@/rooms/application/scheduling/run-room-request';
-import { evaluateSeatResume } from '@/rooms/domain/resume';
 import { type RoomId, roomId } from '@/rooms/domain/room-model';
+import { evaluateSeatResume } from '@/rooms/domain/seat-resume';
 
 export interface ConnectSeatInput {
   readonly auth: SocketAuth;

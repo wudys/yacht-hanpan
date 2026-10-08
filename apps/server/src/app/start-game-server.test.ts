@@ -52,7 +52,7 @@ function config() {
   };
 }
 
-describe('production game HTTP server', () => {
+describe('startGameServer composition', () => {
   test('serves requests and closes its owned worker with a throwing custom logger', async () => {
     const worker = captureOwnedWorker();
     let logs = 0;

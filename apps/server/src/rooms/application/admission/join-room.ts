@@ -4,7 +4,7 @@ import {
   PUBLIC_ERROR_CODE,
 } from '@repo/game-protocol/errors';
 import type { JoinRoomRequest } from '@repo/game-protocol/http';
-import type { GameSnapshot, RoomView } from '@repo/game-protocol/socket';
+import type { GameSnapshot, RoomView } from '@repo/game-protocol/state';
 
 import { createSeatCredential } from '@/rooms/application/connections/seat-token';
 import { mapCommitFailure, mapRoomRejection } from '@/rooms/application/public-error-mapping';

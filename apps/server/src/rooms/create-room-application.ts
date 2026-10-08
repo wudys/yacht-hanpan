@@ -1,4 +1,4 @@
-import type { RoomView } from '@repo/game-protocol/socket';
+import type { RoomView } from '@repo/game-protocol/state';
 import type { CompatibilityContract } from '@repo/game-protocol/version';
 
 import type { RollCommandExecutor } from '@/roll/roll-command-executor';

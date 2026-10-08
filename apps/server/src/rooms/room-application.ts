@@ -5,7 +5,7 @@ import type {
   JoinRoomRequest,
   ResumeRoomRequest,
 } from '@repo/game-protocol/http';
-import type { RoomView } from '@repo/game-protocol/socket';
+import type { RoomView } from '@repo/game-protocol/state';
 import type { CompatibilityContract } from '@repo/game-protocol/version';
 import type { SeatIndex } from '@repo/yacht-rules';
 

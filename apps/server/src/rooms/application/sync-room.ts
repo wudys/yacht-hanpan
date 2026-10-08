@@ -3,7 +3,7 @@ import {
   type ProtocolResult,
   PUBLIC_ERROR_CODE,
 } from '@repo/game-protocol/errors';
-import type { RoomView } from '@repo/game-protocol/socket';
+import type { RoomView } from '@repo/game-protocol/state';
 import type { SeatIndex } from '@repo/yacht-rules';
 
 import { projectRoomView } from '@/rooms/application/projection/room-view';

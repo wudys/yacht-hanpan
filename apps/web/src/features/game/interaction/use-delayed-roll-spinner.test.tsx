@@ -4,7 +4,7 @@
 import { act, cleanup, renderHook } from '@testing-library/react';
 import { afterEach, expect, test, vi } from 'vitest';
 
-import { useDelayedRollSpinner } from '@/features/game/game-display-hooks';
+import { useDelayedRollSpinner } from '@/features/game/interaction/use-delayed-roll-spinner';
 
 afterEach(() => {
   cleanup();

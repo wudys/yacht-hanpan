@@ -7,7 +7,7 @@ import {
   nextFeedbackBoundary,
   type TurnFeedbackInput,
   type TurnFeedbackState,
-} from '@/features/game/turn-feedback-state';
+} from '@/features/game/feedback/turn-feedback-state';
 
 export type TurnFeedbackSnapshot = Pick<
   TurnFeedbackState,

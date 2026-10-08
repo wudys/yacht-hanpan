@@ -17,14 +17,8 @@ import {
   useSyncExternalStore,
 } from 'react';
 
-import { useDelayedRollSpinner } from '@/features/game/game-display-hooks';
-import {
-  deriveGameInputReadiness,
-  deriveGameInputScopes,
-  deriveGameInteraction,
-  deriveGameRecoveryPresentation,
-  type GameLayer,
-} from '@/features/game/game-interaction';
+import { useScoreGroupSelection } from '@/features/game/feedback/use-score-group-selection';
+import { useTurnFeedback } from '@/features/game/feedback/use-turn-feedback';
 import {
   createGameBoardPresentation,
   createGameFeedbackPresentation,
@@ -35,11 +29,17 @@ import { GameRecoveryFrame } from '@/features/game/GameRecoveryFrame';
 import { isTurnReady, useDeadlineReadiness } from '@/features/game/hud/game-deadline-hooks';
 import { GameDeadlineDisplay } from '@/features/game/hud/GameDeadlineDisplay';
 import { GamePresenceNotice, GamePresenceProvider } from '@/features/game/hud/GamePresenceNotice';
+import {
+  deriveGameInputReadiness,
+  deriveGameInputScopes,
+  deriveGameInteraction,
+  deriveGameRecoveryPresentation,
+  type GameLayer,
+} from '@/features/game/interaction/game-interaction';
+import { useDelayedRollSpinner } from '@/features/game/interaction/use-delayed-roll-spinner';
+import { useGameCommands } from '@/features/game/interaction/use-game-commands';
 import { SettledDiceControls } from '@/features/game/SettledDiceControls';
-import { useGameCommands } from '@/features/game/use-game-commands';
 import { useGameResultLifecycle } from '@/features/game/use-game-result-lifecycle';
-import { useScoreGroupSelection } from '@/features/game/use-score-group-selection';
-import { useTurnFeedback } from '@/features/game/use-turn-feedback';
 import {
   BonusInfoPopover,
   deriveGameViewModel,
@@ -52,8 +52,8 @@ import { GameRollSpinner } from '@/features/game/view/board/GameRollSpinner';
 import { SettingsLayer } from '@/features/settings/SettingsLayer';
 import { type Locale, translate } from '@/i18n';
 import type { BrowserAudioRuntime } from '@/runtime/audio/browser-audio-runtime';
+import { PRODUCT_CUE } from '@/runtime/audio/cue-runtime';
 import type { GameAudioFeedback } from '@/runtime/audio/game-audio-feedback';
-import { PRODUCT_CUE } from '@/runtime/audio/product-cues';
 import type { DicePresentation } from '@/runtime/dice/dice-presentation';
 import { gamePhysicsAreaBounds } from '@/runtime/dice/game-dice-layout';
 import type { PreferencesStore } from '@/runtime/preferences/preferences-store';

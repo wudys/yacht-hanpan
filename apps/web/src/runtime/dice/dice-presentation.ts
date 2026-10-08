@@ -9,7 +9,7 @@ import {
   type SpecialCombination,
 } from '@repo/yacht-rules';
 
-import { PRODUCT_CUE, type ProductCue } from '@/runtime/audio/product-cues';
+import { PRODUCT_CUE, type ProductCue } from '@/runtime/audio/cue-runtime';
 import { selectFeaturedCombination } from '@/runtime/dice/achievement-selection';
 import type { PlaybackFailure, RollPlayback } from '@/runtime/dice/replay';
 import type { ProceduralDiceResources } from '@/runtime/dice/resources';

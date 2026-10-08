@@ -26,7 +26,7 @@ const keys: Record<ProductCue, CueRecipeId> = {
   'achievement.yacht': 'yacht',
 };
 
-export function createProductCueRuntime(
+export function createCueRuntime(
   options: {
     enabled?: boolean;
     render?: typeof renderCueBuffers;

@@ -5,8 +5,8 @@ import { PUBLIC_ERROR_CODE } from '@repo/game-protocol';
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
 import type { BrowserAudioRuntime } from '@/runtime/audio/browser-audio-runtime';
+import { PRODUCT_CUE, type ProductCue } from '@/runtime/audio/cue-runtime';
 import type { GameAudioFeedback } from '@/runtime/audio/game-audio-feedback';
-import { PRODUCT_CUE, type ProductCue } from '@/runtime/audio/product-cues';
 import type {
   GameSessionHolder,
   GameSessionHolderSnapshot,

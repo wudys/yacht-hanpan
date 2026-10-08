@@ -4,7 +4,7 @@ import { act, renderHook } from '@testing-library/react';
 import { StrictMode } from 'react';
 import { afterEach, expect, test, vi } from 'vitest';
 
-import { useTurnFeedback } from '@/features/game/use-turn-feedback';
+import { useTurnFeedback } from '@/features/game/feedback/use-turn-feedback';
 import { playingGame } from '@/testing/game-fixtures';
 
 afterEach(() => {

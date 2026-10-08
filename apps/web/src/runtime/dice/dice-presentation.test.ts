@@ -3,7 +3,7 @@ import { parseGameSnapshot, type ResolvedRollArtifact } from '@repo/game-protoco
 import { createCompatibilityContract } from '@repo/game-protocol/version';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 
-import { PRODUCT_CUE } from '@/runtime/audio/product-cues';
+import { PRODUCT_CUE } from '@/runtime/audio/cue-runtime';
 import { createDicePresentation } from '@/runtime/dice/dice-presentation';
 import type { RollPlayback } from '@/runtime/dice/replay';
 import type { ProceduralDiceResources } from '@/runtime/dice/resources';

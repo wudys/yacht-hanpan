@@ -2,7 +2,7 @@ import type { GameSession, ServerClock } from '@repo/game-client-sdk';
 import type { CommandResult } from '@repo/game-client-sdk/session';
 
 import type { BrowserAudioRuntime } from '@/runtime/audio/browser-audio-runtime';
-import { PRODUCT_CUE, type ProductCue } from '@/runtime/audio/product-cues';
+import { PRODUCT_CUE, type ProductCue } from '@/runtime/audio/cue-runtime';
 import { createTurnWarning } from '@/runtime/audio/turn-warning';
 import type { PreferencesStore } from '@/runtime/preferences/preferences-store';
 import type { GameSessionHolder } from '@/runtime/session/game-session-holder';

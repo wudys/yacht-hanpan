@@ -5,8 +5,8 @@ import type { ClientError } from '@repo/game-client-sdk/errors';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, expect, test, vi } from 'vitest';
 
-import { deriveGameRecoveryPresentation } from '@/features/game/game-interaction';
 import { GameRecoveryFrame } from '@/features/game/GameRecoveryFrame';
+import { deriveGameRecoveryPresentation } from '@/features/game/interaction/game-interaction';
 import { LOCALE, translate } from '@/i18n';
 
 afterEach(cleanup);

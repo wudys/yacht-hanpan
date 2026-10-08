@@ -4,9 +4,9 @@ import type { CommandResult } from '@repo/game-client-sdk';
 import { act, cleanup, renderHook } from '@testing-library/react';
 import { afterEach, expect, test, vi } from 'vitest';
 
-import { useGameCommands } from '@/features/game/use-game-commands';
+import { useGameCommands } from '@/features/game/interaction/use-game-commands';
+import { PRODUCT_CUE } from '@/runtime/audio/cue-runtime';
 import { startGameAudioFeedback } from '@/runtime/audio/game-audio-feedback';
-import { PRODUCT_CUE } from '@/runtime/audio/product-cues';
 import { createPreferencesStore } from '@/runtime/preferences/preferences-store';
 import { observeSessionTelemetry } from '@/runtime/telemetry/session-telemetry-observer';
 import { inactiveTelemetry } from '@/runtime/telemetry/telemetry';

@@ -6,7 +6,7 @@ import {
   advanceTurnFeedback,
   createTurnFeedbackState,
   type TurnFeedbackInput,
-} from '@/features/game/turn-feedback-state';
+} from '@/features/game/feedback/turn-feedback-state';
 import { playingGameInput } from '@/testing/game-fixtures';
 
 const session = {};

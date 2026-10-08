@@ -3,7 +3,7 @@ import { useSyncExternalStore } from 'react';
 import { SettingsView } from '@/features/settings/view/SettingsView';
 import { type Locale, translate } from '@/i18n';
 import type { BrowserAudioRuntime } from '@/runtime/audio/browser-audio-runtime';
-import { PRODUCT_CUE } from '@/runtime/audio/product-cues';
+import { PRODUCT_CUE } from '@/runtime/audio/cue-runtime';
 import type { PreferencesStore } from '@/runtime/preferences/preferences-store';
 
 type SettingsLayerProps = Readonly<{

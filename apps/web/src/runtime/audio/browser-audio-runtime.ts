@@ -1,10 +1,6 @@
 import { requireGameAsset } from '@repo/game-assets';
 
-import {
-  createProductCueRuntime,
-  PRODUCT_CUE,
-  type ProductCue,
-} from '@/runtime/audio/product-cues';
+import { createCueRuntime, PRODUCT_CUE, type ProductCue } from '@/runtime/audio/cue-runtime';
 
 const SCENE_AUDIO_URL = {
   lobby: requireGameAsset('audio.bgm.lobby').url,
@@ -44,7 +40,7 @@ export function createBrowserAudioRuntime(
 ): BrowserAudioRuntime {
   const AudioContextConstructor = resolveAudioContextConstructor();
   const AudioConstructor = globalThis.Audio;
-  const cues = createProductCueRuntime({ enabled: options.sfxEnabled ?? true });
+  const cues = createCueRuntime({ enabled: options.sfxEnabled ?? true });
   const onVisibility = () => {
     if (globalThis.document?.hidden) cues.stop();
   };

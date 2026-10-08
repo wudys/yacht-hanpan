@@ -2,8 +2,8 @@
 import type { CommandResult } from '@repo/game-client-sdk';
 import { afterEach, expect, test, vi } from 'vitest';
 
+import { PRODUCT_CUE } from '@/runtime/audio/cue-runtime';
 import { startGameAudioFeedback } from '@/runtime/audio/game-audio-feedback';
-import { PRODUCT_CUE } from '@/runtime/audio/product-cues';
 import { createPreferencesStore } from '@/runtime/preferences/preferences-store';
 import { commandSuccess, playingGameInput as playingGame } from '@/testing/game-fixtures';
 import {

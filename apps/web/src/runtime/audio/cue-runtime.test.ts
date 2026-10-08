@@ -1,6 +1,6 @@
 import { expect, test, vi } from 'vitest';
 
-import { createProductCueRuntime, PRODUCT_CUE } from '@/runtime/audio/product-cues';
+import { createCueRuntime, PRODUCT_CUE } from '@/runtime/audio/cue-runtime';
 import type { CueRecipeId } from '@/runtime/audio/render-cue-buffers';
 function harness() {
   const sources: {
@@ -42,7 +42,7 @@ function harness() {
 }
 test('prepares once on the shared context, selection and roll alias click, one source per action', async () => {
   const h = harness(),
-    runtime = createProductCueRuntime(h);
+    runtime = createCueRuntime(h);
   await Promise.all([runtime.prepare(h.context), runtime.prepare(h.context)]);
   expect(h.render).toHaveBeenCalledTimes(1);
   expect(h.setContext).toHaveBeenCalledWith(h.context);
@@ -61,7 +61,7 @@ test('prepares once on the shared context, selection and roll alias click, one s
 });
 test('OFF cancels every pending voice immediately and ON never replays it', async () => {
   const h = harness(),
-    runtime = createProductCueRuntime(h);
+    runtime = createCueRuntime(h);
   await runtime.prepare(h.context);
   runtime.play(PRODUCT_CUE.ACHIEVEMENT_YACHT);
   runtime.setEnabled(false);
@@ -74,7 +74,7 @@ test('OFF cancels every pending voice immediately and ON never replays it', asyn
 });
 test('warning cancellation leaves other cues alone', async () => {
   const h = harness(),
-    runtime = createProductCueRuntime(h);
+    runtime = createCueRuntime(h);
   await runtime.prepare(h.context);
   runtime.play(PRODUCT_CUE.ACHIEVEMENT_YACHT);
   runtime.play(PRODUCT_CUE.TIMER_WARNING);
@@ -85,7 +85,7 @@ test('warning cancellation leaves other cues alone', async () => {
 test('failed preparation retries without rewrapping context and rejects a different context', async () => {
   const h = harness();
   h.render.mockRejectedValueOnce(new Error('render failed'));
-  const runtime = createProductCueRuntime(h);
+  const runtime = createCueRuntime(h);
   await expect(runtime.prepare(h.context)).rejects.toThrow('render failed');
   await runtime.prepare(h.context);
   expect(h.render).toHaveBeenCalledTimes(2);
@@ -105,7 +105,7 @@ test('dispose waits for in-flight rendering and never publishes its late buffers
         complete = resolve;
       }),
   );
-  const runtime = createProductCueRuntime(h),
+  const runtime = createCueRuntime(h),
     preparation = runtime.prepare(h.context);
   await vi.waitFor(() => expect(h.render).toHaveBeenCalledOnce());
   const disposing = runtime.dispose();

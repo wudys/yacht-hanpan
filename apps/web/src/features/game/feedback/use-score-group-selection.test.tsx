@@ -4,7 +4,7 @@ import { act, renderHook } from '@testing-library/react';
 import { StrictMode } from 'react';
 import { expect, test } from 'vitest';
 
-import { useScoreGroupSelection } from '@/features/game/use-score-group-selection';
+import { useScoreGroupSelection } from '@/features/game/feedback/use-score-group-selection';
 import { playingGame } from '@/testing/game-fixtures';
 
 type Feedback = Parameters<typeof useScoreGroupSelection>[0];

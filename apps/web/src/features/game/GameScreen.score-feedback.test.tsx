@@ -17,8 +17,8 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 
 import GameScreen from '@/features/game/GameScreen';
 import { LOCALE, translate } from '@/i18n';
+import { PRODUCT_CUE } from '@/runtime/audio/cue-runtime';
 import { startGameAudioFeedback } from '@/runtime/audio/game-audio-feedback';
-import { PRODUCT_CUE } from '@/runtime/audio/product-cues';
 import { createPreferencesStore } from '@/runtime/preferences/preferences-store';
 import { createGameSessionHolder } from '@/runtime/session/game-session-holder';
 import {

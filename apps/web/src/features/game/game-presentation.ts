@@ -2,7 +2,7 @@ import { requireGameAsset, resolveCharacterImageAssetId } from '@repo/game-asset
 import type { GameSnapshot, PublicRoom } from '@repo/game-protocol/socket';
 import { CATEGORY_IDS, MAX_ROLLS_PER_TURN, type SeatIndex } from '@repo/yacht-rules';
 
-import type { TurnFeedbackSnapshot } from '@/features/game/use-turn-feedback';
+import type { TurnFeedbackSnapshot } from '@/features/game/feedback/use-turn-feedback';
 import type {
   CategoryLabels,
   GameBoardProps,

@@ -21,7 +21,7 @@ import { afterEach, expect, test, vi } from 'vitest';
 import LobbyScreen from '@/features/lobby/LobbyScreen';
 import { LOCALE, type Locale, translate } from '@/i18n';
 import type { BrowserAudioRuntime } from '@/runtime/audio/browser-audio-runtime';
-import { PRODUCT_CUE } from '@/runtime/audio/product-cues';
+import { PRODUCT_CUE } from '@/runtime/audio/cue-runtime';
 import type { ServerReadiness } from '@/runtime/network/server-readiness';
 import {
   createPreferencesStore,

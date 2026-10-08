@@ -42,7 +42,7 @@ function withPresenceClock(
     });
   };
   try {
-    render(<GameScreen {...harness} locale={LOCALE.EN} />);
+    render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
     run(harness, advance);
   } finally {
     cleanup();

@@ -52,6 +52,7 @@ function input(overrides: Partial<TurnFeedbackInput> = {}): TurnFeedbackInput {
     now: 300,
     serverNow: 300,
     suspended: false,
+    surfaceExposed: true,
     scoreVisible: true,
     boardVisible: true,
     commandPresentationReady: true,

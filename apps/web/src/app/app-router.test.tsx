@@ -92,6 +92,8 @@ vi.mock('@/features/game/GameScreen', async (importOriginal) => {
 });
 
 beforeEach(() => {
+  vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(360);
+  vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(740);
   vi.stubGlobal('matchMedia', () => ({
     matches: false,
     addEventListener: vi.fn(),
@@ -117,6 +119,7 @@ afterEach(() => {
   for (const actor of activeActors) actor.stop();
   activeActors.clear();
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 function deferred(): {
@@ -160,6 +163,7 @@ function createTestAudioRuntime(): BrowserAudioRuntime {
     prepareCues: vi.fn(() => Promise.resolve()),
     playCue: vi.fn(),
     setSfxEnabled: vi.fn(),
+    setSurfaceExposed: vi.fn(),
     stopCue: vi.fn(),
     prefetchScenes: vi.fn(() => Promise.resolve()),
     setBgmEnabled: vi.fn(() => Promise.resolve()),
@@ -211,6 +215,7 @@ function renderApp(
   const profile = createProfileSelectionStore({ getItem: () => null, setItem: () => undefined });
   profile.initialize();
   const router = createAppRouter({
+    setSurfaceExposed: audio.setSurfaceExposed,
     activity,
     access,
     audio,

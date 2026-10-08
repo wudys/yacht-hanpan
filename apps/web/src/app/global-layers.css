@@ -9,7 +9,8 @@
   pointer-events: auto;
 }
 
-.web-global-interaction-surface {
+.web-global-interaction-surface,
+.web-product-surface {
   position: relative;
   width: 100%;
   height: 100%;

@@ -174,7 +174,7 @@ test('shows opponent previews and maxima from their scorecard without accepting 
       },
     },
   });
-  render(<GameScreen {...harness} locale={LOCALE.EN} />);
+  render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
 
   const zero = screen.getByRole('button', { name: 'Ones · 0' });
   const sixes = screen.getByRole('button', { name: 'Sixes · 30' });
@@ -199,7 +199,7 @@ test('shows opponent previews and maxima from their scorecard without accepting 
 
 test('starts on upper scores and preserves the selected tab across game updates', () => {
   const harness = createHarness();
-  render(<GameScreen {...harness} locale={LOCALE.EN} />);
+  render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
 
   expect(screen.getByRole('tab', { selected: true }).getAttribute('data-score-tab')).toBe('upper');
   fireEvent.click(getLowerScoreTab());
@@ -213,7 +213,7 @@ test('settled snapshots do not infer a turn cue across updates, session replacem
   const harness = createHarness();
   render(
     <StrictMode>
-      <GameScreen {...harness} locale={LOCALE.EN} />
+      <GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />
     </StrictMode>,
   );
   expect(screen.queryByText('YOUR TURN')).toBeNull();
@@ -241,7 +241,7 @@ test.each([null, 61_000])(
   'keeps commands locked for unavailable or expired server time %s',
   (serverNow) => {
     const harness = createHarness(playingGame, serverNow);
-    render(<GameScreen {...harness} locale={LOCALE.EN} />);
+    render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
 
     const rollButton = screen.getByRole('button', { name: 'Roll again' });
     expect(rollButton.getAttribute('aria-disabled')).toBe('true');
@@ -258,7 +258,7 @@ test('shows a confirm-only rate-limit notice over the retained Settings layer wi
   const forfeit = deferred<CommandResult>();
   const harness = createHarness();
   vi.mocked(harness.session.forfeitMatch).mockReturnValueOnce(forfeit.promise);
-  render(<GameScreen {...harness} locale={LOCALE.EN} />);
+  render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
 
   fireEvent.click(screen.getByRole('button', { name: translate(LOCALE.EN, 'settings.title') }));
   const settingsHeading = screen.getByRole('heading', {
@@ -296,7 +296,7 @@ test('keeps the authoritative turn timer running behind a rate-limit notice', as
   vi.useFakeTimers();
   try {
     const harness = createHarness();
-    render(<GameScreen {...harness} locale={LOCALE.EN} />);
+    render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Roll again' }));
     await act(async () =>
@@ -325,7 +325,9 @@ test('keeps the authoritative turn timer running behind a rate-limit notice', as
 
 test('ignores a late rate-limit result from a replaced session or unmounted Game', async () => {
   const replaced = createHarness();
-  const { unmount: unmountReplaced } = render(<GameScreen {...replaced} locale={LOCALE.EN} />);
+  const { unmount: unmountReplaced } = render(
+    <GameScreen surfaceExposed={true} {...replaced} locale={LOCALE.EN} />,
+  );
   fireEvent.click(screen.getByRole('button', { name: 'Roll again' }));
   act(() => replaced.sessions.replaceSession(createSessionMock()));
   await act(async () =>
@@ -341,7 +343,9 @@ test('ignores a late rate-limit result from a replaced session or unmounted Game
   unmountReplaced();
 
   const unmounted = createHarness();
-  const { unmount } = render(<GameScreen {...unmounted} locale={LOCALE.EN} />);
+  const { unmount } = render(
+    <GameScreen surfaceExposed={true} {...unmounted} locale={LOCALE.EN} />,
+  );
   fireEvent.click(screen.getByRole('button', { name: 'Roll again' }));
   unmount();
   await act(async () =>
@@ -358,7 +362,7 @@ test('ignores a late rate-limit result from a replaced session or unmounted Game
 
 test('removes the rate-limit notice when an authoritative Result arrives', async () => {
   const harness = createHarness();
-  render(<GameScreen {...harness} locale={LOCALE.EN} />);
+  render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
   fireEvent.click(screen.getByRole('button', { name: 'Roll again' }));
   await act(async () =>
     harness.roll.resolve({
@@ -379,7 +383,7 @@ test('removes the rate-limit notice when an authoritative Result arrives', async
 
 test('gives terminal recovery precedence over an open rate-limit notice', async () => {
   const harness = createHarness();
-  render(<GameScreen {...harness} locale={LOCALE.EN} />);
+  render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
   fireEvent.click(screen.getByRole('button', { name: 'Roll again' }));
   await act(async () =>
     harness.roll.resolve({
@@ -412,7 +416,7 @@ test('retries an eligible failure only through its captured SDK capability', asy
     harness.sessions.publish({ ...playingGame, stateVersion: 8 });
     return commandSuccess();
   });
-  render(<GameScreen {...harness} locale={LOCALE.EN} />);
+  render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
 
   fireEvent.click(screen.getByRole('button', { name: 'Roll again' }));
   await act(async () =>
@@ -460,7 +464,7 @@ test('retries an eligible failure only through its captured SDK capability', asy
 
 test('delegates a command rejection without an SDK retry capability to recovery', async () => {
   const harness = createHarness();
-  render(<GameScreen {...harness} locale={LOCALE.EN} />);
+  render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
 
   fireEvent.click(screen.getByRole('button', { name: 'Roll again' }));
   await act(async () =>
@@ -480,7 +484,7 @@ test('delegates a command rejection without an SDK retry capability to recovery'
 test('clears a retry notice when terminal recovery takes priority', async () => {
   const retry = vi.fn(() => Promise.resolve(commandSuccess(playingGame.stateVersion)));
   const harness = createHarness();
-  render(<GameScreen {...harness} locale={LOCALE.EN} />);
+  render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
 
   fireEvent.click(screen.getByRole('button', { name: 'Roll again' }));
   await act(async () =>
@@ -513,7 +517,7 @@ test('does not resurrect retry UI after session replacement or an authoritative 
   const retry = vi.fn(() => retryResult.promise);
   const freshRetry = vi.fn(() => Promise.resolve(commandSuccess(playingGame.stateVersion)));
   const harness = createHarness();
-  render(<GameScreen {...harness} locale={LOCALE.EN} />);
+  render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
 
   fireEvent.click(screen.getByRole('button', { name: 'Roll again' }));
   await act(async () =>
@@ -537,7 +541,7 @@ test('does not resurrect retry UI after session replacement or an authoritative 
 
   const finishedHarness = createHarness();
   cleanup();
-  render(<GameScreen {...finishedHarness} locale={LOCALE.EN} />);
+  render(<GameScreen surfaceExposed={true} {...finishedHarness} locale={LOCALE.EN} />);
   fireEvent.click(screen.getByRole('button', { name: 'Roll again' }));
   await act(async () =>
     finishedHarness.roll.resolve({
@@ -555,7 +559,7 @@ test('does not resurrect retry UI after session replacement or an authoritative 
 
 test('projects authoritative dice and sends guarded roll, hold, and score commands', async () => {
   const harness = createHarness();
-  render(<GameScreen {...harness} locale={LOCALE.EN} />);
+  render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
 
   expect(screen.getByRole('heading', { name: 'Game' })).not.toBeNull();
   const firstSettledDie = screen.getByRole('button', { name: 'Dice area 1: 2' });
@@ -613,7 +617,7 @@ test.each([
   'preserves slot and face in accessible dice names before and after hold in %s',
   async (locale, settledName, heldName) => {
     const harness = createHarness();
-    render(<GameScreen {...harness} locale={locale} />);
+    render(<GameScreen surfaceExposed={true} {...harness} locale={locale} />);
 
     const settledDie = screen.getByRole('button', { name: settledName });
     expect(settledDie.getAttribute('aria-pressed')).toBe('false');
@@ -678,7 +682,14 @@ test.each([false, true])(
     });
     presentation.start();
     try {
-      render(<GameScreen {...harness} presentation={presentation} locale={LOCALE.EN} />);
+      render(
+        <GameScreen
+          surfaceExposed={true}
+          {...harness}
+          presentation={presentation}
+          locale={LOCALE.EN}
+        />,
+      );
       if (!restored) act(() => harness.sessions.publish(allHeld));
 
       expect(presentation.getSnapshot()).toMatchObject({ phase: 'settled', dice: [] });
@@ -698,7 +709,7 @@ test.each([false, true])(
 
 test('explains a recorded category without sending another score command', () => {
   const harness = createHarness();
-  render(<GameScreen {...harness} locale={LOCALE.EN} />);
+  render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
 
   fireEvent.click(screen.getByRole('tab', { name: /Upper/u }));
   const recorded = screen.getByRole('button', { name: /Ones/u });
@@ -714,7 +725,7 @@ test('explains a recorded category without sending another score command', () =>
 
 test('gives recovery precedence over an open recorded category notice', () => {
   const harness = createHarness();
-  render(<GameScreen {...harness} locale={LOCALE.EN} />);
+  render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
 
   fireEvent.click(screen.getByRole('tab', { name: /Upper/u }));
   fireEvent.click(screen.getByRole('button', { name: /Ones/u }));
@@ -736,7 +747,7 @@ test('gives recovery precedence over an open recorded category notice', () => {
 
 test('labels total and bonus as one contextual player summary', () => {
   const harness = createHarness();
-  render(<GameScreen {...harness} locale={LOCALE.EN} />);
+  render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
 
   expect(screen.getByRole('group', { name: 'Total 2 · Bonus not earned' })).not.toBeNull();
 });
@@ -756,7 +767,7 @@ test('updates bonus achievement with the authoritative score and the current tur
     },
   } satisfies GameSnapshotInput;
   const harness = createHarness(belowBonusGame);
-  render(<GameScreen {...harness} locale={LOCALE.EN} />);
+  render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
   const bonusAction = screen.getByRole('button', { name: 'Bonus rule' });
   expect(screen.getByRole('group', { name: 'Total 62 · Bonus not earned' })).not.toBeNull();
   expect(bonusAction.textContent).toBe('Bonus');
@@ -810,7 +821,7 @@ test('updates bonus achievement with the authoritative score and the current tur
 
 test('locks gameplay and withholds score previews until physical presentation settles', () => {
   const harness = createHarness();
-  render(<GameScreen {...harness} locale={LOCALE.EN} />);
+  render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
 
   expect(getPreviewScoreButtons().length).toBeGreaterThan(0);
 
@@ -923,7 +934,7 @@ test.each([
     const response = deferred<CommandResult>();
     harness.session.forfeitMatch.mockReturnValue(response.promise);
     harness.presentation.publish(snapshot);
-    render(<GameScreen {...harness} locale={LOCALE.EN} />);
+    render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
     const forfeit = screen.getByRole('button', { name: 'Forfeit' });
@@ -960,7 +971,7 @@ test('warns on own-turn seconds while the screen stays mounted and excludes oppo
   if (playingGame.match.status !== 'playing') throw new Error('Expected a playing fixture');
   const playingMatch = playingGame.match;
   const harness = createHarness(playingGame, 55_000);
-  render(<GameScreen {...harness} locale={LOCALE.EN} />);
+  render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
   expect(harness.audio.playCue).not.toHaveBeenCalled();
   expect(screen.getByText('6s').getAttribute('data-timer-warning')).toBe('false');
 
@@ -1008,7 +1019,7 @@ test('warns on own-turn seconds while the screen stays mounted and excludes oppo
 
 test('does not mark the timer warning without a server clock sample', () => {
   const harness = createHarness(playingGame, null);
-  render(<GameScreen {...harness} locale={LOCALE.EN} />);
+  render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
 
   expect(screen.getByText('—s').getAttribute('data-timer-warning')).toBe('false');
 });
@@ -1019,7 +1030,7 @@ test.each([61_000, null])(
     vi.useFakeTimers();
     try {
       const harness = createHarness(playingGame, 60_000);
-      render(<GameScreen {...harness} locale={LOCALE.EN} />);
+      render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
       const roll = screen.getByRole('button', { name: 'Roll again' });
       const die = screen.getByRole('button', { name: 'Dice area 1: 2' });
       act(() => {
@@ -1062,7 +1073,7 @@ test.each([61_000, null])(
     const polling = vi.spyOn(window, 'setInterval');
     try {
       const harness = createHarness(playingGame, 60_000);
-      render(<GameScreen {...harness} locale={LOCALE.EN} />);
+      render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
       fireEvent.click(screen.getByRole('button', { name: 'Scoreboard' }));
       fireEvent.click(screen.getByRole('button', { name: 'Close' }));
       const remountedTimerPoll = polling.mock.calls.at(-1)?.[0];
@@ -1097,7 +1108,7 @@ test.each([61_000, null])(
 
 test('shows authoritative upper progress and the fixed bonus award', () => {
   const harness = createHarness();
-  render(<GameScreen {...harness} locale={LOCALE.EN} />);
+  render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
 
   const bonusAction = screen.getByRole('button', { name: 'Bonus rule' });
   expect(bonusAction.getAttribute('aria-expanded')).toBe('false');
@@ -1126,10 +1137,10 @@ test('releases bonus layout observers on close, locale replacement and unmount',
     },
   );
   const harness = createHarness();
-  const view = render(<GameScreen {...harness} locale={LOCALE.EN} />);
+  const view = render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
   fireEvent.click(screen.getByRole('button', { name: 'Bonus rule' }));
   expect(active.size).toBe(1);
-  view.rerender(<GameScreen {...harness} locale={LOCALE.KO} />);
+  view.rerender(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.KO} />);
   expect(active.size).toBe(1);
   fireEvent.click(within(screen.getByRole('dialog')).getByRole('button'));
   expect(active.size).toBe(0);
@@ -1141,7 +1152,7 @@ test('releases bonus layout observers on close, locale replacement and unmount',
 
 test('closes bonus information explicitly or outside without clicking through to game input', () => {
   const harness = createHarness();
-  render(<GameScreen {...harness} locale={LOCALE.EN} />);
+  render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
 
   const bonusAction = screen.getByRole('button', { name: 'Bonus rule' });
   const rollAction = screen.getByRole('button', { name: 'Roll again' });
@@ -1162,7 +1173,7 @@ test('closes bonus information explicitly or outside without clicking through to
 
 test('keeps bonus information available during an ordinary command pending state', () => {
   const harness = createHarness();
-  render(<GameScreen {...harness} locale={LOCALE.EN} />);
+  render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
 
   fireEvent.click(screen.getByRole('button', { name: 'Roll again' }));
   fireEvent.click(screen.getByRole('button', { name: 'Bonus rule' }));
@@ -1176,7 +1187,7 @@ test('keeps an open game layer mounted and the timer running while recovery lock
   vi.useFakeTimers();
   try {
     const harness = createHarness();
-    render(<GameScreen {...harness} locale={LOCALE.EN} />);
+    render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
     const settings = screen.getByRole('heading', { name: 'Settings' });
@@ -1231,7 +1242,7 @@ test.each([LOCALE.KO, LOCALE.EN])(
         }),
       }),
     );
-    render(<GameScreen {...harness} locale={locale} />);
+    render(<GameScreen surfaceExposed={true} {...harness} locale={locale} />);
 
     expect.soft(screen.queryByText(translate(locale, 'game.opponentDisconnected'))).toBeNull();
     act(() => {
@@ -1244,7 +1255,7 @@ test.each([LOCALE.KO, LOCALE.EN])(
 test('announces recovery of an opponent already disconnected when the screen mounts', () => {
   const harness = createHarness();
   harness.sessions.publishOpponentConnection(false);
-  render(<GameScreen {...harness} locale={LOCALE.EN} />);
+  render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
 
   expect(screen.getByText(translate(LOCALE.EN, 'game.opponentDisconnected'))).not.toBeNull();
   act(() => {
@@ -1257,7 +1268,7 @@ test('shows opponent disconnect persistently and a reconnection notice for exact
   vi.useFakeTimers();
   try {
     const harness = createHarness();
-    render(<GameScreen {...harness} locale={LOCALE.EN} />);
+    render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
 
     expect(screen.queryByText(translate(LOCALE.EN, 'game.opponentDisconnected'))).toBeNull();
     act(() => {
@@ -1307,7 +1318,7 @@ test('shows opponent disconnect persistently and a reconnection notice for exact
 
 test('clears current authority only from the permanent recovery terminal', async () => {
   const harness = createHarness();
-  render(<GameScreen {...harness} locale={LOCALE.EN} />);
+  render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
 
   act(() => {
     harness.recovery.publish({
@@ -1338,7 +1349,7 @@ test.each<ClientError | null>([null, { kind: 'transport', code: 'SOCKET_DISCONNE
     const reload = vi.fn();
     vi.stubGlobal('location', { reload });
     const harness = createHarness();
-    render(<GameScreen {...harness} locale={LOCALE.EN} />);
+    render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
 
     act(() => {
       harness.recovery.publish({ status: 'refreshRequired', error });
@@ -1363,7 +1374,7 @@ test('keeps bonus information available during the opponent turn', () => {
     },
   } satisfies GameSnapshotInput;
   const harness = createHarness(opponentTurn);
-  render(<GameScreen {...harness} locale={LOCALE.EN} />);
+  render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
 
   expect(screen.getByRole('img', { name: 'Opponent' }).getAttribute('src')).toContain('variant');
   expect(screen.getByRole('group', { name: 'Total 1 · Bonus not earned' })).not.toBeNull();
@@ -1377,7 +1388,7 @@ test('keeps bonus information available during the opponent turn', () => {
 
 test('detaches the authoritative Result from transport before returning to the lobby', async () => {
   const harness = createHarness();
-  render(<GameScreen {...harness} locale={LOCALE.EN} />);
+  render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
 
   fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
   fireEvent.click(screen.getByRole('button', { name: 'Forfeit' }));
@@ -1418,7 +1429,7 @@ test.each(
   ({ outcome, reason, reasonKind, reasonMessageKey, winnerSeatIndex, locale }) => {
     const harness = createHarness(finishedGame(reason, winnerSeatIndex));
 
-    render(<GameScreen {...harness} locale={locale} />);
+    render(<GameScreen surfaceExposed={true} {...harness} locale={locale} />);
 
     const result = screen.getByRole('main');
     expect(
@@ -1476,7 +1487,7 @@ test('keeps Result score identity independent of winner and omits Game controls'
   ];
   const harness = createHarness(finishedGame('explicitForfeit', 1, players));
 
-  render(<GameScreen {...harness} locale={LOCALE.EN} />);
+  render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
 
   const headers = screen.getAllByRole('columnheader');
   expect(headers.map((header) => header.textContent)).toEqual(['Category', 'You', 'Opponent']);
@@ -1519,7 +1530,7 @@ test('settled final state keeps pending command lifetime without creating receip
   const harness = createHarness();
   const result = deferred<CommandResult>();
   vi.mocked(harness.session.selectScoreCategory).mockReturnValue(result.promise);
-  const view = render(<GameScreen {...harness} locale={LOCALE.EN} />);
+  const view = render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
   fireEvent.click(screen.getByRole('button', { name: /Twos/u }));
   expect(harness.audio.playCue).not.toHaveBeenCalled();
   act(() => harness.sessions.publish(finishedGame('scoresCompleted', 0)));
@@ -1530,7 +1541,7 @@ test('settled final state keeps pending command lifetime without creating receip
   expect(harness.audio.playCue).not.toHaveBeenCalled();
   expect(harness.session.dispose).toHaveBeenCalledOnce();
   view.unmount();
-  render(<GameScreen {...harness} locale={LOCALE.EN} />);
+  render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
   act(() => harness.sessions.publish(finishedGame('scoresCompleted', 0)));
   expect(harness.audio.playCue).not.toHaveBeenCalled();
 });
@@ -1541,7 +1552,7 @@ test('score rejection produces neither click nor success cue', async () => {
     ok: false,
     error: { kind: 'server', error: { code: 'STALE_TURN', params: {} } },
   });
-  render(<GameScreen {...harness} locale={LOCALE.EN} />);
+  render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
   fireEvent.click(screen.getByRole('button', { name: /Twos/u }));
   await act(async () => Promise.resolve());
   expect(harness.audio.playCue).not.toHaveBeenCalled();
@@ -1553,7 +1564,7 @@ test.each(['failure', 'rejection'] as const)(
     const harness = createHarness();
     const response = deferred<CommandResult>();
     harness.session.selectScoreCategory.mockReturnValue(response.promise);
-    render(<GameScreen {...harness} locale={LOCALE.EN} />);
+    render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
     fireEvent.click(screen.getByRole('button', { name: /Twos/u }));
     act(() => harness.sessions.publish(finishedGame('connectionEnded', 1)));
     expect(screen.getByRole('heading', { name: 'Game result' })).not.toBeNull();
@@ -1576,7 +1587,7 @@ test('score click submits the category without a success cue from a receipt alon
   const harness = createHarness();
   const response = deferred<CommandResult>();
   harness.session.selectScoreCategory.mockReturnValue(response.promise);
-  render(<GameScreen {...harness} locale={LOCALE.EN} />);
+  render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
   fireEvent.click(screen.getByRole('button', { name: /Twos/u }));
   expect(harness.session.selectScoreCategory).toHaveBeenCalledExactlyOnceWith(CATEGORY_ID.TWOS);
   expect(harness.audio.playCue).not.toHaveBeenCalled();
@@ -1589,12 +1600,14 @@ test('score click submits the category without a success cue from a receipt alon
 });
 
 test.each([
-  { openBefore: false, returnAt: 1_000 },
-  { openBefore: false, returnAt: 2_000 },
-  { openBefore: true, returnAt: 1_000 },
+  { cover: 'scoreboard', openBefore: false, returnAt: 1_000 },
+  { cover: 'scoreboard', openBefore: false, returnAt: 2_000 },
+  { cover: 'scoreboard', openBefore: true, returnAt: 1_000 },
+  { cover: 'global', openBefore: false, returnAt: 1_000 },
+  { cover: 'global', openBefore: true, returnAt: 1_000 },
 ])(
-  'skips scoreboard achievement display without shortening its deadline: $openBefore / $returnAt',
-  async ({ openBefore, returnAt }) => {
+  'skips $cover achievement display without shortening its deadline: $openBefore / $returnAt',
+  async ({ cover, openBefore, returnAt }) => {
     vi.useFakeTimers();
     const harness = createHarness();
     const presentation = createDicePresentation({
@@ -1664,27 +1677,53 @@ test.each([
     };
     try {
       const view = render(
-        <GameScreen {...harness} presentation={presentation} locale={LOCALE.EN} />,
+        <GameScreen
+          surfaceExposed={true}
+          {...harness}
+          presentation={presentation}
+          locale={LOCALE.EN}
+        />,
       );
-      if (openBefore) fireEvent.click(screen.getByRole('button', { name: 'Scoreboard' }));
+      const setCovered = (covered: boolean) => {
+        if (cover === 'global')
+          view.rerender(
+            <GameScreen
+              {...harness}
+              presentation={presentation}
+              surfaceExposed={!covered}
+              locale={LOCALE.EN}
+            />,
+          );
+        else
+          fireEvent.click(screen.getByRole('button', { name: covered ? 'Scoreboard' : 'Close' }));
+      };
+      if (openBefore) setCovered(true);
       await showYacht('scoreboard-yacht');
       if (!openBefore) {
         expect(screen.getByRole('status').getAttribute('data-achievement-kind')).toBe('yacht');
         act(() => {
           vi.advanceTimersByTime(500);
         });
-        fireEvent.click(screen.getByRole('button', { name: 'Scoreboard' }));
+        setCovered(true);
       }
+      expect(screen.queryByRole('status')).toBeNull();
       act(() => {
         vi.advanceTimersByTime(returnAt - (openBefore ? 0 : 500));
       });
-      fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+      setCovered(false);
       expect(screen.queryByRole('status')).toBeNull();
       if (returnAt < 1_980) {
         expect(getPreviewScoreButtons()).toHaveLength(0);
         expect(screen.queryByRole('button', { name: 'Roll again' })).toBeNull();
         // Locale changes and repeated layer visits must not resurrect this roll.
-        view.rerender(<GameScreen {...harness} presentation={presentation} locale={LOCALE.KO} />);
+        view.rerender(
+          <GameScreen
+            surfaceExposed={true}
+            {...harness}
+            presentation={presentation}
+            locale={LOCALE.KO}
+          />,
+        );
         fireEvent.click(screen.getByRole('button', { name: '점수판' }));
         fireEvent.click(screen.getByRole('button', { name: '닫기' }));
         expect(screen.queryByRole('status')).toBeNull();
@@ -1698,7 +1737,14 @@ test.each([
       }
       expect(presentation.getSnapshot().phase).toBe('settled');
       expect(getPreviewScoreButtons().length).toBeGreaterThan(0);
-      view.rerender(<GameScreen {...harness} presentation={presentation} locale={LOCALE.EN} />);
+      view.rerender(
+        <GameScreen
+          surfaceExposed={true}
+          {...harness}
+          presentation={presentation}
+          locale={LOCALE.EN}
+        />,
+      );
       await showYacht('next-yacht');
       const next = screen.getByRole('status');
       expect(next.getAttribute('data-achievement-kind')).toBe('yacht');

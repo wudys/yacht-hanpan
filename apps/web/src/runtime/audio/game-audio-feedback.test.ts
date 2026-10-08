@@ -96,8 +96,8 @@ test.each(['command-view', 'live-view'] as const)(
 );
 
 test.each(
-  (['off', 'hidden', 'recovery', 'replacement', 'sync', 'dispose'] as const).flatMap((reason) =>
-    [false, true].map((completed) => ({ reason, completed })),
+  (['off', 'hidden', 'surface', 'recovery', 'replacement', 'sync', 'dispose'] as const).flatMap(
+    (reason) => [false, true].map((completed) => ({ reason, completed })),
   ),
 )(
   '$reason preserves cue cancellation and one-time completion (receipt already received: $completed)',
@@ -129,6 +129,10 @@ test.each(
       hidden.mockReturnValue(false);
       document.dispatchEvent(new Event('visibilitychange'));
     }
+    if (reason === 'surface') {
+      h.feedback.setSurfaceExposed(false);
+      h.feedback.setSurfaceExposed(true);
+    }
     if (reason === 'recovery') {
       h.recovery.publish({ status: 'synchronizing' });
       h.recovery.publish({ status: 'idle' });
@@ -156,6 +160,64 @@ test.each(
     expect(h.audio.playCue).toHaveBeenCalledTimes(completed ? 1 : 0);
   },
 );
+
+test.each(['covered', 'restored'] as const)(
+  'a command completed while %s keeps its result and cannot replay after return',
+  async (completedWhile) => {
+    const h = setup();
+    const response = deferred<CommandResult>();
+    h.feedback.setSurfaceExposed(false);
+    h.feedback.setSurfaceExposed(false);
+    h.observe(response.promise);
+    h.publish();
+    if (completedWhile === 'restored') h.feedback.setSurfaceExposed(true);
+    const result = commandSuccess();
+    response.resolve(result);
+    await expect(response.promise).resolves.toBe(result);
+    h.feedback.setSurfaceExposed(true);
+    expect(h.audio.playCue).not.toHaveBeenCalled();
+
+    h.observe(
+      Promise.resolve({
+        ...commandSuccess(),
+        actionId: '019976a2-d8d8-7000-8000-000000000002',
+      }),
+    );
+    await Promise.resolve();
+    expect(h.audio.playCue).toHaveBeenCalledExactlyOnceWith(PRODUCT_CUE.SCORE);
+    h.feedback.dispose();
+    h.feedback.setSurfaceExposed(false);
+    h.feedback.setSurfaceExposed(true);
+  },
+);
+
+test('surface suppression consumes warning seconds and resumes only at the next fresh boundary', () => {
+  vi.useFakeTimers();
+  const deadline = playingGame.match.currentTurn.deadlineAt;
+  vi.setSystemTime(deadline - 6_000);
+  const h = setup(() => Date.now());
+  vi.advanceTimersByTime(1_000);
+  expect(h.audio.playCue).toHaveBeenCalledExactlyOnceWith(PRODUCT_CUE.TIMER_WARNING);
+  const stops = vi.mocked(h.audio.stopCue).mock.calls.length;
+  h.feedback.setSurfaceExposed(false);
+  expect(h.audio.stopCue).toHaveBeenCalledTimes(stops + 1);
+  expect(h.audio.stopCue).toHaveBeenLastCalledWith(PRODUCT_CUE.TIMER_WARNING);
+  vi.advanceTimersByTime(2_000);
+  expect(h.audio.playCue).toHaveBeenCalledTimes(1);
+  h.feedback.setSurfaceExposed(true);
+  h.feedback.setSurfaceExposed(true);
+  expect(h.audio.playCue).toHaveBeenCalledTimes(1);
+  vi.advanceTimersByTime(1_000);
+  expect(h.audio.playCue).toHaveBeenCalledTimes(2);
+
+  vi.setSystemTime(deadline - 4_000);
+  vi.advanceTimersByTime(2_000);
+  expect(h.audio.playCue).toHaveBeenCalledTimes(2);
+  vi.advanceTimersByTime(1_000);
+  expect(h.audio.playCue).toHaveBeenCalledTimes(3);
+  vi.advanceTimersByTime(1_000);
+  expect(h.audio.playCue).toHaveBeenCalledTimes(3);
+});
 
 test('deduplicates repeated promises and distinct successful results for the same action', async () => {
   const h = setup();

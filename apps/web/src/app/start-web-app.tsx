@@ -179,6 +179,7 @@ export function startWebApp(telemetry: Telemetry): () => void {
       }
     });
     const router = createAppRouter({
+      setSurfaceExposed: execution.setSurfaceExposed,
       access,
       activity,
       audio,

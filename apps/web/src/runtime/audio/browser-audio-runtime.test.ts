@@ -551,3 +551,70 @@ test('only an explicit ON transition confirms once, OFF and hydration stay silen
   expect(context.createBufferSource.mock.results[0]?.value.stop).toHaveBeenCalledTimes(1);
   await runtime.dispose();
 });
+
+test('surface suppression also gates the internal SFX ON confirmation and keeps preferences independent', async () => {
+  vi.stubGlobal('AudioContext', FakeAudioContext);
+  vi.stubGlobal('Audio', FakeAudioElement);
+  const runtime = createBrowserAudioRuntime({ sfxEnabled: false });
+  runtime.setSurfaceExposed(false);
+  await runtime.activate();
+  await runtime.prepareCues();
+  const context = FakeAudioContext.instances[0]!;
+
+  runtime.setSfxEnabled(true, true);
+  runtime.playCue('ui.success');
+  expect(context.createBufferSource).not.toHaveBeenCalled();
+  runtime.setSurfaceExposed(true);
+  expect(context.createBufferSource).not.toHaveBeenCalled();
+  runtime.setSfxEnabled(true, true);
+  expect(context.createBufferSource).not.toHaveBeenCalled();
+  runtime.playCue('ui.success');
+  expect(context.createBufferSource).toHaveBeenCalledOnce();
+  runtime.setSurfaceExposed(false);
+  expect(context.createBufferSource.mock.results[0]?.value.stop).toHaveBeenCalledOnce();
+  runtime.setSfxEnabled(false);
+  runtime.setSurfaceExposed(true);
+  runtime.playCue('ui.success');
+  expect(context.createBufferSource).toHaveBeenCalledOnce();
+  await runtime.dispose();
+  runtime.setSurfaceExposed(false);
+  runtime.setSurfaceExposed(true);
+  runtime.playCue('ui.success');
+  expect(context.createBufferSource).toHaveBeenCalledOnce();
+});
+
+test('surface changes preserve the playing BGM, native context and BGM preference', async () => {
+  vi.stubGlobal('AudioContext', FakeAudioContext);
+  vi.stubGlobal('Audio', FakeAudioElement);
+  const runtime = createBrowserAudioRuntime();
+  await runtime.activate();
+  await runtime.setScene('game');
+  const context = FakeAudioContext.instances[0]!,
+    media = FakeAudioElement.instances[0]!;
+  media.currentTime = 12;
+  media.play.mockClear();
+  media.pause.mockClear();
+  media.load.mockClear();
+
+  runtime.setSurfaceExposed(false);
+  runtime.setSurfaceExposed(false);
+  runtime.setSurfaceExposed(true);
+  await runtime.setScene('game');
+  expect(FakeAudioContext.instances).toEqual([context]);
+  expect(FakeAudioElement.instances).toEqual([media]);
+  expect(context.resume).toHaveBeenCalledOnce();
+  expect(context.close).not.toHaveBeenCalled();
+  expect(media.currentTime).toBe(12);
+  expect(media.play).not.toHaveBeenCalled();
+  expect(media.pause).not.toHaveBeenCalled();
+  expect(media.load).not.toHaveBeenCalled();
+
+  runtime.setSurfaceExposed(false);
+  await runtime.setScene('result');
+  expect(media.play).toHaveBeenCalledOnce();
+  await runtime.setBgmEnabled(false);
+  runtime.setSurfaceExposed(true);
+  await runtime.setScene('lobby');
+  expect(media.play).toHaveBeenCalledOnce();
+  await runtime.dispose();
+});

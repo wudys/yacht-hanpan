@@ -16,6 +16,7 @@ interface ObservedCommand {
 }
 export interface GameAudioFeedback {
   observeCommand: (command: ObservedCommand) => void;
+  setSurfaceExposed: (exposed: boolean) => void;
   dispose: () => void;
 }
 
@@ -32,6 +33,7 @@ export function startGameAudioFeedback(options: {
     () => audio.stopCue(PRODUCT_CUE.TIMER_WARNING),
   );
   let previousSession: GameSession | null = null;
+  let surfaceExposed = true;
   let disposed = false;
   const consumed = new Set<string>();
   const pending = new Set<ObservedCommand>();
@@ -49,6 +51,7 @@ export function startGameAudioFeedback(options: {
         current.session !== entry.session ||
         current.sessionSnapshot?.syncRevision !== entry.syncRevision ||
         recovery.getSnapshot().status !== 'idle' ||
+        !surfaceExposed ||
         !preferences.getSnapshot().sfxEnabled ||
         document.hidden
       ) {
@@ -66,6 +69,7 @@ export function startGameAudioFeedback(options: {
       current.authority?.seatIndex === turn.seatIndex &&
       recovery.getSnapshot().status === 'idle' &&
       preferences.getSnapshot().sfxEnabled &&
+      surfaceExposed &&
       !document.hidden,
     );
     warning.update(identity, seconds, allowed);
@@ -79,6 +83,11 @@ export function startGameAudioFeedback(options: {
   const interval = window.setInterval(update, 250);
   update();
   return {
+    setSurfaceExposed(exposed: boolean) {
+      if (disposed || surfaceExposed === exposed) return;
+      surfaceExposed = exposed;
+      update();
+    },
     observeCommand(command: ObservedCommand) {
       const entry = { ...command };
       if (!disposed) {

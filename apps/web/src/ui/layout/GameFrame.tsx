@@ -1,11 +1,4 @@
-import {
-  type CSSProperties,
-  type ReactNode,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from 'react';
+import { type CSSProperties, type ReactNode, useLayoutEffect, useRef, useState } from 'react';
 
 import { DICE_BOARD_CSS } from '@/ui/layout/dice-board-layout';
 import {
@@ -14,17 +7,16 @@ import {
   computeFrameMetrics,
   computeLogoPlacement,
   type FrameMetrics,
-  isUnsupportedCoarseLandscape,
+  isPlayableArea,
   type SafeAreaInsets,
 } from '@/ui/layout/frame-metrics';
 
-const COARSE_POINTER_QUERY = '(pointer: coarse)';
+export type FrameAvailability = 'unmeasured' | 'insufficient-space' | 'available';
 
 export type GameFrameProps = Readonly<{
-  children: ReactNode;
+  children: ReactNode | ((availability: FrameAvailability) => ReactNode);
   logo?: ReactNode;
-  onOrientationGuardExit?: () => void;
-  orientationMessage: ReactNode;
+  playAreaMessage: ReactNode;
 }>;
 
 function numberValue(value: string): number {
@@ -47,24 +39,9 @@ function measure(element: HTMLElement): FrameMetrics {
   });
 }
 
-function initialCoarsePointer(): boolean {
-  return (
-    typeof window !== 'undefined' &&
-    typeof window.matchMedia === 'function' &&
-    window.matchMedia(COARSE_POINTER_QUERY).matches
-  );
-}
-
-export function GameFrame({
-  children,
-  logo,
-  onOrientationGuardExit,
-  orientationMessage,
-}: GameFrameProps) {
+export function GameFrame({ children, logo, playAreaMessage }: GameFrameProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
-  const orientationBlockedRef = useRef(false);
   const [metrics, setMetrics] = useState<FrameMetrics | null>(null);
-  const [coarsePointer, setCoarsePointer] = useState(initialCoarsePointer);
 
   useLayoutEffect(() => {
     const root = rootRef.current;
@@ -80,27 +57,12 @@ export function GameFrame({
     return () => window.removeEventListener('resize', update);
   }, []);
 
-  useEffect(() => {
-    const query = window.matchMedia(COARSE_POINTER_QUERY);
-    const update = () => setCoarsePointer(query.matches);
-    update();
-    query.addEventListener?.('change', update);
-    return () => query.removeEventListener?.('change', update);
-  }, []);
-
-  const unsupportedLandscape = metrics
-    ? isUnsupportedCoarseLandscape({
-        width: metrics.content.width,
-        height: metrics.content.height,
-        coarsePointer,
-      })
-    : false;
-
-  useLayoutEffect(() => {
-    const wasBlocked = orientationBlockedRef.current;
-    orientationBlockedRef.current = unsupportedLandscape;
-    if (wasBlocked && !unsupportedLandscape) onOrientationGuardExit?.();
-  }, [onOrientationGuardExit, unsupportedLandscape]);
+  const availability: FrameAvailability = metrics
+    ? isPlayableArea(metrics.content)
+      ? 'available'
+      : 'insufficient-space'
+    : 'unmeasured';
+  const blocked = availability !== 'available';
 
   const logoPlacement =
     metrics && logo
@@ -128,15 +90,15 @@ export function GameFrame({
         className='game-frame-slot'
         style={slotStyle}
         data-game-frame-slot='true'
-        inert={unsupportedLandscape || undefined}
-        aria-hidden={unsupportedLandscape || undefined}
+        inert={blocked || undefined}
+        aria-hidden={blocked || undefined}
       >
         <div
           className='game-logical-canvas'
           style={{ ...DICE_BOARD_CSS, width: BASE_FRAME_WIDTH, height: BASE_FRAME_HEIGHT }}
           data-game-logical-canvas='true'
         >
-          {children}
+          {typeof children === 'function' ? children(availability) : children}
         </div>
       </div>
       {logo ? (
@@ -148,9 +110,9 @@ export function GameFrame({
           {logo}
         </div>
       ) : null}
-      {unsupportedLandscape ? (
-        <div className='game-orientation-blocker' role='status' data-orientation-blocker='true'>
-          <div className='game-orientation-blocker__message'>{orientationMessage}</div>
+      {availability === 'insufficient-space' ? (
+        <div className='game-play-area-blocker' role='status' data-play-area-blocker='true'>
+          <div className='game-play-area-blocker__message'>{playAreaMessage}</div>
         </div>
       ) : null}
     </div>

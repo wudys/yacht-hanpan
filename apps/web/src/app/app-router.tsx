@@ -9,11 +9,12 @@ import {
   Outlet,
   useRouterState,
 } from '@tanstack/react-router';
-import { lazy, Suspense, useCallback, useSyncExternalStore } from 'react';
+import { lazy, Suspense, useCallback, useContext, useSyncExternalStore } from 'react';
 import type { ActorRefFrom } from 'xstate';
 
 import { appLifecycleMachine } from '@/app/app-lifecycle-machine';
 import { AppShell } from '@/app/AppShell';
+import { ProductSurfaceContext } from '@/app/product-surface-context';
 import { APP_SCREEN_PATH } from '@/app/screen-paths';
 import { EntryScreen } from '@/features/entry/EntryScreen';
 import { LoadingScreen } from '@/features/loading/LoadingScreen';
@@ -45,6 +46,7 @@ export interface AppRouterContext {
   readonly sessionCredentialStore: SessionCredentialStore;
   readonly recovery: SessionRecovery;
   readonly presentation: DicePresentation;
+  readonly setSurfaceExposed: (exposed: boolean) => void;
 }
 
 const rootRoute = createRootRouteWithContext<AppRouterContext>()({
@@ -102,6 +104,7 @@ function RootLayout() {
     renderer,
     presentation,
     sessionCredentialStore,
+    setSurfaceExposed,
   } = rootRoute.useRouteContext();
   const routePath = useRouterState({ select: (state) => state.location.pathname });
   return (
@@ -113,7 +116,8 @@ function RootLayout() {
       presentation={presentation}
       sessionCredentialStore={sessionCredentialStore}
       routePath={routePath}
-      onOrientationGuardExit={recovery.requestSynchronization}
+      onPlayableAreaRestored={recovery.requestSynchronization}
+      onSurfaceExposureChange={setSurfaceExposed}
     >
       <Outlet />
     </AppShell>
@@ -151,6 +155,7 @@ function LobbyRoute() {
 }
 
 function GameRoute() {
+  const surfaceExposed = useContext(ProductSurfaceContext);
   const {
     audio,
     feedback,
@@ -165,6 +170,7 @@ function GameRoute() {
   return (
     <Suspense fallback={null}>
       <GameScreen
+        surfaceExposed={surfaceExposed}
         audio={audio}
         feedback={feedback}
         locale={locale}

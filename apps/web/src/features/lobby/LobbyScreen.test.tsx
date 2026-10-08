@@ -100,6 +100,7 @@ function createAudio(): BrowserAudioRuntime {
     prepareCues: vi.fn(() => Promise.resolve()),
     playCue: vi.fn(),
     setSfxEnabled: vi.fn(),
+    setSurfaceExposed: vi.fn(),
     stopCue: vi.fn(),
     prefetchScenes: vi.fn(() => Promise.resolve()),
     setBgmEnabled: vi.fn(() => Promise.resolve()),

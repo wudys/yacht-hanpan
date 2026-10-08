@@ -31,6 +31,7 @@ export interface BrowserAudioRuntime {
   readonly setBgmEnabled: (enabled: boolean) => Promise<void>;
   readonly setScene: (scene: ProductAudioScene | null) => Promise<void>;
   readonly setSfxEnabled: (enabled: boolean, feedback?: boolean) => void;
+  readonly setSurfaceExposed: (exposed: boolean) => void;
   readonly stopCue: (cue?: ProductCue) => void;
   readonly dispose: () => Promise<void>;
 }
@@ -206,6 +207,10 @@ export function createBrowserAudioRuntime(
       await playDesiredScene();
     },
     stopCue: cues.stop,
+    setSurfaceExposed(exposed: boolean) {
+      if (disposed) return;
+      cues.setSuppressed(!exposed);
+    },
     setSfxEnabled(nextEnabled: boolean, feedback: boolean = false) {
       const changed = cues.setEnabled(nextEnabled);
       if (changed && nextEnabled && feedback) cues.play(PRODUCT_CUE.SUCCESS);

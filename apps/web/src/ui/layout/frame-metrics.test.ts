@@ -2,11 +2,11 @@ import { describe, expect, test } from 'vitest';
 
 import {
   BASE_FRAME_WIDTH,
+  COMPACT_MAX_WIDTH,
   computeFrameMetrics,
   computeLogoPlacement,
-  DESKTOP_MAX_SCALE,
-  isUnsupportedCoarseLandscape,
-  MOBILE_MAX_WIDTH,
+  isPlayableArea,
+  MAX_FRAME_SCALE,
 } from '@/ui/layout/frame-metrics';
 
 describe('computeFrameMetrics', () => {
@@ -33,12 +33,12 @@ describe('computeFrameMetrics', () => {
     },
   );
 
-  test('uses the exact 430px mobile boundary and 640px desktop cap', () => {
-    expect(computeFrameMetrics({ width: 430, height: 1000 }).mode).toBe('mobile');
-    expect(computeFrameMetrics({ width: 431, height: 1000 }).mode).toBe('desktop');
-    expect(computeFrameMetrics({ width: 2560, height: 1440 }).scale).toBe(DESKTOP_MAX_SCALE);
-    expect(MOBILE_MAX_WIDTH).toBe(430);
-    expect(DESKTOP_MAX_SCALE).toBe(16 / 9);
+  test('uses the exact 430px compact boundary and 640px frame cap', () => {
+    expect(computeFrameMetrics({ width: 430, height: 1000 }).mode).toBe('compact');
+    expect(computeFrameMetrics({ width: 431, height: 1000 }).mode).toBe('wide');
+    expect(computeFrameMetrics({ width: 2560, height: 1440 }).scale).toBe(MAX_FRAME_SCALE);
+    expect(COMPACT_MAX_WIDTH).toBe(430);
+    expect(MAX_FRAME_SCALE).toBe(16 / 9);
   });
 
   test.each([
@@ -48,7 +48,7 @@ describe('computeFrameMetrics', () => {
     [1920, 900, 640, 500 * (16 / 9), 640],
     [1920, 850, 612, 850, 654],
   ])(
-    '%sx%s applies the desktop cap or actual viewport height',
+    '%sx%s applies the frame cap or actual viewport height',
     (width, height, frameWidth, frameHeight, x) => {
       const metrics = computeFrameMetrics({ width, height });
       expect(metrics.frame.width).toBeCloseTo(frameWidth, 3);
@@ -69,7 +69,7 @@ describe('computeFrameMetrics', () => {
     expect(metrics.frame.y).toBe(47);
   });
 
-  test('keeps the same best-effort formula below the supported floor', () => {
+  test('keeps the same geometry formula below the playable floor', () => {
     const metrics = computeFrameMetrics({ width: 280, height: 300 });
     expect(metrics.scale).toBe(0.6);
     expect(metrics.frame).toMatchObject({ width: 216, height: 300, y: 0 });
@@ -83,18 +83,42 @@ describe('wrapper-owned layout decisions', () => {
       computeLogoPlacement(metrics, { width: 80, height: 32, edge: 16, clearance: 12 }),
     ).toMatchObject({ visible: true });
 
-    const mobile = computeFrameMetrics({ width: 390, height: 600 });
+    const compact = computeFrameMetrics({ width: 390, height: 600 });
     expect(
-      computeLogoPlacement(mobile, { width: 80, height: 32, edge: 16, clearance: 12 }),
+      computeLogoPlacement(compact, { width: 80, height: 32, edge: 16, clearance: 12 }),
     ).toEqual({ visible: false, x: 0, y: 0 });
   });
 
-  test('coarse landscape blocks before breakpoint classification', () => {
-    expect(isUnsupportedCoarseLandscape({ width: 844, height: 390, coarsePointer: true })).toBe(
-      true,
-    );
-    expect(isUnsupportedCoarseLandscape({ width: 844, height: 390, coarsePointer: false })).toBe(
-      false,
-    );
+  test.each([
+    [320, 444.5, true],
+    [320, 740, true],
+    [319.99, 900, false],
+    [900, 444.49, false],
+    [740, 320, false],
+    [844, 390, false],
+    [1024, 768, true],
+    [1180, 820, true],
+    [700, 500, true],
+  ])('content %sx%s is playable: %s', (width, height, playable) => {
+    expect(isPlayableArea(computeFrameMetrics({ width, height }).content)).toBe(playable);
+  });
+
+  test('judges the safe-area content once rather than raw size or scaled frame size', () => {
+    const blocked = computeFrameMetrics({
+      width: 360,
+      height: 500,
+      safeArea: { top: 28, right: 20, bottom: 28, left: 20 },
+    });
+    expect(blocked.content).toEqual({ x: 20, y: 28, width: 320, height: 444 });
+    expect(isPlayableArea(blocked.content)).toBe(false);
+
+    const available = computeFrameMetrics({
+      width: 360,
+      height: 500,
+      safeArea: { top: 20, right: 20, bottom: 20, left: 20 },
+    });
+    expect(available.content).toEqual({ x: 20, y: 20, width: 320, height: 460 });
+    expect(available.frame.height).toBeLessThan(444.5);
+    expect(isPlayableArea(available.content)).toBe(true);
   });
 });

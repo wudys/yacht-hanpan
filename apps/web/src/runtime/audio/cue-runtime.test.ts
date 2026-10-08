@@ -33,6 +33,11 @@ function harness() {
         ['click', buffer],
         ['yacht', buffer],
         ['warning', buffer],
+        ['hold', buffer],
+        ['release', buffer],
+        ['score', buffer],
+        ['success', buffer],
+        ['combo', buffer],
       ]),
   );
   const wrapper = { dispose: vi.fn() },
@@ -71,6 +76,52 @@ test('OFF cancels every pending voice immediately and ON never replays it', asyn
   expect(h.sources).toHaveLength(1);
   runtime.play(PRODUCT_CUE.CLICK);
   expect(h.sources).toHaveLength(2);
+});
+test('suppression stops active and scheduled sources, drops every cue, and resumes without a queue', async () => {
+  const h = harness(),
+    runtime = createCueRuntime(h);
+  await runtime.prepare(h.context);
+  runtime.play(PRODUCT_CUE.ACHIEVEMENT_YACHT);
+  expect(h.sources[0]?.start).toHaveBeenCalledWith(4.012);
+  Object.defineProperty(h.context, 'currentTime', { value: 5 });
+  runtime.play(PRODUCT_CUE.CLICK);
+  expect(h.sources[1]?.start).toHaveBeenCalledWith(5.012);
+
+  runtime.setSuppressed(true);
+  runtime.setSuppressed(true);
+  for (const source of h.sources) {
+    expect(source.stop).toHaveBeenCalledExactlyOnceWith();
+    expect(source.disconnect).toHaveBeenCalledOnce();
+  }
+  for (const cue of Object.values(PRODUCT_CUE)) runtime.play(cue);
+  expect(h.sources).toHaveLength(2);
+  runtime.setSuppressed(false);
+  runtime.setSuppressed(false);
+  expect(h.sources).toHaveLength(2);
+  for (const cue of Object.values(PRODUCT_CUE)) runtime.play(cue);
+  expect(h.sources).toHaveLength(2 + Object.values(PRODUCT_CUE).length);
+  await runtime.dispose();
+  runtime.setSuppressed(false);
+  runtime.play(PRODUCT_CUE.CLICK);
+  expect(h.sources).toHaveLength(2 + Object.values(PRODUCT_CUE).length);
+});
+test('temporary suppression does not overwrite the SFX preference', async () => {
+  const h = harness(),
+    runtime = createCueRuntime({ ...h, enabled: false });
+  await runtime.prepare(h.context);
+  runtime.setSuppressed(true);
+  expect(runtime.setEnabled(true)).toBe(true);
+  runtime.play(PRODUCT_CUE.SUCCESS);
+  expect(h.sources).toHaveLength(0);
+  runtime.setSuppressed(false);
+  runtime.play(PRODUCT_CUE.CLICK);
+  expect(h.sources).toHaveLength(1);
+  runtime.setSuppressed(true);
+  runtime.setEnabled(false);
+  runtime.setSuppressed(false);
+  runtime.play(PRODUCT_CUE.CLICK);
+  expect(h.sources).toHaveLength(1);
+  await runtime.dispose();
 });
 test('warning cancellation leaves other cues alone', async () => {
   const h = harness(),

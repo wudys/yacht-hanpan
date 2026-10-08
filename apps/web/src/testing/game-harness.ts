@@ -48,6 +48,7 @@ export function createAudioMock() {
     setBgmEnabled: vi.fn<BrowserAudioRuntime['setBgmEnabled']>(async () => {}),
     setScene: vi.fn<BrowserAudioRuntime['setScene']>(async () => {}),
     setSfxEnabled: vi.fn<BrowserAudioRuntime['setSfxEnabled']>(),
+    setSurfaceExposed: vi.fn<BrowserAudioRuntime['setSurfaceExposed']>(),
     stopCue: vi.fn<BrowserAudioRuntime['stopCue']>(),
     dispose: vi.fn<BrowserAudioRuntime['dispose']>(async () => {}),
   } satisfies BrowserAudioRuntime;

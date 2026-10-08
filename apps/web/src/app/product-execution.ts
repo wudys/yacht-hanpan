@@ -44,6 +44,7 @@ export interface ProductExecution {
   readonly presentation: DicePresentation;
   readonly reentry: StoredRoomReentry;
   readonly access: RoomAccess;
+  setSurfaceExposed(exposed: boolean): void;
   stop(): void;
 }
 
@@ -101,6 +102,7 @@ export function createProductExecution({
     const { bgmEnabled, sfxEnabled } = preferences.getSnapshot();
     const executionAudio = createBrowserAudioRuntime({ bgmEnabled, sfxEnabled });
     audio = executionAudio;
+    executionAudio.setSurfaceExposed(false);
     const sessionCredentialStore = createSessionCredentialStore({ signal: activity.signal });
     const profile = createProfileSelectionStore({
       getItem: (key) => window.localStorage.getItem(key),
@@ -129,6 +131,7 @@ export function createProductExecution({
       preferences,
     });
     feedback = executionFeedback;
+    executionFeedback.setSurfaceExposed(false);
     const executionPresentation = createDicePresentation({
       sessions: executionSessions,
       requestSynchronization: executionRecovery.requestSynchronization,
@@ -179,6 +182,11 @@ export function createProductExecution({
       presentation: executionPresentation,
       reentry: executionReentry,
       access: executionAccess,
+      setSurfaceExposed(exposed: boolean) {
+        if (stopped) return;
+        executionAudio.setSurfaceExposed(exposed);
+        executionFeedback.setSurfaceExposed(exposed);
+      },
       stop,
     };
   } catch (error) {

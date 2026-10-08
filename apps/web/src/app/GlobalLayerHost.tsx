@@ -20,7 +20,7 @@ export function GlobalLayerHost({
   locale: Locale;
   routePath: string;
   sessionCredentialStore: SessionCredentialStore;
-  children: ReactNode;
+  children: ReactNode | ((state: { contentExposed: boolean }) => ReactNode);
 }>) {
   const snapshot = useSelector(globalActor, (current) => current);
   const { persistence } = useSyncExternalStore(
@@ -58,7 +58,10 @@ export function GlobalLayerHost({
         inert={failure !== null || undefined}
         aria-hidden={failure !== null || undefined}
       >
-        {!replaced && children}
+        {!replaced &&
+          (typeof children === 'function'
+            ? children({ contentExposed: failure === null })
+            : children)}
       </div>
       <div
         className='web-global-layer-host'

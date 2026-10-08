@@ -38,6 +38,7 @@ export function createCueRuntime(
 ) {
   let toneContext: { dispose(): unknown } | null = null;
   let enabled = options.enabled ?? true,
+    suppressed = false,
     disposed = false;
   let context: AudioContext | null = null,
     output: GainNode | null = null;
@@ -86,7 +87,15 @@ export function createCueRuntime(
     },
     play(cue: ProductCue) {
       const buffer = buffers.get(keys[cue]);
-      if (!enabled || disposed || !context || !output || !buffer || globalThis.document?.hidden)
+      if (
+        !enabled ||
+        suppressed ||
+        disposed ||
+        !context ||
+        !output ||
+        !buffer ||
+        globalThis.document?.hidden
+      )
         return;
       const source = context.createBufferSource();
       source.buffer = buffer;
@@ -99,6 +108,11 @@ export function createCueRuntime(
       source.start(context.currentTime + 0.012);
     },
     stop,
+    setSuppressed(value: boolean) {
+      if (disposed || suppressed === value) return;
+      suppressed = value;
+      if (suppressed) stop();
+    },
     setEnabled(value: boolean): boolean {
       const changed = enabled !== value;
       enabled = value;

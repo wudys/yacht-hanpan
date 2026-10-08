@@ -36,7 +36,7 @@ for (const locale of [LOCALE.KO, LOCALE.EN]) {
         recovery: createRecoveryFake(),
       };
       try {
-        render(<GameScreen {...harness} locale={locale} />);
+        render(<GameScreen surfaceExposed={true} {...harness} locale={locale} />);
         const label = translate(locale, 'game.reroll');
         const roll = screen.getByRole('button', { name: label });
         fireEvent.click(roll);

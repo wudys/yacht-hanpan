@@ -6,9 +6,9 @@ import { PRODUCTION_GAME_ORIGIN } from '../helpers/test-origins';
 const WEB_BASE_URL = PRODUCTION_GAME_ORIGIN;
 const LOGICAL_FRAME_WIDTH = 360;
 const LOGICAL_FRAME_HEIGHT = 500;
-const DESKTOP_MAX_SCALE = 16 / 9;
-const DESKTOP_MAX_WIDTH = LOGICAL_FRAME_WIDTH * DESKTOP_MAX_SCALE;
-const DESKTOP_MAX_HEIGHT = LOGICAL_FRAME_HEIGHT * DESKTOP_MAX_SCALE;
+const MAX_FRAME_SCALE = 16 / 9;
+const MAX_FRAME_WIDTH = LOGICAL_FRAME_WIDTH * MAX_FRAME_SCALE;
+const MAX_FRAME_HEIGHT = LOGICAL_FRAME_HEIGHT * MAX_FRAME_SCALE;
 
 type ExpectedLayout = Readonly<{
   width: number;
@@ -17,7 +17,7 @@ type ExpectedLayout = Readonly<{
   frameWidth: number;
   frameHeight: number;
   x: number;
-  mode: 'mobile' | 'desktop';
+  mode: 'compact' | 'wide';
 }>;
 
 const FIXTURES: readonly ExpectedLayout[] = [
@@ -28,7 +28,7 @@ const FIXTURES: readonly ExpectedLayout[] = [
     frameWidth: 280,
     frameHeight: LOGICAL_FRAME_HEIGHT * (280 / LOGICAL_FRAME_WIDTH),
     x: 0,
-    mode: 'mobile',
+    mode: 'compact',
   },
   {
     width: 320,
@@ -37,7 +37,7 @@ const FIXTURES: readonly ExpectedLayout[] = [
     frameWidth: 320,
     frameHeight: LOGICAL_FRAME_HEIGHT * (320 / LOGICAL_FRAME_WIDTH),
     x: 0,
-    mode: 'mobile',
+    mode: 'compact',
   },
   {
     width: 360,
@@ -46,7 +46,7 @@ const FIXTURES: readonly ExpectedLayout[] = [
     frameWidth: LOGICAL_FRAME_WIDTH,
     frameHeight: LOGICAL_FRAME_HEIGHT,
     x: 0,
-    mode: 'mobile',
+    mode: 'compact',
   },
   {
     width: 390,
@@ -55,7 +55,7 @@ const FIXTURES: readonly ExpectedLayout[] = [
     frameWidth: 390,
     frameHeight: LOGICAL_FRAME_HEIGHT * (390 / LOGICAL_FRAME_WIDTH),
     x: 0,
-    mode: 'mobile',
+    mode: 'compact',
   },
   {
     width: 430,
@@ -64,7 +64,7 @@ const FIXTURES: readonly ExpectedLayout[] = [
     frameWidth: 430,
     frameHeight: LOGICAL_FRAME_HEIGHT * (430 / LOGICAL_FRAME_WIDTH),
     x: 0,
-    mode: 'mobile',
+    mode: 'compact',
   },
   {
     width: 431,
@@ -73,7 +73,7 @@ const FIXTURES: readonly ExpectedLayout[] = [
     frameWidth: 431,
     frameHeight: LOGICAL_FRAME_HEIGHT * (431 / LOGICAL_FRAME_WIDTH),
     x: 0,
-    mode: 'desktop',
+    mode: 'wide',
   },
   {
     width: 390,
@@ -82,7 +82,7 @@ const FIXTURES: readonly ExpectedLayout[] = [
     frameWidth: 345.6,
     frameHeight: 480,
     x: 22.2,
-    mode: 'mobile',
+    mode: 'compact',
   },
   {
     width: 1024,
@@ -91,7 +91,7 @@ const FIXTURES: readonly ExpectedLayout[] = [
     frameWidth: 432,
     frameHeight: 600,
     x: 296,
-    mode: 'desktop',
+    mode: 'wide',
   },
   {
     width: 1366,
@@ -100,34 +100,34 @@ const FIXTURES: readonly ExpectedLayout[] = [
     frameWidth: LOGICAL_FRAME_WIDTH * (768 / LOGICAL_FRAME_HEIGHT),
     frameHeight: 768,
     x: (1366 - LOGICAL_FRAME_WIDTH * (768 / LOGICAL_FRAME_HEIGHT)) / 2,
-    mode: 'desktop',
+    mode: 'wide',
   },
   {
     width: 1536,
     height: 1024,
-    scale: DESKTOP_MAX_SCALE,
-    frameWidth: DESKTOP_MAX_WIDTH,
-    frameHeight: DESKTOP_MAX_HEIGHT,
+    scale: MAX_FRAME_SCALE,
+    frameWidth: MAX_FRAME_WIDTH,
+    frameHeight: MAX_FRAME_HEIGHT,
     x: 448,
-    mode: 'desktop',
+    mode: 'wide',
   },
   {
     width: 1920,
     height: 950,
-    scale: DESKTOP_MAX_SCALE,
-    frameWidth: DESKTOP_MAX_WIDTH,
-    frameHeight: DESKTOP_MAX_HEIGHT,
+    scale: MAX_FRAME_SCALE,
+    frameWidth: MAX_FRAME_WIDTH,
+    frameHeight: MAX_FRAME_HEIGHT,
     x: 640,
-    mode: 'desktop',
+    mode: 'wide',
   },
   {
     width: 1920,
     height: 900,
-    scale: DESKTOP_MAX_SCALE,
-    frameWidth: DESKTOP_MAX_WIDTH,
-    frameHeight: DESKTOP_MAX_HEIGHT,
+    scale: MAX_FRAME_SCALE,
+    frameWidth: MAX_FRAME_WIDTH,
+    frameHeight: MAX_FRAME_HEIGHT,
     x: 640,
-    mode: 'desktop',
+    mode: 'wide',
   },
   {
     width: 1920,
@@ -136,7 +136,7 @@ const FIXTURES: readonly ExpectedLayout[] = [
     frameWidth: 612,
     frameHeight: 850,
     x: 654,
-    mode: 'desktop',
+    mode: 'wide',
   },
 ];
 
@@ -149,6 +149,11 @@ for (const fixture of FIXTURES) {
     const canvas = page.locator('[data-game-logical-canvas=true]');
     await expect(wrapper).toHaveAttribute('data-layout-mode', fixture.mode);
     await expect(wrapper).toHaveAttribute('data-measured', 'true');
+    await expect(page.locator('[data-play-area-blocker]')).toHaveCount(fixture.width < 320 ? 1 : 0);
+    if (fixture.width < 320) {
+      await expect(slot).toHaveAttribute('inert', '');
+      await expect(slot).toHaveAttribute('aria-hidden', 'true');
+    }
     const slotBox = await slot.boundingBox();
     const canvasBox = await canvas.boundingBox();
     expect(slotBox).not.toBeNull();
@@ -178,7 +183,7 @@ for (const fixture of FIXTURES) {
   });
 }
 
-test('live desktop resize reuses the wrapper and reaches the 640px cap', async ({ page }) => {
+test('live wide resize reuses the wrapper and reaches the 640px cap', async ({ page }) => {
   await page.setViewportSize({ width: 1024, height: 600 });
   await page.goto('/');
   const wrapper = page.locator('[data-game-ui-root=true]');
@@ -188,15 +193,13 @@ test('live desktop resize reuses the wrapper and reaches the 640px cap', async (
   await page.setViewportSize({ width: 1920, height: 950 });
 
   await expect(wrapper).toHaveAttribute('data-resize-probe', 'same-node');
-  await expect(wrapper).toHaveAttribute('data-layout-mode', 'desktop');
-  await expect
-    .poll(async () => (await slot.boundingBox())?.width)
-    .toBeCloseTo(DESKTOP_MAX_WIDTH, 0);
+  await expect(wrapper).toHaveAttribute('data-layout-mode', 'wide');
+  await expect.poll(async () => (await slot.boundingBox())?.width).toBeCloseTo(MAX_FRAME_WIDTH, 0);
   const slotBox = await slot.boundingBox();
   expect(slotBox).not.toBeNull();
   expect(slotBox!.x).toBeCloseTo(640, 0);
-  expect(slotBox!.width).toBeCloseTo(DESKTOP_MAX_WIDTH, 0);
-  expect(slotBox!.height).toBeCloseTo(DESKTOP_MAX_HEIGHT, 0);
+  expect(slotBox!.width).toBeCloseTo(MAX_FRAME_WIDTH, 0);
+  expect(slotBox!.height).toBeCloseTo(MAX_FRAME_HEIGHT, 0);
 });
 
 test('production web keeps the responsive frame across a route transition', async ({ page }) => {
@@ -209,8 +212,8 @@ test('production web keeps the responsive frame across a route transition', asyn
   const slotBox = await slot.boundingBox();
   expect(slotBox).not.toBeNull();
   expect(slotBox!.x).toBeCloseTo(640, 0);
-  expect(slotBox!.width).toBeCloseTo(DESKTOP_MAX_WIDTH, 0);
-  expect(slotBox!.height).toBeCloseTo(DESKTOP_MAX_HEIGHT, 0);
+  expect(slotBox!.width).toBeCloseTo(MAX_FRAME_WIDTH, 0);
+  expect(slotBox!.height).toBeCloseTo(MAX_FRAME_HEIGHT, 0);
 
   const logo = page.locator('img.web-logo');
   await expect(logo).toBeVisible();
@@ -236,7 +239,7 @@ test('production web keeps the responsive frame across a route transition', asyn
         requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
       }),
   );
-  await page.screenshot({ path: test.info().outputPath('wrapper-logo-desktop.png') });
+  await page.screenshot({ path: test.info().outputPath('wrapper-logo-wide.png') });
 
   await page.getByRole('button', { name: '게임 시작' }).click();
   await expect(page.getByRole('heading', { name: '로비' })).toBeVisible();
@@ -250,22 +253,22 @@ test('production web keeps the responsive frame across a route transition', asyn
     })
     .toBeLessThanOrEqual(320);
   await expect(logo).toBeVisible();
-  const mobileLogoBox = await logo.boundingBox();
-  const mobileSlotBox = await slot.boundingBox();
-  expect(mobileLogoBox).not.toBeNull();
-  expect(mobileSlotBox).not.toBeNull();
-  expect(mobileLogoBox!.width).toBeGreaterThan(0);
-  expect(mobileLogoBox!.height).toBeGreaterThan(0);
+  const compactLogoBox = await logo.boundingBox();
+  const compactSlotBox = await slot.boundingBox();
+  expect(compactLogoBox).not.toBeNull();
+  expect(compactSlotBox).not.toBeNull();
+  expect(compactLogoBox!.width).toBeGreaterThan(0);
+  expect(compactLogoBox!.height).toBeGreaterThan(0);
   await expectLogoAspectRatio(logo);
-  expect(mobileLogoBox!.x).toBeGreaterThanOrEqual(0);
-  expect(mobileLogoBox!.y).toBeGreaterThanOrEqual(0);
-  expect(mobileLogoBox!.y + mobileLogoBox!.height).toBeLessThanOrEqual(740);
-  expect(rectanglesOverlap(mobileSlotBox!, mobileLogoBox!)).toBe(false);
-  expect(mobileLogoBox!.x + mobileLogoBox!.width).toBeLessThanOrEqual(320);
-  await page.screenshot({ path: test.info().outputPath('wrapper-logo-mobile.png') });
+  expect(compactLogoBox!.x).toBeGreaterThanOrEqual(0);
+  expect(compactLogoBox!.y).toBeGreaterThanOrEqual(0);
+  expect(compactLogoBox!.y + compactLogoBox!.height).toBeLessThanOrEqual(740);
+  expect(rectanglesOverlap(compactSlotBox!, compactLogoBox!)).toBe(false);
+  expect(compactLogoBox!.x + compactLogoBox!.width).toBeLessThanOrEqual(320);
+  await page.screenshot({ path: test.info().outputPath('wrapper-logo-compact.png') });
 });
 
-test('production web blocks coarse landscape input and restores portrait', async ({
+test('production web blocks insufficient height and restores an exposed frame', async ({
   browser,
 }, testInfo) => {
   const context = await createTestContext(browser, {
@@ -277,15 +280,15 @@ test('production web blocks coarse landscape input and restores portrait', async
     const page = await context.newPage();
     await page.goto(WEB_BASE_URL);
     expect(await page.evaluate(() => matchMedia('(pointer: coarse)').matches)).toBe(true);
-    const blocker = page.locator('[data-orientation-blocker=true]');
+    const blocker = page.locator('[data-play-area-blocker=true]');
     await expect(blocker).toBeVisible();
     expect(await blocker.boundingBox()).toEqual({ x: 0, y: 0, width: 844, height: 390 });
     expect(
       await page.evaluate(() =>
         document
           .elementFromPoint(innerWidth / 2, innerHeight / 2)
-          ?.closest('[data-orientation-blocker=true]')
-          ?.hasAttribute('data-orientation-blocker'),
+          ?.closest('[data-play-area-blocker=true]')
+          ?.hasAttribute('data-play-area-blocker'),
       ),
     ).toBe(true);
     await page.evaluate(() => document.fonts.ready);
@@ -296,7 +299,7 @@ test('production web blocks coarse landscape input and restores portrait', async
         }),
     );
     await blocker.screenshot({
-      path: testInfo.outputPath('orientation-guard-ko-844x390.png'),
+      path: testInfo.outputPath('play-area-guard-ko-844x390.png'),
     });
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(blocker).toHaveCount(0);
@@ -335,3 +338,66 @@ function rectanglesOverlap(
     second.y + second.height <= first.y
   );
 }
+
+for (const hasTouch of [false, true]) {
+  test(`insufficient portrait width and landscape height block ${hasTouch ? 'coarse' : 'fine'} input`, async ({
+    browser,
+  }) => {
+    const context = await createTestContext(browser, {
+      hasTouch,
+      viewport: { width: 319, height: 740 },
+    });
+    try {
+      const page = await context.newPage();
+      await page.goto(WEB_BASE_URL);
+      expect(await page.evaluate(() => matchMedia('(pointer: coarse)').matches)).toBe(hasTouch);
+      const blocker = page.locator('[data-play-area-blocker]');
+      const frame = page.locator('[data-game-frame-slot]');
+      await expect(blocker).toBeVisible();
+      await expect(frame).toHaveAttribute('inert', '');
+      const start = page.getByRole('button', {
+        name: '게임 시작',
+        exact: true,
+        includeHidden: true,
+      });
+      const hit = await start.boundingBox();
+      expect(hit).not.toBeNull();
+      await page.mouse.click(hit!.x + hit!.width / 2, hit!.y + hit!.height / 2);
+      if (hasTouch) await page.touchscreen.tap(hit!.x + hit!.width / 2, hit!.y + hit!.height / 2);
+      await page.keyboard.press('Tab');
+      await page.keyboard.press('Enter');
+      await page.keyboard.press('Space');
+      await expect(page.locator('[data-screen="entry"]')).toBeVisible();
+      await page.setViewportSize({ width: 740, height: 444 });
+      await expect(blocker).toBeVisible();
+      await expect(frame).toHaveAttribute('inert', '');
+      await page.setViewportSize({ width: 740, height: 445 });
+      await expect(blocker).toHaveCount(0);
+      await start.click();
+      await expect(page.getByRole('heading', { name: '로비', exact: true })).toBeVisible();
+    } finally {
+      await context.close();
+    }
+  });
+}
+
+test('wrapper padding is excluded from usable width while logical geometry survives the guard', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 500 });
+  await page.goto(WEB_BASE_URL);
+  const wrapper = page.locator('[data-game-ui-root]');
+  await wrapper.evaluate((element: HTMLElement) => {
+    element.style.paddingLeft = '20px';
+    element.style.paddingRight = '20px';
+  });
+  const frame = page.locator('[data-game-frame-slot]');
+  await expect.poll(async () => (await frame.boundingBox())?.width).toBeCloseTo(320, 1);
+  await expect(page.locator('[data-play-area-blocker]')).toHaveCount(0);
+  await wrapper.evaluate((element: HTMLElement) => {
+    element.style.paddingRight = '21px';
+  });
+  await expect(page.locator('[data-play-area-blocker]')).toBeVisible();
+  await expect.poll(async () => (await frame.boundingBox())?.width).toBeCloseTo(319, 1);
+  await expect(frame).toHaveAttribute('inert', '');
+});

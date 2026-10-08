@@ -74,6 +74,7 @@ type GameScreenProps = Readonly<{
   sessionCredentialStore: SessionCredentialStore;
   preferences: PreferencesStore;
   presentation: DicePresentation;
+  surfaceExposed: boolean;
 }>;
 
 const MemoSettledDiceControls = memo(SettledDiceControls);
@@ -100,6 +101,7 @@ export default function GameScreen({
   sessionCredentialStore,
   preferences,
   presentation,
+  surfaceExposed,
 }: GameScreenProps) {
   const { persistence } = useSyncExternalStore(
     sessionCredentialStore.subscribe,
@@ -126,11 +128,14 @@ export default function GameScreen({
   const [suppressedAchievementRollId, setSuppressedAchievementRollId] = useState<string | null>(
     null,
   );
-  useEffect(() => {
-    if (layer === 'scoreboard' && presentationSnapshot.phase === 'achievement') {
-      setSuppressedAchievementRollId(presentationSnapshot.rollId);
-    }
-  }, [layer, presentationSnapshot]);
+  // Consume a covered achievement before this render can expose its title again.
+  if (
+    (!surfaceExposed || layer === 'scoreboard') &&
+    presentationSnapshot.phase === 'achievement' &&
+    presentationSnapshot.rollId !== suppressedAchievementRollId
+  ) {
+    setSuppressedAchievementRollId(presentationSnapshot.rollId);
+  }
   const [recordedCategoryNoticeTurnIdentity, setRecordedCategoryNoticeTurnIdentity] = useState<
     string | null
   >(null);
@@ -221,6 +226,7 @@ export default function GameScreen({
       presentation: holderSnapshot.sessionSnapshot?.presentation ?? null,
       viewerSeat: viewerSeatIndex ?? null,
       suspended: recoveryActive || (!connected && !finished),
+      surfaceExposed,
       scoreVisible: (layer === 'board' || layer === 'bonus') && !hasCommandNotice,
       boardVisible: layer === 'board' && !hasCommandNotice && !recordedCategoryNoticeOpen,
       commandPresentationReady: readiness.requestReady && readiness.presentationReady,
@@ -309,8 +315,9 @@ export default function GameScreen({
     )
       return;
     consumedYacht.current = { session: holderSnapshot.session, rollId: yachtRollId };
-    if (!recoveryActive && document.visibilityState !== 'hidden') selectYachtGroup();
-  }, [holderSnapshot.session, recoveryActive, selectYachtGroup, yachtRollId]);
+    if (surfaceExposed && !recoveryActive && document.visibilityState !== 'hidden')
+      selectYachtGroup();
+  }, [holderSnapshot.session, recoveryActive, selectYachtGroup, surfaceExposed, yachtRollId]);
   const canHold = interaction?.canHold ?? false;
   const canScore = interaction?.canScore ?? false;
   const canExplainRecordedCategory = interaction?.canExplainRecordedCategory ?? false;
@@ -621,7 +628,8 @@ export default function GameScreen({
           </ScrollablePanel>
         </div>
       ) : null}
-      {presentationSnapshot.phase === 'achievement' &&
+      {surfaceExposed &&
+      presentationSnapshot.phase === 'achievement' &&
       presentationSnapshot.rollId !== suppressedAchievementRollId ? (
         <div className='web-game-achievement-overlay' data-game-achievement-layer='true'>
           <AchievementSequence

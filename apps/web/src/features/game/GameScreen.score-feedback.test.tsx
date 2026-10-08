@@ -258,7 +258,7 @@ test.each([0, 1] as const)(
   'a zero-point Yacht uses ordinary record feedback for viewer %s',
   async (viewerSeat) => {
     const harness = await createHarness(viewerSeat);
-    render(<GameScreen {...harness} locale={LOCALE.EN} />);
+    render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
     harness.publish(scoreTransition(CATEGORY_ID.YACHT, 0));
 
     const cell = screen.getByRole('button', { name: 'Yacht · 0' });
@@ -292,7 +292,7 @@ test.each([0, 1] as const)(
   'both seats retain the recorded owner and 0 before the 900ms handoff (viewer %s)',
   async (viewerSeat) => {
     const harness = await createHarness(viewerSeat);
-    render(<GameScreen {...harness} locale={LOCALE.EN} />);
+    render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
     harness.publish(scoreTransition());
     const owner = viewerSeat === 0 ? 'viewer' : 'opponent';
     expect(summary().getAttribute('data-player-summary')).toBe(owner);
@@ -323,7 +323,7 @@ test.each([0, 1] as const)(
 
 test('synchronizing newer settled dice cancels confirmation and restores the current player previews', async () => {
   const harness = await createHarness(0);
-  render(<GameScreen {...harness} locale={LOCALE.EN} />);
+  render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
   harness.publish(scoreTransition());
   advance(300);
   expectScorePreviewsHidden();
@@ -366,7 +366,7 @@ test('synchronizing newer settled dice cancels confirmation and restores the cur
 
 test('input waits for 1000ms while YOUR TURN starts at readiness and clears on the first roll request', async () => {
   const harness = await createHarness(1);
-  render(<GameScreen {...harness} locale={LOCALE.EN} />);
+  render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
   harness.publish(scoreTransition());
   const roll = screen.getByRole('button', { name: 'Roll' });
   advance(999);
@@ -391,7 +391,7 @@ test.each([false, true])(
       vi.spyOn(performance, 'now').mockImplementation(() => originalNow() + ++reads * 0.01);
     }
     const harness = await createHarness(1);
-    render(<GameScreen {...harness} locale={LOCALE.EN} />);
+    render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
     harness.publish(scoreTransition());
     advance(1000);
     expect(screen.getByText('YOUR TURN')).not.toBeNull();
@@ -429,7 +429,7 @@ test.each([false, true])(
 
 test('a score moves both seats once to its group and preserves later manual selection across duplicate and presence updates', async () => {
   const harness = await createHarness(1);
-  const view = render(<GameScreen {...harness} locale={LOCALE.EN} />);
+  const view = render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
   const recorded = scoreTransition(CATEGORY_ID.CHOICE, 20);
   harness.publish(recorded);
   expect(tab('lower').getAttribute('aria-selected')).toBe('true');
@@ -438,7 +438,7 @@ test('a score moves both seats once to its group and preserves later manual sele
   harness.publish(
     parseRoomView({ ...recorded, presence: { ...recorded.presence!, presenceVersion: 2 } }),
   );
-  view.rerender(<GameScreen {...harness} locale={LOCALE.KO} />);
+  view.rerender(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.KO} />);
   advance(700);
   expect(tab('upper').getAttribute('aria-selected')).toBe('true');
   expect(
@@ -455,7 +455,7 @@ test.each([
   'viewer %s returns from the temporary %s-to-%s score tab with the incoming owner',
   async (viewerSeat, previousGroup, recordedGroup, category) => {
     const harness = await createHarness(viewerSeat);
-    render(<GameScreen {...harness} locale={LOCALE.EN} />);
+    render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
     fireEvent.click(tab(previousGroup));
     harness.audio.playCue.mockClear();
     harness.publish(scoreTransition(category, category === CATEGORY_ID.CHOICE ? 20 : 0));
@@ -478,13 +478,13 @@ test.each([
 
 test('reselecting the automatically displayed tab keeps that choice without another select sound', async () => {
   const harness = await createHarness(1);
-  const view = render(<GameScreen {...harness} locale={LOCALE.EN} />);
+  const view = render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
   const recorded = scoreTransition(CATEGORY_ID.CHOICE, 20);
   harness.publish(recorded);
   fireEvent.click(tab('lower'));
   advance(1000);
   harness.publish(recorded);
-  view.rerender(<GameScreen {...harness} locale={LOCALE.KO} />);
+  view.rerender(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.KO} />);
   expect(tab('lower').getAttribute('aria-selected')).toBe('true');
   expect(harness.audio.playCue).toHaveBeenCalledExactlyOnceWith(PRODUCT_CUE.SCORE);
 });
@@ -539,7 +539,7 @@ test.each(['ack-first', 'live-first'] as const)(
           if (screen.queryByRole('heading', { name: 'Game result' }) !== null) resultCommits();
         }}
       >
-        <GameScreen {...harness} locale={LOCALE.EN} />
+        <GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />
       </Profiler>,
     );
     fireEvent.click(tab('lower'));
@@ -576,11 +576,55 @@ test.each(['ack-first', 'live-first'] as const)(
   },
 );
 
-test('a live final score shows Result at 1000ms while its original command remains pending until the 1500ms ACK', async () => {
+test.each([
+  { viewerSeat: 0 as const, coverBefore: true },
+  { viewerSeat: 1 as const, coverBefore: true },
+  { viewerSeat: 0 as const, coverBefore: false },
+  { viewerSeat: 1 as const, coverBefore: false },
+])(
+  'global cover retains final confirmation lifetime: $viewerSeat / $coverBefore',
+  async ({ viewerSeat, coverBefore }) => {
+    const { playing, finished } = finalViews();
+    const harness = await createHarness(viewerSeat, playing);
+    const view = render(
+      <GameScreen {...harness} surfaceExposed={!coverBefore} locale={LOCALE.EN} />,
+    );
+    harness.publish(finished);
+    expect(screen.queryByRole('heading', { name: 'Game result' })).toBeNull();
+    advance(300);
+    view.rerender(<GameScreen {...harness} surfaceExposed={false} locale={LOCALE.EN} />);
+    expect(screen.queryByRole('heading', { name: 'Game result' })).toBeNull();
+    expect(
+      screen.queryAllByText(
+        (_text, element) => element?.classList.contains('score-feedback__particle') ?? false,
+      ),
+    ).toHaveLength(0);
+    expect(harness.sessionCredentialStore.removeRoom).toHaveBeenCalledOnce();
+    expect(harness.session.getSnapshot().connection).toBe('disposed');
+    advance(100);
+    view.rerender(<GameScreen {...harness} surfaceExposed={true} locale={LOCALE.EN} />);
+    expect(
+      screen.queryAllByText(
+        (_text, element) => element?.getAttribute('data-yacht-ring') === 'recorded',
+      ),
+    ).toHaveLength(0);
+    advance(599);
+    expect(screen.queryByRole('heading', { name: 'Game result' })).toBeNull();
+    expect(harness.audio.setScene).toHaveBeenLastCalledWith('game');
+    advance(1);
+    expect(screen.getByRole('heading', { name: 'Game result' })).not.toBeNull();
+    expect(harness.audio.setScene).toHaveBeenLastCalledWith('result');
+    expect(
+      harness.audio.playCue.mock.calls.filter(([cue]) => cue === PRODUCT_CUE.SCORE),
+    ).toHaveLength(coverBefore ? 0 : 1);
+  },
+);
+
+test('a live final score under global cover shows Result at 1000ms while its original command remains pending until the 1500ms ACK', async () => {
   const { playing, finished } = finalViews();
   const harness = await createHarness(0, playing, 5000);
   const selectScore = vi.spyOn(harness.session, 'selectScoreCategory');
-  render(<GameScreen {...harness} locale={LOCALE.EN} />);
+  const view = render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
   fireEvent.click(tab('lower'));
   harness.audio.playCue.mockClear();
   fireEvent.click(screen.getByRole('button', { name: /Yacht/u }));
@@ -589,7 +633,11 @@ test('a live final score shows Result at 1000ms while its original command remai
   harness.publish(finished);
   expect(summary().getAttribute('aria-label')).toBe('Total 55 · Bonus not earned');
   expect(harness.sessionCredentialStore.removeRoom).toHaveBeenCalledOnce();
-  advance(999);
+  advance(300);
+  view.rerender(<GameScreen {...harness} surfaceExposed={false} locale={LOCALE.EN} />);
+  advance(100);
+  view.rerender(<GameScreen {...harness} surfaceExposed={true} locale={LOCALE.EN} />);
+  advance(599);
   expect(screen.queryByRole('heading', { name: 'Game result' })).toBeNull();
   advance(1);
   const result = screen.getByRole('heading', { name: 'Game result' });
@@ -617,7 +665,7 @@ test.each(['explicitForfeit', 'connectionEnded'] as const)(
   '%s at 300ms cancels record confirmation immediately without later feedback or a turn cue',
   async (reason) => {
     const harness = await createHarness(1);
-    render(<GameScreen {...harness} locale={LOCALE.EN} />);
+    render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
     const recorded = scoreTransition();
     harness.publish(recorded);
     advance(300);
@@ -647,17 +695,35 @@ test.each(['explicitForfeit', 'connectionEnded'] as const)(
 test('a final score known only through synchronization displays Result immediately without success feedback', async () => {
   const { playing, finished } = finalViews();
   const harness = await createHarness(0, playing);
-  render(<GameScreen {...harness} locale={LOCALE.EN} />);
+  render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
   await harness.synchronize(finished);
   expect(screen.getByRole('heading', { name: 'Game result' })).not.toBeNull();
   expect(harness.audio.playCue).not.toHaveBeenCalled();
   expect(harness.session.getSnapshot().connection).toBe('disposed');
 });
 
+test.each(['settings', 'scoreboard'] as const)(
+  'global cover preserves immediate Result for a final score already covered by %s',
+  async (layer) => {
+    const { playing, finished } = finalViews();
+    const harness = await createHarness(0, playing);
+    const view = render(<GameScreen {...harness} surfaceExposed={true} locale={LOCALE.EN} />);
+    fireEvent.click(
+      screen.getByRole('button', { name: layer === 'settings' ? 'Settings' : 'Scoreboard' }),
+    );
+    harness.audio.playCue.mockClear();
+    view.rerender(<GameScreen {...harness} surfaceExposed={false} locale={LOCALE.EN} />);
+    harness.publish(finished);
+    expect(screen.getByRole('heading', { name: 'Game result' })).not.toBeNull();
+    expect(harness.audio.setScene).toHaveBeenLastCalledWith('result');
+    expect(harness.audio.playCue).not.toHaveBeenCalled();
+  },
+);
+
 test('the final automatic record tab stays visible past 900ms until Result replaces the board', async () => {
   const { playing, finished } = finalViews();
   const harness = await createHarness(1, playing);
-  render(<GameScreen {...harness} locale={LOCALE.EN} />);
+  render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
   expect(tab('upper').getAttribute('aria-selected')).toBe('true');
   harness.publish(finished);
   expect(tab('lower').getAttribute('aria-selected')).toBe('true');
@@ -672,7 +738,7 @@ test.each(['hidden', 'recovery', 'restore'] as const)(
   'cancelling a visible confirmation through %s restores the previous tab without replay',
   async (cancellation) => {
     const harness = await createHarness(1);
-    render(<GameScreen {...harness} locale={LOCALE.EN} />);
+    render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
     const visibility = vi.spyOn(document, 'visibilityState', 'get');
     const recorded = scoreTransition(CATEGORY_ID.CHOICE, 20);
     harness.publish(recorded);
@@ -700,11 +766,98 @@ test.each(['hidden', 'recovery', 'restore'] as const)(
   },
 );
 
+test.each([0, 1] as const)(
+  'a globally covered record consumes group and score without replay for viewer %s',
+  async (viewerSeat) => {
+    const harness = await createHarness(viewerSeat);
+    const view = render(<GameScreen {...harness} surfaceExposed={false} locale={LOCALE.EN} />);
+    harness.publish(scoreTransition(CATEGORY_ID.CHOICE, 20));
+    expect(tab('lower').getAttribute('aria-selected')).toBe('true');
+    expect(
+      screen.getByRole('button', { name: 'Choice · 20' }).getAttribute('data-value-state'),
+    ).toBe('recorded');
+    expect(
+      screen.queryAllByText(
+        (_text, element) => element?.classList.contains('score-feedback__particle') ?? false,
+      ),
+    ).toHaveLength(0);
+    expect(summary().getAttribute('aria-label')).toBe('Total 22 · Bonus not earned');
+    expect(harness.audio.playCue).not.toHaveBeenCalled();
+    advance(300);
+    view.rerender(<GameScreen {...harness} surfaceExposed={true} locale={LOCALE.EN} />);
+    expect(
+      screen.queryAllByText(
+        (_text, element) => element?.classList.contains('score-feedback__particle') ?? false,
+      ),
+    ).toHaveLength(0);
+    advance(700);
+    expect(summary().getAttribute('aria-label')).toBe('Total 1 · Bonus not earned');
+    expect(tab('lower').getAttribute('aria-selected')).toBe('true');
+    expect(screen.queryByText('YOUR TURN')).toBeNull();
+    expect(harness.audio.playCue).not.toHaveBeenCalled();
+  },
+);
+
+test.each([0, 1] as const)(
+  'global cover cancels a temporary record tab without restarting feedback for viewer %s',
+  async (viewerSeat) => {
+    const harness = await createHarness(viewerSeat);
+    const view = render(<GameScreen {...harness} surfaceExposed={true} locale={LOCALE.EN} />);
+    harness.publish(scoreTransition(CATEGORY_ID.CHOICE, 20));
+    expect(tab('lower').getAttribute('aria-selected')).toBe('true');
+    advance(300);
+    view.rerender(<GameScreen {...harness} surfaceExposed={false} locale={LOCALE.EN} />);
+    expect(tab('upper').getAttribute('aria-selected')).toBe('true');
+    expect(summary().getAttribute('aria-label')).toBe('Total 22 · Bonus not earned');
+    expect(
+      screen.queryAllByText(
+        (_text, element) => element?.classList.contains('score-feedback__particle') ?? false,
+      ),
+    ).toHaveLength(0);
+    advance(100);
+    view.rerender(<GameScreen {...harness} surfaceExposed={true} locale={LOCALE.EN} />);
+    expect(
+      screen.queryAllByText(
+        (_text, element) => element?.classList.contains('score-feedback__particle') ?? false,
+      ),
+    ).toHaveLength(0);
+    advance(600);
+    expect(tab('upper').getAttribute('aria-selected')).toBe('true');
+    expect(screen.queryByText('YOUR TURN')).toBeNull();
+    expect(harness.audio.playCue).toHaveBeenCalledExactlyOnceWith(PRODUCT_CUE.SCORE);
+  },
+);
+
+test('global cover consumes pending YOUR TURN even when exposure returns before readiness', async () => {
+  const harness = await createHarness(1);
+  const view = render(<GameScreen {...harness} surfaceExposed={true} locale={LOCALE.EN} />);
+  harness.publish(scoreTransition());
+  advance(300);
+  view.rerender(<GameScreen {...harness} surfaceExposed={false} locale={LOCALE.EN} />);
+  advance(100);
+  view.rerender(<GameScreen {...harness} surfaceExposed={true} locale={LOCALE.EN} />);
+  advance(600);
+  expect(screen.getByRole('button', { name: 'Roll' }).getAttribute('aria-disabled')).toBe('false');
+  expect(screen.queryByText('YOUR TURN')).toBeNull();
+});
+
+test('global cover consumes an already visible YOUR TURN cue without late replay', async () => {
+  const harness = await createHarness(1);
+  const view = render(<GameScreen {...harness} surfaceExposed={true} locale={LOCALE.EN} />);
+  harness.publish(scoreTransition());
+  advance(1000);
+  expect(screen.getByText('YOUR TURN')).not.toBeNull();
+  view.rerender(<GameScreen {...harness} surfaceExposed={false} locale={LOCALE.EN} />);
+  expect(screen.queryByText('YOUR TURN')).toBeNull();
+  view.rerender(<GameScreen {...harness} surfaceExposed={true} locale={LOCALE.EN} />);
+  expect(screen.queryByText('YOUR TURN')).toBeNull();
+});
+
 test.each(['hidden', 'recovery'] as const)(
   'a record accepted during %s does not replay after returning',
   async (suspension) => {
     const harness = await createHarness(1);
-    render(<GameScreen {...harness} locale={LOCALE.EN} />);
+    render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
     const visibility = vi.spyOn(document, 'visibilityState', 'get');
     act(() => {
       if (suspension === 'hidden') {
@@ -731,7 +884,7 @@ test.each(['settings', 'scoreboard'] as const)(
   'keeps the %s layer and skips hidden feedback after closing it',
   async (layer) => {
     const harness = await createHarness(1);
-    render(<GameScreen {...harness} locale={LOCALE.EN} />);
+    render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
     fireEvent.click(
       screen.getByRole('button', { name: layer === 'settings' ? 'Settings' : 'Scoreboard' }),
     );
@@ -762,7 +915,7 @@ test.each(['settings', 'scoreboard'] as const)(
   'opening %s during a visible confirmation discards its temporary tab without reinterpreting it',
   async (layer) => {
     const harness = await createHarness(1);
-    render(<GameScreen {...harness} locale={LOCALE.EN} />);
+    render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
     const recorded = scoreTransition(CATEGORY_ID.CHOICE, 20);
     harness.publish(recorded);
     expect(tab('lower').getAttribute('aria-selected')).toBe('true');
@@ -793,7 +946,7 @@ test('the open bonus popover follows the same summary owner at the 900ms handoff
     },
   });
   const harness = await createHarness(0, before);
-  render(<GameScreen {...harness} locale={LOCALE.EN} />);
+  render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
   fireEvent.click(tab('lower'));
   fireEvent.click(screen.getByRole('button', { name: 'Bonus rule' }));
   const popover = screen.getByRole('dialog', { name: 'Bonus rule' });
@@ -814,7 +967,7 @@ test('a live final score sounds once, then ACK timeout recovery cancels confirma
   const { playing, finished } = finalViews();
   const harness = await createHarness(0, playing);
   const score = vi.spyOn(harness.session, 'selectScoreCategory');
-  render(<GameScreen {...harness} locale={LOCALE.EN} />);
+  render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
   fireEvent.click(tab('lower'));
   harness.audio.playCue.mockClear();
   fireEvent.click(screen.getByRole('button', { name: /Yacht/u }));
@@ -839,7 +992,7 @@ test.each([1000, 1100])(
   'a record arriving at %ims projects current state without a new confirmation or temporary tab',
   async (arrivalAt) => {
     const harness = await createHarness(1);
-    render(<GameScreen {...harness} locale={LOCALE.EN} />);
+    render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
     advance(arrivalAt);
     const recorded = scoreTransition(CATEGORY_ID.CHOICE, 20);
     harness.publish(recorded);
@@ -866,7 +1019,7 @@ test.each([1000, 1100])(
 test('SFX off consumes a fresh record so turning sound on does not replay it', async () => {
   const harness = await createHarness();
   harness.preferences.setSfxEnabled(false);
-  render(<GameScreen {...harness} locale={LOCALE.EN} />);
+  render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
   harness.publish(scoreTransition());
   expect(summary().getAttribute('aria-label')).toBe('Total 2 · Bonus not earned');
   expect(harness.audio.playCue).not.toHaveBeenCalled();
@@ -907,7 +1060,7 @@ test.each([0, 1] as const)(
   async (viewerSeat) => {
     const initial = yachtGame();
     const harness = await createHarness(viewerSeat, roomView(initial));
-    render(<GameScreen {...harness} locale={LOCALE.EN} />);
+    render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
     const rolled = roomView({
       ...initial,
       stateVersion: 8,
@@ -970,11 +1123,85 @@ test.each([0, 1] as const)(
   },
 );
 
+test('a Yacht revealed under global cover keeps current previews but consumes automatic navigation until the next roll', async () => {
+  const initial = yachtGame();
+  const harness = await createHarness(0, roomView(initial));
+  const view = render(<GameScreen {...harness} surfaceExposed={false} locale={LOCALE.EN} />);
+  function revealYacht(stateVersion: number, rollCount: 1 | 2 | 3, rollId: string) {
+    const gameView = roomView({
+      ...initial,
+      stateVersion,
+      match: {
+        ...initialPlayingMatch,
+        currentTurn: {
+          ...initialPlayingMatch.currentTurn,
+          heldSlots: [],
+          rollCount,
+          dice: [{ value: 6 }, { value: 6 }, { value: 6 }, { value: 6 }, { value: 6 }],
+        },
+      },
+    });
+    const rolled = parseRoomView({ ...gameView, presence: harness.session.getSnapshot().presence });
+    const roll = parseResolvedRollArtifact({
+      type: 'roll:resolved',
+      replay: {
+        mode: 'seeded-physics',
+        rollId,
+        seed: 'covered-yacht',
+        pourStyle: 'classic',
+        rolledSlots: [0, 1, 2, 3, 4],
+        contract: createCompatibilityContract('test-release'),
+      },
+      outcome: { authoritativeValuesBySlot: [0, 1, 2, 3, 4].map((slot) => ({ slot, value: 6 })) },
+    });
+    act(() => {
+      harness.presentation.publish({ phase: 'hidden', resources: null });
+      harness.socket.onRoomUpdate.mock.lastCall?.[0]({
+        type: 'roll:committed',
+        view: rolled,
+        roll,
+      });
+      harness.presentation.publish({
+        phase: 'achievement',
+        resources: null,
+        dice: [],
+        rollId: roll.replay.rollId,
+        achievement: { kind: 'yacht', categoryId: 'yacht' },
+      });
+    });
+    return rolled;
+  }
+  const rolled = revealYacht(8, 2, '8184fc0a-4e59-455d-a7c1-579a9ee96403');
+  expect(tab('upper').getAttribute('aria-selected')).toBe('true');
+  view.rerender(<GameScreen {...harness} surfaceExposed={true} locale={LOCALE.EN} />);
+  expect(tab('upper').getAttribute('aria-selected')).toBe('true');
+  harness.publish(
+    parseRoomView({ ...rolled, presence: { ...rolled.presence, presenceVersion: 2 } }),
+  );
+  view.rerender(<GameScreen {...harness} surfaceExposed={true} locale={LOCALE.KO} />);
+  expect(tab('upper').getAttribute('aria-selected')).toBe('true');
+  act(() => harness.presentation.publish({ phase: 'settled', resources: null, dice: [] }));
+  view.rerender(<GameScreen {...harness} surfaceExposed={true} locale={LOCALE.EN} />);
+  fireEvent.click(tab('lower'));
+  expect(yachtRing()).not.toBeNull();
+  expect(screen.getByRole('button', { name: 'Yacht · 50' }).getAttribute('data-value-state')).toBe(
+    'preview',
+  );
+  fireEvent.click(tab('upper'));
+  revealYacht(9, 3, '8184fc0a-4e59-455d-a7c1-579a9ee96404');
+  expect(harness.session.getSnapshot().presentation).toMatchObject({
+    kind: 'roll',
+    roll: { replay: { rollId: '8184fc0a-4e59-455d-a7c1-579a9ee96404' } },
+  });
+  expect(tab('lower').getAttribute('aria-selected')).toBe('true');
+  expect(yachtRing()).not.toBeNull();
+});
+
 test.each([undefined, 0, 50] as const)(
   'restored Yacht %s only restores an eligible ring and never auto-selects its tab',
   async (recorded) => {
     const harness = await createHarness(1, roomView(yachtGame(recorded)));
-    render(<GameScreen {...harness} locale={LOCALE.EN} />);
+    render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
     expect(tab('upper').getAttribute('aria-selected')).toBe('true');
     fireEvent.click(tab('lower'));
     if (recorded === undefined) expect(yachtRing()).not.toBeNull();
@@ -1004,7 +1231,7 @@ test.each([0, 1] as const)(
     } satisfies GameSnapshotInput;
     const beforeView = roomView(before);
     const harness = await createHarness(viewerSeat, beforeView);
-    render(<GameScreen {...harness} locale={LOCALE.EN} />);
+    render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
     harness.publish(scoreTransition(CATEGORY_ID.ONES, 1, beforeView));
     expect(summary().getAttribute('aria-label')).toBe('Total 98 · Bonus earned');
     expect(screen.getByText('+35')).not.toBeNull();
@@ -1021,7 +1248,7 @@ test.each([0, 1] as const)(
   'a fresh timeout turn shows YOUR TURN only to its newly ready owner (viewer %s)',
   async (viewerSeat) => {
     const harness = await createHarness(viewerSeat);
-    render(<GameScreen {...harness} locale={LOCALE.EN} />);
+    render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
     harness.publish(
       roomView({
         ...playingGameInput,
@@ -1066,7 +1293,7 @@ test('a live initial turn starts YOUR TURN once while a synchronized initial gam
     },
   });
   const harness = await createHarness(0, initial);
-  render(<GameScreen {...harness} locale={LOCALE.EN} />);
+  render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
   const firstTurn = roomView({
     stateVersion: 1,
     match: {
@@ -1110,7 +1337,7 @@ test.each(['ready', 'expired'] as const)(
     const originalView = roomView(originalTurn);
     const harness = await createHarness(0, originalView, 120_000);
     const selectScore = vi.spyOn(harness.session, 'selectScoreCategory');
-    render(<GameScreen {...harness} locale={LOCALE.EN} />);
+    render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
     fireEvent.click(screen.getByRole('button', { name: /Twos/u }));
     expect(harness.socket.emitCommand).toHaveBeenCalledOnce();
     const ownRecord = scoreTransition(CATEGORY_ID.TWOS, 0, originalView);
@@ -1229,7 +1456,7 @@ test.each([0, 300, 900])(
     let reads = 0;
     vi.spyOn(performance, 'now').mockImplementation(() => originalNow() + ++reads * 0.01);
     const harness = await createHarness(1);
-    render(<GameScreen {...harness} locale={LOCALE.EN} />);
+    render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
     advance(delay);
     harness.publish(scoreTransition());
     // Commit each timer independently, as the browser does, instead of batching two seconds.

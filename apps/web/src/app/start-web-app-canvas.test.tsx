@@ -85,6 +85,7 @@ vi.mock('@/app/product-execution', () => ({
     };
     return {
       activity: activity.signal,
+      setSurfaceExposed: vi.fn(),
       client: { clock: { now: () => null } },
       audio: {
         supported: true,

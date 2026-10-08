@@ -4,6 +4,7 @@ import type { ActorRefFrom } from 'xstate';
 
 import type { appLifecycleMachine } from '@/app/app-lifecycle-machine';
 import { GlobalLayerHost } from '@/app/GlobalLayerHost';
+import { ProductSurfaceBoundary } from '@/app/ProductSurfaceBoundary';
 import { translate } from '@/i18n';
 import type { BrowserAudioRuntime } from '@/runtime/audio/browser-audio-runtime';
 import type { RendererReadiness } from '@/runtime/dice/canvas/renderer-readiness';
@@ -28,7 +29,8 @@ export function AppShell({
   presentation,
   sessionCredentialStore,
   routePath,
-  onOrientationGuardExit,
+  onPlayableAreaRestored,
+  onSurfaceExposureChange,
   children,
 }: Readonly<{
   audio: BrowserAudioRuntime;
@@ -38,7 +40,8 @@ export function AppShell({
   presentation: DicePresentation;
   sessionCredentialStore: SessionCredentialStore;
   routePath: string;
-  onOrientationGuardExit: () => void;
+  onPlayableAreaRestored: () => void;
+  onSurfaceExposureChange: (exposed: boolean) => void;
   children: ReactNode;
 }>) {
   const { locale, bgmEnabled, sfxEnabled } = useSyncExternalStore(
@@ -54,19 +57,34 @@ export function AppShell({
   return (
     <div className='web-app-shell' data-web-app-shell='true' style={webShellStyle}>
       <GameFrame
-        onOrientationGuardExit={onOrientationGuardExit}
-        orientationMessage={translate(locale, 'game.portraitRequired')}
+        playAreaMessage={
+          <>
+            <strong>{translate(locale, 'layout.insufficientSpaceTitle')}</strong>
+            <span>{translate(locale, 'layout.insufficientSpaceDescription')}</span>
+          </>
+        }
         logo={<img className='web-logo' src={wrapperLogoUrl} alt='' draggable={false} />}
       >
-        <GlobalLayerHost
-          sessionCredentialStore={sessionCredentialStore}
-          globalActor={globalActor}
-          locale={locale}
-          routePath={routePath}
-        >
-          <MemoizedDiceCanvas renderer={renderer} presentation={presentation} />
-          {children}
-        </GlobalLayerHost>
+        {(frameAvailability) => (
+          <GlobalLayerHost
+            sessionCredentialStore={sessionCredentialStore}
+            globalActor={globalActor}
+            locale={locale}
+            routePath={routePath}
+          >
+            {({ contentExposed }) => (
+              <ProductSurfaceBoundary
+                frameAvailability={frameAvailability}
+                contentExposed={contentExposed}
+                onPlayableAreaRestored={onPlayableAreaRestored}
+                onSurfaceExposureChange={onSurfaceExposureChange}
+              >
+                <MemoizedDiceCanvas renderer={renderer} presentation={presentation} />
+                {children}
+              </ProductSurfaceBoundary>
+            )}
+          </GlobalLayerHost>
+        )}
       </GameFrame>
     </div>
   );

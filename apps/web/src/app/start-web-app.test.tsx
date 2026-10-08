@@ -66,11 +66,12 @@ vi.mock('@/runtime/audio/browser-audio-runtime', () => ({
     prefetchScenes: async () => undefined,
     prepareCues: async () => undefined,
     playCue: vi.fn(),
+    setSurfaceExposed: vi.fn(),
     dispose: fixture.audioDispose,
   }),
 }));
 vi.mock('@/runtime/audio/game-audio-feedback', () => ({
-  startGameAudioFeedback: () => ({ dispose: vi.fn() }),
+  startGameAudioFeedback: () => ({ dispose: vi.fn(), setSurfaceExposed: vi.fn() }),
 }));
 vi.mock('@/runtime/dice/dice-presentation', () => ({
   createDicePresentation: () => ({ start: vi.fn(), dispose: fixture.presentationDispose }),

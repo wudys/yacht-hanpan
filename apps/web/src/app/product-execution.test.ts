@@ -16,6 +16,8 @@ const fixture = vi.hoisted(() => ({
   presentationDispose: vi.fn(),
   sessionsDispose: vi.fn(),
   audioDispose: vi.fn(),
+  audioExposure: vi.fn(),
+  feedbackExposure: vi.fn(),
   presentationStart: vi.fn(),
   presentationOptions: undefined as DicePresentationOptions | undefined,
   requireRefresh: vi.fn(),
@@ -23,10 +25,17 @@ const fixture = vi.hoisted(() => ({
 
 vi.mock('@repo/game-client-sdk', () => ({ createGameClient: () => ({ clock: {} }) }));
 vi.mock('@/runtime/audio/browser-audio-runtime', () => ({
-  createBrowserAudioRuntime: () => ({ playCue: vi.fn(), dispose: fixture.audioDispose }),
+  createBrowserAudioRuntime: () => ({
+    playCue: vi.fn(),
+    dispose: fixture.audioDispose,
+    setSurfaceExposed: fixture.audioExposure,
+  }),
 }));
 vi.mock('@/runtime/audio/game-audio-feedback', () => ({
-  startGameAudioFeedback: () => ({ dispose: fixture.feedbackDispose }),
+  startGameAudioFeedback: () => ({
+    dispose: fixture.feedbackDispose,
+    setSurfaceExposed: fixture.feedbackExposure,
+  }),
 }));
 vi.mock('@/runtime/dice/dice-presentation', () => ({
   createDicePresentation: (options: DicePresentationOptions) => {
@@ -83,6 +92,23 @@ function createExecution(telemetry: Telemetry = inactiveTelemetry) {
     telemetry,
   });
 }
+
+test('starts covered and synchronously forwards exposure until execution stops', () => {
+  const execution = createExecution();
+  expect(fixture.audioExposure).toHaveBeenCalledExactlyOnceWith(false);
+  expect(fixture.feedbackExposure).toHaveBeenCalledExactlyOnceWith(false);
+  execution.setSurfaceExposed(true);
+  expect(fixture.audioExposure).toHaveBeenLastCalledWith(true);
+  expect(fixture.feedbackExposure).toHaveBeenLastCalledWith(true);
+  execution.setSurfaceExposed(false);
+  expect(fixture.audioExposure).toHaveBeenLastCalledWith(false);
+  expect(fixture.feedbackExposure).toHaveBeenLastCalledWith(false);
+  execution.stop();
+  vi.clearAllMocks();
+  execution.setSurfaceExposed(true);
+  expect(fixture.audioExposure).not.toHaveBeenCalled();
+  expect(fixture.feedbackExposure).not.toHaveBeenCalled();
+});
 
 test('aborts activity before stopping owned work once, including reentrant stop', () => {
   const execution = createExecution();

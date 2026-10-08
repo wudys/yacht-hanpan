@@ -115,7 +115,7 @@ function DiagnosticRun({
   return (
     <main className='physics-diagnostic'>
       <section className='physics-diagnostic__stage' aria-label='Physical dice board'>
-        <GameFrame orientationMessage='Use portrait orientation to inspect the dice board.'>
+        <GameFrame playAreaMessage='Make more room to inspect the dice board.'>
           <div className='physics-diagnostic__playfield' aria-hidden='true' />
           {ready ? (
             <DiagnosticCanvas

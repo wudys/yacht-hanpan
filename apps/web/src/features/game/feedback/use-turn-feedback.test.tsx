@@ -37,6 +37,7 @@ function finalOptions() {
     } as const,
     viewerSeat: 0 as const,
     suspended: false,
+    surfaceExposed: true,
     scoreVisible: true,
     boardVisible: true,
     commandPresentationReady: false,

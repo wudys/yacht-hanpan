@@ -17,6 +17,8 @@ export interface TurnFeedbackInput {
   readonly now: number;
   readonly serverNow: number | null;
   readonly suspended: boolean;
+  readonly surfaceExposed: boolean;
+  /** Local score-layer eligibility also determines whether a final record confirms. */
   readonly scoreVisible: boolean;
   readonly boardVisible: boolean;
   readonly commandPresentationReady: boolean;
@@ -82,6 +84,8 @@ export function advanceTurnFeedback(
       : { ...createTurnFeedbackState(), session: input.session };
   let { consumedVersion, record, pendingTurn, turnCue, tabRequest } = initial;
   const { game, presentation, now, serverNow } = input;
+  const scoreExposed = input.surfaceExposed && input.scoreVisible;
+  const boardExposed = input.surfaceExposed && input.boardVisible;
   const turn = game?.match.status === 'playing' ? game.match.currentTurn : null;
   const sourceVersion =
     presentation?.kind === 'score'
@@ -128,7 +132,7 @@ export function advanceTurnFeedback(
             phase: 'confirming',
             bonusEarned: earnedBonus(game, presentation.record),
             final,
-            visible: input.scoreVisible,
+            visible: scoreExposed,
           };
           pendingTurn =
             turn !== null && turn.seatIndex === input.viewerSeat && serverNow !== null
@@ -169,7 +173,7 @@ export function advanceTurnFeedback(
             : elapsed >= RECORD_FADE_OUT_MS
               ? 'outgoing'
               : 'confirming';
-        const visible = record.visible && input.scoreVisible;
+        const visible = record.visible && scoreExposed;
         if (record.phase !== phase || record.visible !== visible)
           record = { ...record, phase, visible };
       }
@@ -177,7 +181,12 @@ export function advanceTurnFeedback(
 
     const currentTurn =
       turn !== null && turn.seatIndex === input.viewerSeat && turn.rollCount === 0;
-    if (!currentTurn || input.rollPending || presentation?.kind === 'settled') {
+    if (
+      !input.surfaceExposed ||
+      !currentTurn ||
+      input.rollPending ||
+      presentation?.kind === 'settled'
+    ) {
       pendingTurn = null;
       turnCue = null;
     } else {
@@ -190,7 +199,7 @@ export function advanceTurnFeedback(
             scheduledFor: now + turn.startedAt - serverNow,
             waitingForInput: false,
           };
-        } else if (!input.boardVisible || serverNow === null || serverNow >= turn.deadlineAt) {
+        } else if (!boardExposed || serverNow === null || serverNow >= turn.deadlineAt) {
           pendingTurn = null;
         } else if (!input.commandPresentationReady) {
           if (!pendingTurn.waitingForInput) {
@@ -206,7 +215,7 @@ export function advanceTurnFeedback(
           pendingTurn = null;
         }
       }
-      if (turnCue !== null && (!input.boardVisible || now >= turnCue.startedAt + TURN_CUE_MS))
+      if (turnCue !== null && (!boardExposed || now >= turnCue.startedAt + TURN_CUE_MS))
         turnCue = null;
     }
   }

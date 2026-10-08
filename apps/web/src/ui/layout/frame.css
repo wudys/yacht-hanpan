@@ -55,29 +55,40 @@
   visibility: visible;
 }
 
-.game-orientation-blocker {
+.game-play-area-blocker {
   position: absolute;
   inset: 0;
   z-index: 10;
   display: grid;
   place-items: center;
-  padding: 24px;
+  padding: clamp(12px, 4vmin, 24px);
   color: var(--product-ivory);
   background: var(--product-base-deep);
 }
 
-.game-orientation-blocker__message {
+.game-play-area-blocker__message {
   display: grid;
   place-items: center;
+  align-content: start;
+  gap: 12px;
   width: min(560px, 100%);
-  min-height: 160px;
-  padding: 32px 24px;
+  min-height: min(160px, 100%);
+  max-height: 100%;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: clamp(16px, 5vmin, 32px) clamp(12px, 4vmin, 24px);
   border: 1px solid var(--product-border);
   border-radius: 16px;
   background: #0d302b;
   box-shadow: 0 12px 28px #00000066;
   font-size: clamp(1.125rem, 4vw, 1.5rem);
-  font-weight: 600;
+  font-weight: 400;
   line-height: 1.4;
   text-align: center;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+.game-play-area-blocker__message strong {
+  font-weight: 600;
 }

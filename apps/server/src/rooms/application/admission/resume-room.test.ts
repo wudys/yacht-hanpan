@@ -71,6 +71,7 @@ describe('executeResumeRoom', () => {
     const repository = new InMemoryRoomRepository();
     seedWaiting(repository);
     const before = repository.getById(roomId(ROOM_ID));
+    const beforeSnapshot = structuredClone(before);
 
     const result = await executeResumeRoom(
       parseResumeRoomRequest({ roomId: ROOM_ID, seatToken: SEAT_TOKEN }),
@@ -92,6 +93,7 @@ describe('executeResumeRoom', () => {
     expect(result.data).toMatchObject({ seatIndex: SEAT_INDEX, view: { game: null } });
     expect(JSON.stringify(result)).not.toContain(SEAT_TOKEN);
     expect(repository.getById(roomId(ROOM_ID))).toBe(before);
+    expect(repository.getById(roomId(ROOM_ID))).toEqual(beforeSnapshot);
   });
 
   test('collapses a wrong token to a safe resume error', async () => {
@@ -198,6 +200,7 @@ describe('executeResumeRoom', () => {
       },
     };
     repository.replace(roomId(ROOM_ID), bothDisconnected);
+    const beforeSnapshot = structuredClone(bothDisconnected);
 
     const result = await executeResumeRoom(
       parseResumeRoomRequest({ roomId: ROOM_ID, seatToken: JOINER_TOKEN }),
@@ -209,6 +212,7 @@ describe('executeResumeRoom', () => {
     expect(result.data.view.room.status).toBe('playing');
     expect(result.data.view.game?.match.status).toBe('playing');
     expect(repository.getById(roomId(ROOM_ID))).toBe(bothDisconnected);
+    expect(repository.getById(roomId(ROOM_ID))).toEqual(beforeSnapshot);
   });
 
   test('rejects an expired waiting room and distinguishes an absent room only by public policy', async () => {

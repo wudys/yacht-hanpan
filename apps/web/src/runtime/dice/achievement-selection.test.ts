@@ -8,9 +8,18 @@ test('features Yacht and Large Straight regardless of classification order', () 
     selectFeaturedCombination([SPECIAL_COMBINATION.FOUR_OF_A_KIND, SPECIAL_COMBINATION.YACHT]),
   ).toBe(SPECIAL_COMBINATION.YACHT);
   expect(
+    selectFeaturedCombination([SPECIAL_COMBINATION.YACHT, SPECIAL_COMBINATION.FOUR_OF_A_KIND]),
+  ).toBe(SPECIAL_COMBINATION.YACHT);
+  expect(
     selectFeaturedCombination([
       SPECIAL_COMBINATION.SMALL_STRAIGHT,
       SPECIAL_COMBINATION.LARGE_STRAIGHT,
+    ]),
+  ).toBe(SPECIAL_COMBINATION.LARGE_STRAIGHT);
+  expect(
+    selectFeaturedCombination([
+      SPECIAL_COMBINATION.LARGE_STRAIGHT,
+      SPECIAL_COMBINATION.SMALL_STRAIGHT,
     ]),
   ).toBe(SPECIAL_COMBINATION.LARGE_STRAIGHT);
 });

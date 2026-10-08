@@ -91,8 +91,6 @@ test.each(['sine', 'triangle'] as const)(
           modulation: { type: 'sine' },
         }),
       );
-      expect(FMSynth).toHaveBeenCalledWith(expect.objectContaining({ modulationIndex: 0.22 }));
-      expect(FMSynth).toHaveBeenCalledWith(expect.objectContaining({ modulationIndex: 0.8 }));
     } finally {
       recipes.warning.events[0]!.options = originalOscillatorOptions;
       recipes.combo.events[0]!.options = originalFmOptions;

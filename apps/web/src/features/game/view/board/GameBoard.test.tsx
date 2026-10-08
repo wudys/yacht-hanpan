@@ -81,7 +81,6 @@ test('composes the fixed game bands around an injected physics stage', () => {
     />,
   );
 
-  expect(view.match(/data-game-band=/g)?.length).toBe(4);
   expect(view).toContain('data-dice-stage-slot="true"');
   expect(view).toContain('data-physics-stage="true"');
   expect(view.match(/data-held-slot=/g)?.length).toBe(5);

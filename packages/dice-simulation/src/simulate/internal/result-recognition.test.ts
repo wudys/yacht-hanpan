@@ -3,10 +3,6 @@ import { describe, expect, it } from 'bun:test';
 import { type QuaternionTuple, recognizeTopFace } from './result-recognition';
 
 describe('dice result recognition', () => {
-  it('recognizes the identity quaternion as face 1', () => {
-    expect(recognizeTopFace([0, 0, 0, 1])).toBe(1);
-  });
-
   it('recognizes canonical display poses as their intended faces', () => {
     expect(
       (

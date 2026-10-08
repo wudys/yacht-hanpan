@@ -82,6 +82,40 @@ test('keeps a complete local confirmation after a delayed fresh record, then ope
   expect(advanceTurnFeedback(opened, input({ now: 1_950, serverNow: 1_950 })).turnCue).toBeNull();
 });
 
+test('confirms a fresh upper record without celebrating an already earned bonus', () => {
+  const alreadyEarned = parseGameSnapshot({
+    ...game,
+    stateVersion: 9,
+    match: {
+      ...game.match,
+      players: [
+        {
+          ...game.match.players[0],
+          scorecard: { ...game.match.players[0].scorecard, twos: 2 },
+        },
+        game.match.players[1],
+      ],
+    },
+  });
+  const freshPresentation: GamePresentation = {
+    kind: 'score',
+    record: {
+      ...presentation.record,
+      stateVersion: alreadyEarned.stateVersion,
+      categoryId: 'twos',
+      score: 2,
+    },
+  };
+  const confirmed = advanceTurnFeedback(
+    createTurnFeedbackState(),
+    input({ game: alreadyEarned, presentation: freshPresentation }),
+  );
+
+  expect(confirmed.record?.record).toEqual(freshPresentation.record);
+  expect(confirmed.record).toMatchObject({ startedAt: 300, phase: 'confirming' });
+  expect(confirmed.record?.bonusEarned).toBe(false);
+});
+
 test('consumes a late record without replaying it after a clock correction', () => {
   const skipped = advanceTurnFeedback(
     createTurnFeedbackState(),

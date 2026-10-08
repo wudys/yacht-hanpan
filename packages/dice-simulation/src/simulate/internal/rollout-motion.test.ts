@@ -24,4 +24,19 @@ describe('rollout motion assistance', () => {
       ),
     ).toBeLessThan(0.001);
   });
+
+  it('interpolates each interval and clamps outside the motion cap range', () => {
+    const points = [
+      { t: 0, value: 8 },
+      { t: 2, value: 4 },
+      { t: 4, value: 2 },
+    ];
+
+    expect(interpolateMotionCap(-1, points)).toBe(8);
+    expect(interpolateMotionCap(0, points)).toBe(8);
+    expect(interpolateMotionCap(1, points)).toBe(6);
+    expect(interpolateMotionCap(3, points)).toBe(3);
+    expect(interpolateMotionCap(4, points)).toBe(2);
+    expect(interpolateMotionCap(5, points)).toBe(2);
+  });
 });

@@ -101,12 +101,12 @@ export const ASSET_SOURCE_CATALOG: readonly AssetSource[] = Object.freeze([
   },
   {
     id: 'ui.scoreboard',
-    sourcePath: 'files/ui/sheet.svg',
+    sourcePath: 'files/ui/scoreboard.svg',
     kind: ASSET_KIND.SVG,
   },
   {
     id: 'ui.settings',
-    sourcePath: 'files/ui/setting.svg',
+    sourcePath: 'files/ui/settings.svg',
     kind: ASSET_KIND.SVG,
   },
   ...sceneBgm,

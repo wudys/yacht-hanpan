@@ -151,7 +151,7 @@ export default function LobbyScreen({
   const reentryProgressLabel =
     view === 'checkingExpiry' || restoreView.status === 'checking'
       ? translate(locale, 'lobby.reentryChecking')
-      : restoreView.status === 'synchronizing' || restoreView.status === 'playing'
+      : restoreView.status === 'synchronizing' || restoreView.status === 'gameReady'
         ? translate(locale, 'lobby.reentrySynchronizing')
         : translate(locale, 'lobby.reentryConnecting');
   const reentryProgress =
@@ -159,7 +159,7 @@ export default function LobbyScreen({
     restoreView.status === 'connecting' ||
     restoreView.status === 'synchronizing' ||
     restoreView.status === 'waiting' ||
-    restoreView.status === 'playing';
+    restoreView.status === 'gameReady';
 
   return (
     <div

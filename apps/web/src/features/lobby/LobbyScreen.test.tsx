@@ -19,7 +19,7 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, expect, test, vi } from 'vitest';
 
 import LobbyScreen from '@/features/lobby/LobbyScreen';
-import { LOCALE, translate } from '@/i18n';
+import { LOCALE, type Locale, translate } from '@/i18n';
 import type { BrowserAudioRuntime } from '@/runtime/audio/browser-audio-runtime';
 import { PRODUCT_CUE } from '@/runtime/audio/product-cues';
 import type { ServerReadiness } from '@/runtime/network/server-readiness';
@@ -251,6 +251,7 @@ function renderLobby(
     recovery = createRecovery().value,
     telemetry = inactiveTelemetry,
     sessionCredentialStore = createStore(),
+    locale = LOCALE.EN,
   }: {
     session?: GameSession;
     preferences?: PreferencesStore;
@@ -259,9 +260,10 @@ function renderLobby(
     recovery?: SessionRecovery;
     telemetry?: Telemetry;
     sessionCredentialStore?: SessionCredentialStore;
+    locale?: Locale;
   } = {},
 ) {
-  preferences.setLocale(LOCALE.EN);
+  preferences.setLocale(locale);
   const sessions = createHolder(session);
   const profileStorage = {
     getItem: () => JSON.stringify({ characterId: 'navy-bob', variant: false }),
@@ -286,7 +288,7 @@ function renderLobby(
         activity={activity}
         access={access}
         audio={audio}
-        locale={LOCALE.EN}
+        locale={locale}
         clock={client.clock}
         profile={profile}
         preferences={preferences}
@@ -717,6 +719,40 @@ test('navigates a resumed match only after the coordinator publishes gameReady',
   expect(navigate).toHaveBeenCalledOnce();
   expect(reentry.value.completeHandoff).toHaveBeenCalledOnce();
 });
+
+test.each([LOCALE.KO, LOCALE.EN])(
+  'keeps synchronizing progress and admission blocked through a restored Game handoff (%s)',
+  async (locale) => {
+    const reentry = createReentry({ status: 'synchronizing' });
+    vi.mocked(reentry.value.completeHandoff).mockImplementation(() => {});
+    const createRoom = vi.fn<GameClient['createRoom']>();
+    const client = { clock: { now: () => 1_000 }, createRoom } as unknown as GameClient;
+    const { audio } = renderLobby(client, { reentry: reentry.value, locale });
+    const create = screen.getByRole('button', { name: translate(locale, 'lobby.createRoom') });
+
+    expect(screen.getByRole('status').textContent).toBe(
+      translate(locale, 'lobby.reentrySynchronizing'),
+    );
+    expect(create.getAttribute('aria-disabled')).toBe('true');
+    fireEvent.click(create);
+    expect(createRoom).not.toHaveBeenCalled();
+    expect(navigate).not.toHaveBeenCalled();
+    expect(reentry.value.completeHandoff).not.toHaveBeenCalled();
+
+    await act(async () => reentry.publish({ status: 'gameReady' }));
+
+    expect(screen.getByRole('status').textContent).toBe(
+      translate(locale, 'lobby.reentrySynchronizing'),
+    );
+    expect(create.getAttribute('aria-disabled')).toBe('true');
+    fireEvent.click(create);
+    expect(createRoom).not.toHaveBeenCalled();
+    expect(audio.playCue).not.toHaveBeenCalled();
+    expect(navigate).toHaveBeenCalledOnce();
+    expect(navigate).toHaveBeenCalledWith({ to: '/game', replace: true });
+    expect(reentry.value.completeHandoff).toHaveBeenCalledOnce();
+  },
+);
 
 test('confirms a permanent reentry failure through the coordinator', () => {
   const error = {

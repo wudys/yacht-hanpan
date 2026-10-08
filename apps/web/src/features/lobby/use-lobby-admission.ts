@@ -110,7 +110,7 @@ function isRestoreBlocking(state: ReturnType<LobbyServices['access']['getSnapsho
 function restoreDisplay(state: ReturnType<LobbyServices['access']['getSnapshot']>) {
   if (state.status === 'restoring') return { status: state.phase };
   if (state.status === 'handoff' && state.origin === 'restore')
-    return { status: state.target === 'game' ? ('playing' as const) : ('waiting' as const) };
+    return { status: state.target === 'game' ? ('gameReady' as const) : ('waiting' as const) };
   if (state.status === 'authorityFailure' && state.origin === 'restore')
     return { status: 'permanentFailure' as const, error: state.error };
   if (state.status === 'refreshRequired' && state.origin === 'restore')

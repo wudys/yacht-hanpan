@@ -1,13 +1,15 @@
 import { PUBLIC_ERROR_CODE } from '@repo/game-protocol/errors';
 import {
-  type GameSnapshot,
   parseCommittedRoomUpdate,
   parseSocketConnectionFailure,
+  SOCKET_CONNECTION_INTENT,
+} from '@repo/game-protocol/socket';
+import {
+  type GameSnapshot,
   type PresenceSnapshot,
   type PublicRoom,
   type RoomView,
-  SOCKET_CONNECTION_INTENT,
-} from '@repo/game-protocol/socket';
+} from '@repo/game-protocol/state';
 import type { CompatibilityContract } from '@repo/game-protocol/version';
 import { v4 as uuidV4, v7 as uuidV7 } from 'uuid';
 
@@ -18,12 +20,12 @@ import {
   createProtocolError,
   createTransportError,
 } from '../errors';
-import type { GameSocketFactory, RoomAuthority } from '../ports';
+import type { RoomAuthority } from '../room-authority';
 import type { ServerClock } from '../server-clock';
+import type { GameSocketFactory } from '../socket/game-socket';
 import { socketIoGameSocketFactory } from '../socket/socket-io-adapter';
 import { type CommandResult, type CommandRunner, createCommandRunner } from './command-runner';
 import { GAME_CLIENT_RETRY_POLICY, type RetryPolicy } from './retry-policy';
-import { requestSync } from './sync-request';
 import {
   createSessionState,
   type GamePresentation,
@@ -31,9 +33,10 @@ import {
   reduceCommittedUpdate,
   reduceRestoredView,
   type SessionState,
-} from './update-reducer';
+} from './room-view-reducer';
+import { requestSync } from './sync-request';
 
-export type { GamePresentation, ScoreRecord } from './update-reducer';
+export type { GamePresentation, ScoreRecord } from './room-view-reducer';
 
 export type ConnectionStatus =
   'idle' | 'connecting' | 'connected' | 'disconnected' | 'replaced' | 'disposed';

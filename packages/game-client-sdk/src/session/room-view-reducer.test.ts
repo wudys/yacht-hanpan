@@ -1,12 +1,10 @@
 import {
   GAME_COMMAND_TYPE,
   type GameCommand,
-  type GameSnapshot,
   parseCommittedRoomUpdate,
   parseGameCommand,
-  parseRoomView,
-  type RoomView,
 } from '@repo/game-protocol/socket';
+import { type GameSnapshot, parseRoomView, type RoomView } from '@repo/game-protocol/state';
 import { describe, expect, test } from 'bun:test';
 
 import {
@@ -16,7 +14,7 @@ import {
   reduceRestoredView,
   reduceRoomView,
   type SessionState,
-} from './update-reducer';
+} from './room-view-reducer';
 
 const ROOM_ID = '01890f47-e89b-7cc3-98c5-4c5da03f78ab';
 const TURN_ID = turnId('de305d54-75b4-431b-adb2-eb6b9e546018');

@@ -1,4 +1,5 @@
-import { GAME_COMMAND_TYPE, type GameCommand, type GameSnapshot } from '@repo/game-protocol/socket';
+import { GAME_COMMAND_TYPE, type GameCommand } from '@repo/game-protocol/socket';
+import { type GameSnapshot } from '@repo/game-protocol/state';
 
 type ScoreCommand = Extract<GameCommand, { type: typeof GAME_COMMAND_TYPE.SELECT_SCORE_CATEGORY }>;
 type PlayingMatch = Extract<GameSnapshot['match'], { status: 'playing' }>;

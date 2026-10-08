@@ -7,7 +7,7 @@ import {
 } from '@repo/game-protocol/socket';
 import { io, type Socket } from 'socket.io-client';
 
-import type { GameSocketFactory, RawGameSocket } from '../ports';
+import type { GameSocketFactory, RawGameSocket } from './game-socket';
 
 type GameSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 const AUTHENTICATION_TIMEOUT_MS = 20_000;

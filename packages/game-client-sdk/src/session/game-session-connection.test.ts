@@ -1,95 +1,24 @@
 import { PUBLIC_ERROR_CODE } from '@repo/game-protocol/errors';
-import { parseCreateRoomResponse } from '@repo/game-protocol/http';
-import { GAME_SOCKET_PATH, SOCKET_EVENT } from '@repo/game-protocol/socket';
+import { GAME_SOCKET_PATH, parseSocketAuth, SOCKET_EVENT } from '@repo/game-protocol/socket';
 import { createCompatibilityContract, GAME_PROTOCOL_VERSION } from '@repo/game-protocol/version';
 import { describe, expect, test } from 'bun:test';
 
-import { CLIENT_ERROR_CODE } from '../errors';
-import type { RawGameSocket } from '../ports';
-import { createServerClock } from '../server-clock';
-import { createGameSession } from './session';
-
-const RESPONSE = parseCreateRoomResponse({
-  ok: true,
-  data: {
-    authority: {
-      roomId: '01890f47-e89b-7cc3-98c5-4c5da03f78ab',
-      seatIndex: 0,
-      seatToken: '550e8400-e29b-41d4-a716-446655440000',
-    },
-    view: {
-      room: {
-        status: 'waiting',
-        roomId: '01890f47-e89b-7cc3-98c5-4c5da03f78ab',
-        roomCode: '123456',
-        createdAt: 1,
-        expiresAt: 301_000,
-        seats: [{ profile: { characterId: 'navy-bob', variant: false } }],
-      },
-      game: null,
-      presence: {
-        roomId: '01890f47-e89b-7cc3-98c5-4c5da03f78ab',
-        presenceVersion: 0,
-        seats: [{ status: 'disconnected', reconnectDeadlineAt: null }],
-      },
-    },
-  },
-  meta: {
-    requestId: '9d6ffbb8-10a4-4d43-8c46-cd035b9e87f0',
-    serverTime: 1000,
-    gameProtocolVersion: GAME_PROTOCOL_VERSION,
-  },
-});
-if (!RESPONSE.ok) throw new Error('Expected waiting room fixture');
-const { authority, view } = RESPONSE.data;
-
-class ConnectionSocket implements RawGameSocket {
-  readonly listeners = {
-    connected: new Set<() => void>(),
-    disconnected: new Set<() => void>(),
-    replaced: new Set<() => void>(),
-    connectionError: new Set<(value: unknown) => void>(),
-  };
-  connectCount = 0;
-  syncCount = 0;
-  disposed = false;
-  connected = false;
-
-  connect = async (): Promise<void> => {
-    this.connectCount += 1;
-    this.connected = true;
-    for (const listener of this.listeners.connected) listener();
-  };
-  disconnect = (): void => {
-    if (!this.connected) return;
-    this.connected = false;
-    for (const listener of this.listeners.disconnected) listener();
-  };
-  dispose = (): void => {
-    this.disposed = true;
-    this.connected = false;
-    Object.values(this.listeners).forEach((listeners) => listeners.clear());
-  };
-  emitSync: RawGameSocket['emitSync'] = (acknowledge) => {
-    this.syncCount += 1;
-    acknowledge({ ok: true, data: view, meta: RESPONSE.meta });
-  };
-  emitCommand: RawGameSocket['emitCommand'] = () => {};
-  onConnectionError: RawGameSocket['onConnectionError'] = (listener) => {
-    this.listeners.connectionError.add(listener);
-    return () => this.listeners.connectionError.delete(listener);
-  };
-  onRoomUpdate: RawGameSocket['onRoomUpdate'] = () => () => {};
-  onConnected: RawGameSocket['onConnected'] = (listener) => this.add('connected', listener);
-  onDisconnected: RawGameSocket['onDisconnected'] = (listener) =>
-    this.add('disconnected', listener);
-  onReplaced: RawGameSocket['onReplaced'] = (listener) => this.add('replaced', listener);
-
-  private add(key: 'connected' | 'disconnected' | 'replaced', listener: () => void): () => void {
-    this.listeners[key].add(listener);
-    return () => this.listeners[key].delete(listener);
-  }
-}
+import type { GameSocketFactory } from '../socket/game-socket';
+import { createGameSession } from './game-session';
+import {
+  AUTHORITY,
+  authority,
+  ConnectionSocket,
+  FakeSocket,
+  game,
+  presence,
+  REQUEST_ID,
+  RESPONSE,
+  room,
+  ROOM_ID,
+  SEAT_TOKEN,
+  view,
+} from './game-session.test-fixtures';
 
 function sessionFor(socket: ConnectionSocket) {
   return createGameSession({
@@ -121,47 +50,333 @@ function replace(socket: ConnectionSocket): void {
   for (const listener of socket.listeners.replaced) listener();
 }
 
-describe('connection publication', () => {
-  test('rejects unsafe timestamp metadata before confirming a full sync or accepting its clock', async () => {
-    const socket = new ConnectionSocket();
-    const clock = createServerClock(() => 0);
-    let serverTime = Number.MAX_SAFE_INTEGER + 1;
-    socket.emitSync = (acknowledge) => {
-      socket.syncCount += 1;
-      acknowledge({ ok: true, data: view, meta: { ...RESPONSE.meta, serverTime } });
+describe('game session connection', () => {
+  test('replacement ends pending work and cannot be revived by late callbacks or reconnect', async () => {
+    const socket = new FakeSocket();
+    let acknowledgeSync!: (value: unknown) => void;
+    let acknowledgeCommand!: (value: unknown) => void;
+    let commandCount = 0;
+    socket.emitCommand = (_command, acknowledge) => {
+      commandCount += 1;
+      acknowledgeCommand = acknowledge;
     };
     const session = createGameSession({
       socketUrl: 'https://game.example.test',
-      authority,
+      authority: AUTHORITY,
       contract: createCompatibilityContract('release-1'),
       socketFactory: { create: () => socket },
-      clock,
+      retryPolicy: { acknowledgementTimeoutMs: 20, maximumAttempts: 3, retryDelayMs: 0 },
     });
-    try {
-      expect(await session.connect()).toEqual({
-        ok: false,
-        error: { kind: 'protocol', code: CLIENT_ERROR_CODE.INVALID_RESPONSE },
-      });
-      expect(session.getSnapshot()).toMatchObject({
-        room: null,
-        syncStatus: 'idle',
-        syncRevision: 0,
-        error: { kind: 'protocol', code: CLIENT_ERROR_CODE.INVALID_RESPONSE },
-      });
-      expect(clock.now()).toBeNull();
-      expect(socket.syncCount).toBe(1);
+    await session.connect();
+    socket.syncResponder = (acknowledge) => {
+      acknowledgeSync = acknowledge;
+    };
 
-      serverTime = Number.MAX_SAFE_INTEGER;
-      expect(await session.synchronize()).toEqual({ ok: true });
-      expect(session.getSnapshot()).toMatchObject({
-        room: view.room,
-        syncRevision: 1,
-        error: null,
+    const lateConnected = [...socket.listeners.connected];
+    const lateDisconnected = [...socket.listeners.disconnected];
+    const observed: string[] = [];
+    session.subscribe(() => observed.push(session.getSnapshot().connection));
+    const syncing = session.synchronize();
+    const command = session.rollDice();
+    for (const callback of socket.listeners.replaced) callback();
+    const terminal = session.getSnapshot();
+    expect(terminal.connection).toBe('replaced');
+    expect(observed.at(-1)).toBe('replaced');
+    expect(socket.disposed).toBe(true);
+    expect(await syncing).toMatchObject({ ok: false, error: { code: 'SESSION_DISPOSED' } });
+    expect(await command).toMatchObject({ ok: false, error: { code: 'SESSION_DISPOSED' } });
+    acknowledgeSync({
+      ok: true,
+      data: { room: room(), game: game(8), presence: presence(8) },
+      meta: { requestId: REQUEST_ID, serverTime: 1000, gameProtocolVersion: GAME_PROTOCOL_VERSION },
+    });
+    acknowledgeCommand({ invalid: true });
+    for (const callback of [...lateConnected, ...lateDisconnected]) callback();
+    expect(await session.connect()).toMatchObject({ ok: false });
+    expect(await session.synchronize()).toMatchObject({ ok: false });
+    expect(await session.rollDice()).toMatchObject({ ok: false });
+    session.disconnect();
+    await Bun.sleep(30);
+    expect(session.getSnapshot()).toBe(terminal);
+    expect(commandCount).toBe(1);
+    expect(socket.syncCount).toBe(2);
+    session.dispose();
+  });
+
+  test('does not open transport when a connecting subscriber ends the session', async () => {
+    const socket = new FakeSocket();
+    let connectCount = 0;
+    socket.connect = async () => {
+      connectCount += 1;
+    };
+    const session = createGameSession({
+      socketUrl: 'https://game.example.test',
+      authority: AUTHORITY,
+      contract: createCompatibilityContract('release-1'),
+      socketFactory: { create: () => socket },
+    });
+    session.subscribe(() => {
+      if (session.getSnapshot().connection === 'connecting') {
+        for (const callback of socket.listeners.replaced) callback();
+      }
+    });
+    expect(await session.connect()).toMatchObject({ ok: false });
+    expect(session.getSnapshot().connection).toBe('replaced');
+    expect(connectCount).toBe(0);
+    session.dispose();
+  });
+
+  test('replacement settles authentication and invalidates an offered retry', async () => {
+    const connectingSocket = new FakeSocket();
+    connectingSocket.connect = () => new Promise(() => {});
+    const connectingSession = createGameSession({
+      socketUrl: 'https://game.example.test',
+      authority: AUTHORITY,
+      contract: createCompatibilityContract('release-1'),
+      socketFactory: { create: () => connectingSocket },
+    });
+    const connecting = connectingSession.connect();
+    for (const callback of connectingSocket.listeners.replaced) callback();
+    expect(await connecting).toMatchObject({ ok: false, error: { code: 'SESSION_DISPOSED' } });
+    expect(connectingSession.getSnapshot().connection).toBe('replaced');
+    expect(connectingSocket.syncCount).toBe(0);
+    connectingSession.dispose();
+
+    const socket = new FakeSocket();
+    let commandCount = 0;
+    socket.emitCommand = (command, acknowledge) => {
+      commandCount += 1;
+      acknowledge({
+        ok: false,
+        error: { code: PUBLIC_ERROR_CODE.INTERNAL_ERROR, params: {} },
+        meta: {
+          requestId: REQUEST_ID,
+          gameProtocolVersion: GAME_PROTOCOL_VERSION,
+          actionId: command.actionId,
+        },
       });
-      expect(clock.now()).toBe(Number.MAX_SAFE_INTEGER);
-    } finally {
-      session.dispose();
+    };
+    const session = createGameSession({
+      socketUrl: 'https://game.example.test',
+      authority: AUTHORITY,
+      contract: createCompatibilityContract('release-1'),
+      socketFactory: { create: () => socket },
+    });
+    await session.connect();
+    const result = await session.rollDice();
+    if (result.ok || !result.retry) throw new Error('expected retry capability');
+    expect(result.retry.isAvailable()).toBe(true);
+    for (const callback of socket.listeners.replaced) callback();
+    expect(result.retry.isAvailable()).toBe(false);
+    expect(result.retry.run()).toBeNull();
+    expect(commandCount).toBe(1);
+    session.dispose();
+  });
+
+  test('uses one execution identity and spends enter intent before any authentication reply', () => {
+    let getAuth!: Parameters<GameSocketFactory['create']>[0]['getAuth'];
+    const session = createGameSession({
+      socketUrl: 'https://game.example.test',
+      authority: AUTHORITY,
+      contract: createCompatibilityContract('release-1'),
+      socketFactory: {
+        create: (input) => {
+          getAuth = input.getAuth;
+          return new FakeSocket();
+        },
+      },
+    });
+    const first = parseSocketAuth(getAuth());
+    const retry = parseSocketAuth(getAuth());
+    expect(first.connectionIntent).toBe('enter');
+    expect(retry).toEqual({ ...first, connectionIntent: 'reconnect' });
+    expect(getAuth()).toEqual(retry);
+    session.dispose();
+  });
+
+  test.each(['event', 'promise'] as const)(
+    'ends a rejected reconnect through its %s without reviving the session',
+    async (delivery) => {
+      const socket = new FakeSocket();
+      const failure = {
+        ok: false,
+        error: { code: PUBLIC_ERROR_CODE.SESSION_REPLACED, params: {} },
+        meta: { requestId: REQUEST_ID, gameProtocolVersion: GAME_PROTOCOL_VERSION },
+      };
+      socket.connect = async () => {
+        if (delivery === 'event')
+          for (const listener of socket.listeners.connectionError) listener(failure);
+        throw failure;
+      };
+      const session = createGameSession({
+        socketUrl: 'https://game.example.test',
+        authority: AUTHORITY,
+        contract: createCompatibilityContract('release-1'),
+        socketFactory: { create: () => socket },
+      });
+      const lateConnected = [...socket.listeners.connected];
+      const lateDisconnected = [...socket.listeners.disconnected];
+      expect((await session.connect()).ok).toBeFalse();
+      const terminal = session.getSnapshot();
+      expect(terminal.connection).toBe('replaced');
+      expect(socket.disposed).toBeTrue();
+      for (const callback of [...lateConnected, ...lateDisconnected]) callback();
+      await session.connect();
+      expect(session.getSnapshot()).toBe(terminal);
+      expect(socket.syncCount).toBe(0);
+    },
+  );
+
+  test('authenticates exactly and syncs on every connection', async () => {
+    const socket = new FakeSocket();
+    let factoryInput: Parameters<GameSocketFactory['create']>[0] | undefined;
+    const factory: GameSocketFactory = {
+      create: (input) => {
+        factoryInput = input;
+        return socket;
+      },
+    };
+    const session = createGameSession({
+      socketUrl: 'https://game.example.test',
+      authority: AUTHORITY,
+      contract: createCompatibilityContract('release-1'),
+      socketFactory: factory,
+      retryPolicy: { acknowledgementTimeoutMs: 20, maximumAttempts: 1, retryDelayMs: 0 },
+      createActionId: () => 'de305d54-75b4-431b-adb2-eb6b9e546010',
+    });
+
+    expect(await session.connect()).toMatchObject({ ok: true });
+    expect(JSON.parse(JSON.stringify(parseSocketAuth(factoryInput?.getAuth())))).toEqual({
+      roomId: ROOM_ID,
+      seatToken: SEAT_TOKEN,
+      executionId: expect.any(String),
+      connectionIntent: 'enter',
+      contract: createCompatibilityContract('release-1'),
+    });
+    expect(factoryInput?.url).toBe('https://game.example.test');
+    expect(socket.syncCount).toBe(1);
+    expect(session.getSnapshot()).toMatchObject({
+      connection: 'connected',
+      game: { stateVersion: 1 },
+      presence: { presenceVersion: 1 },
+    });
+
+    socket.syncVersion = 2;
+    for (const listener of socket.listeners.disconnected) listener();
+    for (const listener of socket.listeners.connected) listener();
+    await Bun.sleep(0);
+    expect(socket.syncCount).toBe(2);
+    expect(Number(session.getSnapshot().game?.stateVersion)).toBe(2);
+  });
+
+  test('removes every listener and remains silent after dispose', async () => {
+    const socket = new FakeSocket();
+    const session = createGameSession({
+      socketUrl: 'https://game.example.test',
+      authority: AUTHORITY,
+      contract: createCompatibilityContract('release-1'),
+      socketFactory: { create: () => socket },
+      retryPolicy: { acknowledgementTimeoutMs: 20, maximumAttempts: 1, retryDelayMs: 0 },
+      createActionId: () => 'de305d54-75b4-431b-adb2-eb6b9e546010',
+    });
+    let notifications = 0;
+    session.subscribe(() => {
+      notifications += 1;
+    });
+    await session.connect();
+    expect(notifications).toBeGreaterThan(0);
+    const notificationsBeforeDispose = notifications;
+    session.dispose();
+
+    expect(notifications).toBe(notificationsBeforeDispose);
+    expect(socket.disposed).toBeTrue();
+    expect(Object.values(socket.listeners).every((listeners) => listeners.size === 0)).toBeTrue();
+    expect(await session.connect()).toMatchObject({
+      ok: false,
+      error: { kind: 'protocol', code: 'SESSION_DISPOSED' },
+    });
+    expect(notifications).toBe(notificationsBeforeDispose);
+  });
+
+  test('settles a pending connect when explicitly disconnected', async () => {
+    const socket = new FakeSocket();
+    socket.connect = () => new Promise<void>(() => {});
+    const session = createGameSession({
+      socketUrl: 'https://game.example.test',
+      authority: AUTHORITY,
+      contract: createCompatibilityContract('release-1'),
+      socketFactory: { create: () => socket },
+      retryPolicy: { acknowledgementTimeoutMs: 20, maximumAttempts: 1, retryDelayMs: 0 },
+    });
+
+    const pending = session.connect();
+    session.disconnect();
+
+    expect(await pending).toMatchObject({
+      ok: false,
+      error: { kind: 'transport', code: 'SOCKET_DISCONNECTED' },
+    });
+    expect(session.getSnapshot().connection).toBe('disconnected');
+    session.dispose();
+  });
+
+  test('preserves the disposed snapshot when a pending connection settles', async () => {
+    const socket = new FakeSocket();
+    socket.connect = () => new Promise<void>(() => {});
+    const session = createGameSession({
+      socketUrl: 'https://game.example.test',
+      authority: AUTHORITY,
+      contract: createCompatibilityContract('release-1'),
+      socketFactory: { create: () => socket },
+    });
+    const connectedCallbacks = [...socket.listeners.connected];
+    const pending = session.connect();
+    session.dispose();
+    const disposedSnapshot = session.getSnapshot();
+
+    expect(await pending).toMatchObject({
+      ok: false,
+      error: { kind: 'protocol', code: 'SESSION_DISPOSED' },
+    });
+    expect(session.getSnapshot()).toBe(disposedSnapshot);
+    for (const callback of connectedCallbacks) callback();
+    expect(session.getSnapshot()).toBe(disposedSnapshot);
+    expect(session.getSnapshot().connection).toBe('disposed');
+    expect(socket.syncCount).toBe(0);
+  });
+
+  test('maps a handshake version rejection to one protocol compatibility error', () => {
+    const socket = new FakeSocket();
+    const session = createGameSession({
+      socketUrl: 'https://game.example.test',
+      authority: AUTHORITY,
+      contract: createCompatibilityContract('release-1'),
+      socketFactory: { create: () => socket },
+      retryPolicy: { acknowledgementTimeoutMs: 20, maximumAttempts: 1, retryDelayMs: 0 },
+      createActionId: () => 'de305d54-75b4-431b-adb2-eb6b9e546010',
+    });
+
+    for (const listener of socket.listeners.connectionError) {
+      listener({
+        ok: false,
+        error: { code: PUBLIC_ERROR_CODE.PROTOCOL_MISMATCH, params: {} },
+        meta: {
+          requestId: REQUEST_ID,
+          serverTime: 1000,
+          gameProtocolVersion: GAME_PROTOCOL_VERSION,
+        },
+      });
     }
+
+    expect(session.getSnapshot()).toMatchObject({
+      connection: 'disconnected',
+      error: {
+        kind: 'protocol',
+        code: 'PROTOCOL_MISMATCH',
+        requestId: REQUEST_ID,
+      },
+    });
+    session.dispose();
   });
 
   test('fulfills connect without an event and ignores a later duplicate connected event', async () => {
@@ -439,9 +654,7 @@ describe('connection publication', () => {
     expect(finalSnapshot).toMatchObject({ connection: 'disposed', error: null });
     expect(socket.syncCount).toBe(0);
   });
-});
 
-describe('connection cancellation', () => {
   test.each(['explicit', 'raw transport'] as const)(
     '%s disconnect in the fulfilled transport continuation gap cannot restart sync',
     async (source) => {

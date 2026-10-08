@@ -3,7 +3,7 @@ import {
   parseGameSnapshot,
   parsePresenceSnapshot,
   parsePublicRoom,
-} from '@repo/game-protocol/socket';
+} from '@repo/game-protocol/state';
 import { GAME_PROTOCOL_VERSION } from '@repo/game-protocol/version';
 import { describe, expect, test } from 'bun:test';
 

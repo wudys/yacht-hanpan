@@ -3,11 +3,10 @@ import {
   type CommandReceipt,
   GAME_COMMAND_TYPE,
   type GameCommand,
-  type GameSnapshot,
   parseCommandAck,
   parseGameCommand,
-  type RoomView,
 } from '@repo/game-protocol/socket';
+import { type GameSnapshot, type RoomView } from '@repo/game-protocol/state';
 
 import {
   CLIENT_ERROR_CODE,

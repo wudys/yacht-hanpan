@@ -10,7 +10,7 @@ import {
   REQUEST_ID,
   syncResponse,
   viewFromGame,
-} from '../session/session.test-fixtures';
+} from '../session/game-session.test-fixtures';
 
 // Use Socket.IO's actual emitter dispatch order, with only network I/O substituted.
 let connectCount = 0;
@@ -47,7 +47,7 @@ Object.defineProperty(transport, 'emit', {
   },
 });
 await mock.module('socket.io-client', () => ({ io: () => transport }));
-const { createGameSession } = await import('../session/session');
+const { createGameSession } = await import('../session/game-session');
 const session = createGameSession({
   socketUrl: 'https://game.example.test',
   authority: AUTHORITY,

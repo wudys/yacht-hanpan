@@ -2,10 +2,9 @@ import { PUBLIC_ERROR_CODE } from '@repo/game-protocol/errors';
 import {
   GAME_COMMAND_TYPE,
   type GameCommand,
-  parseGameSnapshot,
   parseResolvedRollArtifact,
-  parseRoomView,
 } from '@repo/game-protocol/socket';
+import { parseGameSnapshot, parseRoomView } from '@repo/game-protocol/state';
 import { createCompatibilityContract, GAME_PROTOCOL_VERSION } from '@repo/game-protocol/version';
 import { describe, expect, jest, test } from 'bun:test';
 

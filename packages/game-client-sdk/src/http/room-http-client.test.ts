@@ -5,7 +5,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { CLIENT_ERROR_CODE } from '../errors';
 import { createServerClock } from '../server-clock';
-import { createRoomHttpClient } from './http-client';
+import { createRoomHttpClient } from './room-http-client';
 
 const CLIENT_ID = '01890f47-e89b-7cc3-98c5-4c5da03f78aa';
 const ROOM_ID = '01890f47-e89b-7cc3-98c5-4c5da03f78ab';

@@ -1,6 +1,6 @@
 export * from './errors';
 export * from './game-client';
 export * from './http';
-export type { RoomAuthority } from './ports';
+export type { RoomAuthority } from './room-authority';
 export * from './server-clock';
 export * from './session';

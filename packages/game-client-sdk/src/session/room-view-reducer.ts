@@ -5,8 +5,8 @@ import {
   type GameCommand,
   type ResolvedRollArtifact,
   ROOM_UPDATE_TYPE,
-  type RoomView,
 } from '@repo/game-protocol/socket';
+import { type RoomView } from '@repo/game-protocol/state';
 
 import { freshScoreRecord, isFreshTimeoutTurn, type ScoreRecord } from './presentation-transitions';
 
@@ -35,12 +35,12 @@ export function createSessionState(): SessionState {
  * kind describes RoomView acceptance, not whether the whole session state changed.
  * An ignored full sync can still settle an ephemeral presentation; callers use the returned state.
  */
-export type UpdateReduction =
+export type RoomViewReduction =
   | { readonly kind: 'applied' | 'ignored'; readonly state: SessionState }
   | { readonly kind: 'invalid' };
 
 /** Authority advances as one view. Crossing counters cannot describe one ordered room history. */
-export function reduceRoomView(state: SessionState, view: RoomView): UpdateReduction {
+export function reduceRoomView(state: SessionState, view: RoomView): RoomViewReduction {
   const current = state.view;
   if (current !== null) {
     if (current.room.roomId !== view.room.roomId) return { kind: 'invalid' };
@@ -64,7 +64,7 @@ export function reduceRoomView(state: SessionState, view: RoomView): UpdateReduc
 }
 
 /** Full-state recovery confirms the present; it never supplies a historical event to replay. */
-export function reduceRestoredView(state: SessionState, view: RoomView): UpdateReduction {
+export function reduceRestoredView(state: SessionState, view: RoomView): RoomViewReduction {
   const reduction = reduceRoomView(state, view);
   if (reduction.kind === 'invalid') return reduction;
   if ((view.game?.stateVersion ?? 0) < (state.view?.game?.stateVersion ?? 0)) return reduction;
@@ -79,7 +79,7 @@ export function reduceRestoredView(state: SessionState, view: RoomView): UpdateR
 export function reduceCommittedUpdate(
   state: SessionState,
   update: CommittedRoomUpdate,
-): UpdateReduction {
+): RoomViewReduction {
   const reduction = reduceRoomView(state, update.view);
   if (reduction.kind !== 'applied') return reduction;
   if (update.type === ROOM_UPDATE_TYPE.ROLL_COMMITTED)
@@ -118,7 +118,7 @@ export function reduceCommandView(
   state: SessionState,
   data: Readonly<{ receipt: CommandReceipt; view: RoomView }>,
   command: GameCommand,
-): UpdateReduction {
+): RoomViewReduction {
   const { receipt, view } = data;
   if (
     command.type === GAME_COMMAND_TYPE.ROLL_DICE &&
@@ -151,10 +151,10 @@ export function reduceCommandView(
 
 function withFreshRoll(
   previous: SessionState,
-  reduction: Extract<UpdateReduction, { readonly state: SessionState }>,
+  reduction: Extract<RoomViewReduction, { readonly state: SessionState }>,
   roll: ResolvedRollArtifact,
   receiptVersion: number,
-): UpdateReduction {
+): RoomViewReduction {
   const previousGame = previous.view?.game;
   const game = reduction.state.view?.game;
   if (

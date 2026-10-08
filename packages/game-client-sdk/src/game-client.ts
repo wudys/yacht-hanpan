@@ -4,11 +4,12 @@ import {
   createRoomHttpClient,
   type CreateRoomHttpClientOptions,
   type RoomHttpClient,
-} from './http/http-client';
-import type { GameSocketFactory, RoomAuthority } from './ports';
+} from './http/room-http-client';
+import type { RoomAuthority } from './room-authority';
 import { createServerClock, type ServerClock } from './server-clock';
+import { createGameSession, type GameSession } from './session/game-session';
 import type { RetryPolicy } from './session/retry-policy';
-import { createGameSession, type GameSession } from './session/session';
+import type { GameSocketFactory } from './socket/game-socket';
 
 export interface CreateGameClientOptions {
   readonly serverUrl: string;

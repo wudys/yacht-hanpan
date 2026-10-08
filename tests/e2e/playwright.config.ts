@@ -6,8 +6,8 @@ import {
   PRODUCT_GAME_PORT,
   PRODUCT_SERVER_ORIGIN,
   PRODUCT_SERVER_PORT,
-  PRODUCTION_GAME_ORIGIN,
-  PRODUCTION_GAME_PORT,
+  BUILT_WEB_ORIGIN,
+  BUILT_WEB_PORT,
 } from './helpers/test-origins';
 
 export default defineConfig({
@@ -36,8 +36,8 @@ export default defineConfig({
       timeout: 120_000,
     },
     {
-      command: `VITE_GAME_SERVER_URL=https://game.example.test bun --filter @repo/web build && STATIC_ROOT=../../apps/web/dist PORT=${PRODUCTION_GAME_PORT} bun ./scripts/serve-static-spa.ts`,
-      url: PRODUCTION_GAME_ORIGIN,
+      command: `VITE_GAME_SERVER_URL=https://game.example.test bun --filter @repo/web build && STATIC_ROOT=../../apps/web/dist PORT=${BUILT_WEB_PORT} bun ./scripts/serve-static-spa.ts`,
+      url: BUILT_WEB_ORIGIN,
       reuseExistingServer: false,
       timeout: 120_000,
     },

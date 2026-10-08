@@ -23,7 +23,7 @@
     "lint": "turbo run lint",
     "sortjson": "bunx sort-package-json '**/package.json' --ignore '**/node_modules/**'",
     "test": "turbo run test",
-    "test:browser-parity": "bun --filter @repo/e2e test:all-browsers -- specs/browser-parity.spec.ts",
+    "test:browser-parity": "bun --filter @repo/e2e test:all-browsers -- specs/diagnostics/browser-parity.spec.ts",
     "test:compatibility": "bun --filter @repo/server build && bun --filter @repo/server test:compatibility && bun --filter @repo/server soak:compatibility && bun --filter @repo/server smoke:build",
     "test:server-load": "bun --filter @repo/server load:server",
     "test:statistical": "bun --filter @repo/dice-simulation test:statistical",

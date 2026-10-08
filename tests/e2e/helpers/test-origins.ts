@@ -5,7 +5,7 @@ if (!Number.isInteger(portOffset) || portOffset < 0 || portOffset > 65_535 - 49_
 
 export const PRODUCT_GAME_PORT = 49_330 + portOffset;
 export const PRODUCT_SERVER_PORT = 49_331 + portOffset;
-export const PRODUCTION_GAME_PORT = 49_329 + portOffset;
+export const BUILT_WEB_PORT = 49_329 + portOffset;
 export const PRODUCT_GAME_ORIGIN = `http://127.0.0.1:${PRODUCT_GAME_PORT}`;
 export const PRODUCT_SERVER_ORIGIN = `http://127.0.0.1:${PRODUCT_SERVER_PORT}`;
-export const PRODUCTION_GAME_ORIGIN = `http://127.0.0.1:${PRODUCTION_GAME_PORT}`;
+export const BUILT_WEB_ORIGIN = `http://127.0.0.1:${BUILT_WEB_PORT}`;

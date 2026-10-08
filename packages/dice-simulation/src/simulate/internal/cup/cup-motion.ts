@@ -1,11 +1,11 @@
-import { CUP_EXIT_HOLD_MS, type CupFrame, type PourStyle } from '../../contract';
-import { cupLowerSupport } from '../../contract/cup-geometry';
-import { TRAY_FLOOR_TOP_Y } from '../../contract/roll-geometry';
+import { CUP_EXIT_HOLD_MS, type CupFrame, type PourStyle } from '../../../contract';
+import { cupLowerSupport } from '../../../contract/cup-geometry';
+import { TRAY_FLOOR_TOP_Y } from '../../../contract/roll-geometry';
+import { rollAreaMeta, trayGeometry } from '../roll-simulation-constants';
+import { seededNumber } from '../seed-expander';
+import { quatFromEuler, round } from '../simulation-math';
 import { CUP_EXIT_TAIL_MS, CUP_GATHER_MS, cupPourProgress } from './cup-motion-progress';
 import { createCupPourProfile } from './cup-pour-profile';
-import { rollAreaMeta, trayGeometry } from './roll-simulation-constants';
-import { seededNumber } from './seed-expander';
-import { quatFromEuler, round } from './simulation-math';
 
 export interface CupTransform {
   x: number;

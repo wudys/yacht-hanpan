@@ -1,7 +1,7 @@
 import { parentPort } from 'node:worker_threads';
 
 import { initializeDeterministicRapierForBun } from '@repo/dice-simulation/rapier/bun';
-import { evaluateRollCandidate, simulateRoll } from '@repo/dice-simulation/simulate';
+import { evaluateRollCandidate, simulateRollWithDigest } from '@repo/dice-simulation/simulate';
 
 import {
   ROLL_WORKER_GOLDEN_DIGEST,
@@ -19,7 +19,7 @@ const port = parentPort;
 
 try {
   await initializeDeterministicRapierForBun();
-  const golden = await simulateRoll(ROLL_WORKER_GOLDEN_INPUT);
+  const golden = await simulateRollWithDigest(ROLL_WORKER_GOLDEN_INPUT);
   if (golden.replayDigest !== ROLL_WORKER_GOLDEN_DIGEST) {
     throw new Error('roll simulation worker golden mismatch');
   }

@@ -4,7 +4,7 @@ import { beforeAll, describe, expect, spyOn, test } from 'bun:test';
 import { type DieSlot, POUR_STYLES, type SimulationInput, SimulationInputError } from '../contract';
 import { DEFAULT_CUP_GEOMETRY } from '../contract/cup-geometry';
 import { initializeDeterministicRapierForBun } from '../rapier/bun';
-import * as cupMotion from './internal/cup-motion';
+import * as cupMotion from './internal/cup/cup-motion';
 import * as recording from './internal/roll-simulation-constants';
 import {
   CupReleaseError,
@@ -12,7 +12,7 @@ import {
   simulateRollPhysics,
   simulateRollTimeline,
 } from './simulate-physics';
-import { simulateRoll, simulateRollOutcome, simulateRollReplay } from './simulate-roll';
+import { simulateRollOutcome, simulateRollReplay, simulateRollWithDigest } from './simulate-roll';
 
 beforeAll(async () => {
   await initializeDeterministicRapierForBun();
@@ -194,7 +194,7 @@ describe('optional replay recording', () => {
   test('validates every public entry before allocating a world', async () => {
     const create = spyOn(RAPIER.World.prototype, 'createRigidBody');
     try {
-      for (const simulator of [simulateRoll, simulateRollReplay, simulateRollOutcome]) {
+      for (const simulator of [simulateRollWithDigest, simulateRollReplay, simulateRollOutcome]) {
         for (const input of [
           { ...inputs[0], targetValues: [6] },
           { ...inputs[0], rolledSlots: [2, 0] },
@@ -223,7 +223,7 @@ describe('optional replay recording', () => {
     expect(Object.isFrozen(outcome)).toBe(true);
     expect(Object.isFrozen(outcome.authoritativeValuesBySlot[0])).toBe(true);
     expect(Object.isFrozen(replay.timeline.dice[0].frames)).toBe(false);
-    const legacy = await simulateRoll(expected.input);
+    const legacy = await simulateRollWithDigest(expected.input);
     expect(legacy.timeline).toEqual(expected.timeline);
     expect(Object.isFrozen(legacy.timeline.dice[0].frames[0].p)).toBe(true);
   });

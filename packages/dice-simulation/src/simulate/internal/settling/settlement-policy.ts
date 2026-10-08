@@ -1,10 +1,16 @@
 import type { Collider, World } from '@dimforge/rapier3d-deterministic';
 
-import { hasActualLowerSupportContact } from './contact-query';
-import type { PhysicsDie } from './physics-environment';
-import type { AppliedSettlingAssist } from './physics-settling';
-import { recognizeTopFace, topFaceAlignment } from './result-recognition';
-import { DIE_SIZE, FLOOR_TOP_Y } from './roll-simulation-constants';
+import { hasActualLowerSupportContact } from '../contact-query';
+import type { PhysicsDie } from '../physics-environment';
+import { recognizeTopFace, topFaceAlignment } from '../result-recognition';
+import { DIE_SIZE, FLOOR_TOP_Y } from '../roll-simulation-constants';
+import {
+  normalizedQuatDistance,
+  quatDistance,
+  type QuaternionTuple,
+  type VectorTuple,
+} from '../simulation-math';
+import type { AppliedSettlingAssist } from './settling-assistance';
 import {
   POSE_POSITION_TOLERANCE,
   POSE_ROTATION_TOLERANCE,
@@ -13,12 +19,6 @@ import {
   SLOW_ANGULAR_SPEED,
   SLOW_LINEAR_SPEED,
 } from './settling-criteria';
-import {
-  normalizedQuatDistance,
-  quatDistance,
-  type QuaternionTuple,
-  type VectorTuple,
-} from './simulation-math';
 
 interface Pose {
   readonly position: VectorTuple;

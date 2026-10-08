@@ -1,10 +1,10 @@
 import RAPIER from '@dimforge/rapier3d-deterministic';
 import { beforeAll, expect, test } from 'bun:test';
 
-import { initializeDeterministicRapierForBun } from '../../rapier/bun';
+import { initializeDeterministicRapierForBun } from '../../../rapier/bun';
 import { runPhysicsRest } from './physics-rest';
-import { createSettlingAssistance } from './physics-settling';
 import type { SettlementObservation, SettlementPolicy } from './settlement-policy';
+import { createSettlingAssistance } from './settling-assistance';
 
 beforeAll(initializeDeterministicRapierForBun);
 

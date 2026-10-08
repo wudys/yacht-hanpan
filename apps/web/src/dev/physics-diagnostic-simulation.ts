@@ -3,7 +3,7 @@ import {
   DETERMINISTIC_RAPIER_WASM_FILE,
   initializeDeterministicRapierForBrowser,
 } from '@repo/dice-simulation/rapier/browser';
-import { simulateRoll } from '@repo/dice-simulation/simulate';
+import { simulateRollWithDigest } from '@repo/dice-simulation/simulate';
 
 export type PhysicsDiagnosticInput = Readonly<{ seed: string; pourStyle: string; count: number }>;
 
@@ -27,7 +27,7 @@ export async function runPhysicsDiagnostic(
     signal,
   );
   signal?.throwIfAborted();
-  const result = await simulateRoll(recipe);
+  const result = await simulateRollWithDigest(recipe);
   signal?.throwIfAborted();
   return result;
 }

@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, test } from 'bun:test';
 
 import type { SimulationInput, SimulationResult } from '../contract';
 import { initializeDeterministicRapierForBun } from '../rapier/bun';
-import { simulateRoll } from './simulate-roll';
+import { simulateRollWithDigest } from './simulate-roll';
 
 interface GoldenCase {
   recipe: SimulationInput;
@@ -36,7 +36,7 @@ describe('deterministic golden replay', () => {
 
   for (const golden of fixture.cases) {
     test(`matches reviewed main-thread artifact for ${golden.recipe.rollId}`, async () => {
-      const result = await simulateRoll(golden.recipe);
+      const result = await simulateRollWithDigest(golden.recipe);
       expect(summarize(result)).toEqual(golden.expected);
     });
 

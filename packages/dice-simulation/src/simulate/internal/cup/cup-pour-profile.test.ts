@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 
+import { rollAreaMeta } from '../roll-simulation-constants';
 import { createCupPourProfile } from './cup-pour-profile';
-import { rollAreaMeta } from './roll-simulation-constants';
 
 const seeds = [
   'motion-coverage-0',

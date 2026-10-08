@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 
-import { createRollPhysicsConfig } from './roll-physics';
+import { createRollPhysicsConfig } from './physics-config';
 
 describe('shared roll physics', () => {
   it('keeps caller changes isolated from later worlds', () => {

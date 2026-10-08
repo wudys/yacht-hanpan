@@ -4,7 +4,7 @@ import { beforeAll, expect, test } from 'bun:test';
 import { DEFAULT_CUP_GEOMETRY as CUP } from '../contract/cup-geometry';
 import { DIE_GEOMETRY } from '../contract/roll-geometry';
 import { initializeDeterministicRapierForBun } from '../rapier/bun';
-import { createPhysicsCup } from '../simulate/internal/physics-cup';
+import { createPhysicsCup } from '../simulate/internal/cup/physics-cup';
 import { quatFromEuler, rotateVectorByQuat } from '../simulate/internal/simulation-math';
 import { measureCupBottomBoundary } from './cup-boundary-audit';
 

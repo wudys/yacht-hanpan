@@ -28,7 +28,7 @@ export async function simulateRollReplay(input: SimulationInput): Promise<Simula
   return result.replay;
 }
 
-export async function simulateRoll(input: SimulationInput): Promise<SimulationResult> {
+export async function simulateRollWithDigest(input: SimulationInput): Promise<SimulationResult> {
   const replay = await simulateRollReplay(input);
   const replayDigest = await createReplayDigest(replay.input, replay.timeline);
 

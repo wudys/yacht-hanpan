@@ -8,14 +8,14 @@ import type {
 import RAPIER from '@dimforge/rapier3d-deterministic';
 
 import { DEFAULT_CUP_GEOMETRY } from '../../contract/cup-geometry';
-import type { SimulatedCupMotion } from './cup-motion';
-import { cupTransformAt } from './cup-motion';
-import type { RollPhysicsConfig } from './roll-physics';
+import type { SimulatedCupMotion } from './cup/cup-motion';
+import { cupTransformAt } from './cup/cup-motion';
+import type { RollPhysicsConfig } from './physics-config';
 import {
   DIE_COLLIDER_RADIUS,
   DIE_SIZE,
+  FIXED_STEP_SECONDS,
   FLOOR_Y,
-  STEP,
   trayGeometry,
 } from './roll-simulation-constants';
 import { seededNumber } from './seed-expander';
@@ -40,7 +40,7 @@ export interface PhysicsDie {
 
 export function createRollWorld(physics: RollPhysicsConfig): World {
   const world = new RAPIER.World({ x: 0, y: physics.gravity, z: 0 });
-  world.timestep = STEP;
+  world.timestep = FIXED_STEP_SECONDS;
   world.numSolverIterations = 2;
   // A broad speculative margin consumes wall impact before the real contact.
   // Keep a small look-ahead; visible cup contacts still use CCD.

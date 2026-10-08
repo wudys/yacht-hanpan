@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 
-import { DEFAULT_CUP_GEOMETRY } from '../../contract/cup-geometry';
+import { DEFAULT_CUP_GEOMETRY } from '../../../contract/cup-geometry';
 import { cupInteriorDimensions } from './cup-timeline-dimensions';
 
 describe('cup timeline dimensions', () => {

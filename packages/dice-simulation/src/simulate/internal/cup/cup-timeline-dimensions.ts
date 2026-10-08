@@ -1,4 +1,4 @@
-import { type CupGeometry, DEFAULT_CUP_GEOMETRY } from '../../contract/cup-geometry';
+import { type CupGeometry, DEFAULT_CUP_GEOMETRY } from '../../../contract/cup-geometry';
 
 export function cupInteriorDimensions(spec: CupGeometry = DEFAULT_CUP_GEOMETRY) {
   return {

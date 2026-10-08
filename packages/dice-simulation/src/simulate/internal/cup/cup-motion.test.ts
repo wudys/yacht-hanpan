@@ -9,11 +9,11 @@ import {
   POUR_STYLES,
   TRAY_FLOOR_TOP_Y,
   TRAY_GEOMETRY,
-} from '../../contract';
+} from '../../../contract';
+import { rollAreaMeta } from '../roll-simulation-constants';
+import { quatFromEuler, rotateVectorByQuat } from '../simulation-math';
 import { createCupFrame, createCupMotion, cupTransformAt } from './cup-motion';
 import { CUP_GATHER_MS } from './cup-motion-progress';
-import { rollAreaMeta } from './roll-simulation-constants';
-import { quatFromEuler, rotateVectorByQuat } from './simulation-math';
 
 // Both sides and preparation-time boundaries; count is not a motion input.
 const motionCases = [

@@ -11,10 +11,10 @@ import {
 import { DEFAULT_CUP_GEOMETRY } from '../contract/cup-geometry';
 import { DIE_GEOMETRY } from '../contract/roll-geometry';
 import { initializeDeterministicRapierForBun } from '../rapier/bun';
-import { createCupMotion, cupTransformAt } from './internal/cup-motion';
-import { haveDiceClearedCup } from './internal/physics-cup';
+import { createCupMotion, cupTransformAt } from './internal/cup/cup-motion';
+import { haveDiceClearedCup } from './internal/cup/physics-cup';
 import { recognizeTopFace } from './internal/result-recognition';
-import { STEP } from './internal/roll-simulation-constants';
+import { FIXED_STEP_SECONDS } from './internal/roll-simulation-constants';
 import { rotateVectorByQuat } from './internal/simulation-math';
 import { simulateRollTimeline } from './simulate-physics';
 
@@ -70,8 +70,8 @@ test.each(
     this.forEachRigidBody((body) => bodies.push(body));
     const cup = bodies.find((body) => body.isKinematic());
     if (!cup) return;
-    const substeps = Math.round(STEP / this.timestep);
-    const t = Math.round(Math.floor(substep++ / substeps) * STEP * 1000);
+    const substeps = Math.round(FIXED_STEP_SECONDS / this.timestep);
+    const t = Math.round(Math.floor(substep++ / substeps) * FIXED_STEP_SECONDS * 1000);
     const center = cup.translation();
     const normal = rotateVectorByQuat([0, 1, 0], cup.rotation());
     const ray = new RAPIER.Ray(center, { x: normal[0], y: normal[1], z: normal[2] });
@@ -111,10 +111,10 @@ test.each(
       rolledSlots: [0, 1, 2, 3, 4].slice(0, count) as DieSlot[],
     });
     expect(closedThroughoutShake).toBe(true);
-    expect(lastClosedAt).toBeGreaterThanOrEqual(motion.pourAtMs - STEP * 1000 - 1);
+    expect(lastClosedAt).toBeGreaterThanOrEqual(motion.pourAtMs - FIXED_STEP_SECONDS * 1000 - 1);
     expect(openThroughoutPour).toBe(true);
     expect(firstOpenAt).toBeGreaterThanOrEqual(motion.pourAtMs);
-    expect(firstOpenAt).toBeLessThanOrEqual(motion.pourAtMs + STEP * 1000 + 1);
+    expect(firstOpenAt).toBeLessThanOrEqual(motion.pourAtMs + FIXED_STEP_SECONDS * 1000 + 1);
     expect(escapedWhileShaking).toBe(false);
     expect(timeline.cup.releaseAtMs).toBeGreaterThan(motion.pourAtMs);
   } finally {
@@ -160,7 +160,7 @@ test('remembers a mouth crossing during shaking when the die later rests behind 
   ) {
     stepWorld.apply(this, args);
     elapsedSeconds += this.timestep;
-    const t = Math.round((elapsedSeconds - STEP) * 1000);
+    const t = Math.round((elapsedSeconds - FIXED_STEP_SECONDS) * 1000);
     const bodies: RAPIER.RigidBody[] = [];
     this.forEachRigidBody((body) => bodies.push(body));
     const cup = bodies.find((body) => body.isKinematic());
@@ -224,7 +224,7 @@ test.each(['classic', 'burst'] as const)(
       ) {
         stepWorld.apply(this, args);
         elapsedSeconds += this.timestep;
-        const t = Math.round((elapsedSeconds - STEP) * 1000);
+        const t = Math.round((elapsedSeconds - FIXED_STEP_SECONDS) * 1000);
         const bodies: RAPIER.RigidBody[] = [];
         this.forEachRigidBody((body) => bodies.push(body));
         const body = bodies.find((body) => body.isKinematic());

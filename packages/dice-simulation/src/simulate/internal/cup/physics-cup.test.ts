@@ -1,8 +1,11 @@
 import RAPIER from '@dimforge/rapier3d-deterministic';
 import { beforeAll, expect, spyOn, test } from 'bun:test';
 
-import { cupWallVertices, DEFAULT_CUP_GEOMETRY } from '../../contract/cup-geometry';
-import { initializeDeterministicRapierForBun } from '../../rapier/bun';
+import { cupWallVertices, DEFAULT_CUP_GEOMETRY } from '../../../contract/cup-geometry';
+import { initializeDeterministicRapierForBun } from '../../../rapier/bun';
+import { createRollPhysicsConfig } from '../physics-config';
+import { createRollWorld } from '../physics-environment';
+import { FIXED_STEP_SECONDS } from '../roll-simulation-constants';
 import { createCupMotion } from './cup-motion';
 import {
   applyCupPourAssist,
@@ -13,9 +16,6 @@ import {
   stepWorldWithCup,
   updatePhysicsCup,
 } from './physics-cup';
-import { createRollWorld } from './physics-environment';
-import { createRollPhysicsConfig } from './roll-physics';
-import { STEP } from './roll-simulation-constants';
 
 beforeAll(initializeDeterministicRapierForBun);
 
@@ -167,7 +167,7 @@ test.each([
       motion.pourAtMs + motion.pourAssistDelayMs + 100,
       new Set(),
     );
-    expect(body.linvel().y).toBeCloseTo(-20 * STEP, 6);
+    expect(body.linvel().y).toBeCloseTo(-20 * FIXED_STEP_SECONDS, 6);
     expect(body.angvel()).toEqual({ x: 0, y: 0, z: 0 });
   } finally {
     world.free();
@@ -198,14 +198,17 @@ test('interpolates cup pose across two actual substeps and restores the outer ti
     stepWorldWithCup(world, cup);
     expect(observations).toHaveLength(2);
     observations.forEach((sample, index) => {
-      expect(sample.timestep).toBeCloseTo(STEP / 2, 8);
+      expect(sample.timestep).toBeCloseTo(FIXED_STEP_SECONDS / 2, 8);
       expect(sample.solverIterations).toBe(2);
       expect(sample.x).toBeCloseTo(0.3 * (index + 1), 6);
       expect(sample.q.z).toBeCloseTo(Math.sin(0.1 * (index + 1)), 6);
       expect(sample.q.w).toBeCloseTo(Math.cos(0.1 * (index + 1)), 6);
     });
-    expect(observations.reduce((sum, sample) => sum + sample.timestep, 0)).toBeCloseTo(STEP, 8);
-    expect(world.timestep).toBeCloseTo(STEP, 8);
+    expect(observations.reduce((sum, sample) => sum + sample.timestep, 0)).toBeCloseTo(
+      FIXED_STEP_SECONDS,
+      8,
+    );
+    expect(world.timestep).toBeCloseTo(FIXED_STEP_SECONDS, 8);
   } finally {
     observer.mockRestore();
     world.free();

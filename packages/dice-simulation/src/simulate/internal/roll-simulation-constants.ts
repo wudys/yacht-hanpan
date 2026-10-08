@@ -6,8 +6,8 @@ import {
   TRAY_GEOMETRY,
 } from '../../contract/roll-geometry';
 
-export const STEP = DICE_SIMULATION_CONTRACT.fixedStepSeconds;
-export const SAMPLE_FPS = 30;
+export const FIXED_STEP_SECONDS = DICE_SIMULATION_CONTRACT.fixedStepSeconds;
+export const TIMELINE_SAMPLE_FPS = 30;
 export const DIE_SIZE = DIE_GEOMETRY.size;
 export const DIE_COLLIDER_RADIUS = DIE_GEOMETRY.colliderRadius;
 export const FLOOR_Y = TRAY_GEOMETRY.floorY;
@@ -21,5 +21,5 @@ export function rollAreaMeta() {
 
 /** Display recording interval; physical handoff keeps its own cadence. */
 export function timelineSampleEverySteps(): number {
-  return Math.max(1, Math.round(1 / STEP / SAMPLE_FPS));
+  return Math.max(1, Math.round(1 / FIXED_STEP_SECONDS / TIMELINE_SAMPLE_FPS));
 }

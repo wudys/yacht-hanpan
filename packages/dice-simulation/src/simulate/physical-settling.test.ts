@@ -5,15 +5,15 @@ import { DIE_GEOMETRY, TRAY_GEOMETRY } from '../contract';
 import { measurePhysicsCompletion } from '../quality/physical-roll-audit';
 import { initializeDeterministicRapierForBun } from '../rapier/bun';
 import { hasSolverContact } from './internal/contact-query';
+import { topFaceAlignment } from './internal/result-recognition';
+import { FIXED_STEP_SECONDS } from './internal/roll-simulation-constants';
 import {
   type AppliedSettlingAssist,
   createSettlingAssistance,
   releaseRestingGroundEdges,
   releaseRestingWallLeans,
   type SettlingAssistState,
-} from './internal/physics-settling';
-import { topFaceAlignment } from './internal/result-recognition';
-import { STEP } from './internal/roll-simulation-constants';
+} from './internal/settling/settling-assistance';
 import { type PhysicsCompletionSnapshot, simulateRollTimeline } from './simulate-physics';
 
 beforeAll(initializeDeterministicRapierForBun);
@@ -489,12 +489,12 @@ test.each([
     value: RAPIER.Vector,
     wake: boolean,
   ) {
-    interventionTimes.push((elapsedSeconds - STEP) * 1000);
+    interventionTimes.push((elapsedSeconds - FIXED_STEP_SECONDS) * 1000);
     return impulse.call(this, value, wake);
   });
   const torqueSpy = spyOn(RAPIER.RigidBody.prototype, 'applyTorqueImpulse').mockImplementation(
     function (this: RAPIER.RigidBody, value: RAPIER.Vector, wake: boolean) {
-      interventionTimes.push((elapsedSeconds - STEP) * 1000);
+      interventionTimes.push((elapsedSeconds - FIXED_STEP_SECONDS) * 1000);
       return torque.call(this, value, wake);
     },
   );

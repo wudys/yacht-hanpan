@@ -5,15 +5,15 @@ import type { SimulationInput } from '../contract';
 import { initializeDeterministicRapierForBun } from '../rapier/bun';
 import {
   evaluateRollCandidate,
-  simulateRoll,
   simulateRollOutcome,
   simulateRollReplay,
+  simulateRollWithDigest,
   SimulationRejectedError,
 } from './index';
 
 beforeAll(initializeDeterministicRapierForBun);
 
-// Expected times are from the independently frozen, adopted r900 experiment.
+// Expected times are independently frozen from the adopted 900ms repeated-assistance experiment.
 test.each([
   {
     seed: '21f806f9d20df7231635b433a1dc99aa',
@@ -44,7 +44,7 @@ test.each([
       reason: fixture.reason,
       simulationMs: fixture.simulationMs,
     });
-    for (const simulate of [simulateRollOutcome, simulateRollReplay, simulateRoll]) {
+    for (const simulate of [simulateRollOutcome, simulateRollReplay, simulateRollWithDigest]) {
       const result = simulate(input);
       await expect(result).rejects.toBeInstanceOf(SimulationRejectedError);
       await expect(result).rejects.toMatchObject({

@@ -11,7 +11,7 @@ import {
   type PhysicsCompletionSnapshot,
   simulateRollTimeline,
 } from './simulate-physics';
-import { simulateRoll } from './simulate-roll';
+import { simulateRollWithDigest } from './simulate-roll';
 
 beforeAll(async () => {
   await initializeDeterministicRapierForBun();
@@ -231,7 +231,7 @@ describe('deterministic physics roll', () => {
   });
 
   test('returns one immutable authoritative face per requested slot with a full replay digest', async () => {
-    const result = await simulateRoll({
+    const result = await simulateRollWithDigest({
       rollId: 'roll-result',
       seed: 'seed-result',
       rolledSlots: [1, 3],

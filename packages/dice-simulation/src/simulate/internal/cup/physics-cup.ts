@@ -5,11 +5,11 @@ import {
   type CupGeometry,
   cupWallVertices,
   DEFAULT_CUP_GEOMETRY,
-} from '../../contract/cup-geometry';
+} from '../../../contract/cup-geometry';
+import type { PhysicsDie } from '../physics-environment';
+import { DIE_COLLIDER_RADIUS, DIE_SIZE, FIXED_STEP_SECONDS } from '../roll-simulation-constants';
+import { quatFromEuler, rotateVectorByQuat } from '../simulation-math';
 import type { CupTransform, SimulatedCupMotion } from './cup-motion';
-import type { PhysicsDie } from './physics-environment';
-import { DIE_COLLIDER_RADIUS, DIE_SIZE, STEP } from './roll-simulation-constants';
-import { quatFromEuler, rotateVectorByQuat } from './simulation-math';
 
 export interface PhysicsCup {
   readonly geometry: CupGeometry;
@@ -91,7 +91,7 @@ export function stepWorldWithCup(world: World, cup: PhysicsCup): void {
   const to = cup.body.nextTranslation();
   const rotationFrom = cup.body.rotation();
   const rotationTo = cup.body.nextRotation();
-  world.timestep = STEP / substeps;
+  world.timestep = FIXED_STEP_SECONDS / substeps;
   for (let part = 1; part <= substeps; part += 1) {
     const alpha = part / substeps;
     cup.body.setNextKinematicTranslation({
@@ -102,7 +102,7 @@ export function stepWorldWithCup(world: World, cup: PhysicsCup): void {
     cup.body.setNextKinematicRotation(slerpRotation(rotationFrom, rotationTo, alpha));
     world.step();
   }
-  world.timestep = STEP;
+  world.timestep = FIXED_STEP_SECONDS;
 }
 
 function slerpRotation(from: Rotation, to: Rotation, alpha: number): Rotation {
@@ -160,7 +160,7 @@ export function applyCupPourAssist(
       continue;
     // Equal acceleration regardless of count, mass, orientation or face value.
     // Stop at the mouth centre plane; the remaining exit and flight stay unassisted.
-    const impulse = die.body.mass() * 20 * STEP;
+    const impulse = die.body.mass() * 20 * FIXED_STEP_SECONDS;
     die.body.applyImpulse(
       { x: axis[0] * impulse, y: axis[1] * impulse, z: axis[2] * impulse },
       true,

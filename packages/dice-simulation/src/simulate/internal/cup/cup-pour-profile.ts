@@ -1,6 +1,6 @@
-import { DEFAULT_CUP_GEOMETRY } from '../../contract/cup-geometry';
-import type { RollArea } from '../../contract/types';
-import { seededNumber } from './seed-expander';
+import { DEFAULT_CUP_GEOMETRY } from '../../../contract/cup-geometry';
+import type { RollArea } from '../../../contract/types';
+import { seededNumber } from '../seed-expander';
 
 export type CupPourProfile = {
   stageX: number;

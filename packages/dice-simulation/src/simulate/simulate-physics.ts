@@ -12,9 +12,9 @@ import {
   type SimulationReplay,
 } from '../contract';
 import { assertRapierReady } from '../rapier/state';
-import { createCupFrame, createCupMotion, cupTransformAt } from './internal/cup-motion';
-import { CUP_EXIT_TAIL_MS } from './internal/cup-motion-progress';
-import { cupInteriorDimensions } from './internal/cup-timeline-dimensions';
+import { createCupFrame, createCupMotion, cupTransformAt } from './internal/cup/cup-motion';
+import { CUP_EXIT_TAIL_MS } from './internal/cup/cup-motion-progress';
+import { cupInteriorDimensions } from './internal/cup/cup-timeline-dimensions';
 import {
   applyCupPourAssist,
   areDiceOutsideCup,
@@ -25,20 +25,14 @@ import {
   removePhysicsCup,
   stepWorldWithCup,
   updatePhysicsCup,
-} from './internal/physics-cup';
+} from './internal/cup/physics-cup';
+import { createRollPhysicsConfig } from './internal/physics-config';
 import { createDieInCup, createRollWorld, createTray } from './internal/physics-environment';
-import { runPhysicsRest } from './internal/physics-rest';
-import {
-  createSettlingAssistance,
-  hasElevatedNearbyPair,
-  hasReadableHandoffPose,
-} from './internal/physics-settling';
 import { recognizeTopFace } from './internal/result-recognition';
-import { createRollPhysicsConfig } from './internal/roll-physics';
 import {
   DIE_SIZE,
+  FIXED_STEP_SECONDS,
   rollAreaMeta,
-  STEP,
   timelineSampleEverySteps,
 } from './internal/roll-simulation-constants';
 import {
@@ -46,7 +40,13 @@ import {
   constrainRolloutVelocity,
 } from './internal/rollout-dynamics';
 import { seededNumber } from './internal/seed-expander';
-import { createSettlementPolicy } from './internal/settlement-policy';
+import { runPhysicsRest } from './internal/settling/physics-rest';
+import { createSettlementPolicy } from './internal/settling/settlement-policy';
+import {
+  createSettlingAssistance,
+  hasElevatedNearbyPair,
+  hasReadableHandoffPose,
+} from './internal/settling/settling-assistance';
 import { round } from './internal/simulation-math';
 import { SimulationRejectedError } from './simulation-rejected-error';
 
@@ -124,7 +124,7 @@ export function simulateRollPhysics(
         seededNumber(`${seed}:roll-length`, diceCount) * 620,
     );
     let simulationMs = cup.releaseAtMs + rollSimulationMs;
-    const steps = Math.ceil(simulationMs / 1000 / STEP);
+    const steps = Math.ceil(simulationMs / 1000 / FIXED_STEP_SECONDS);
     const sampleEvery = timelineSampleEverySteps();
     let released = false;
     const exitedDice = new Set<string>();
@@ -164,7 +164,7 @@ export function simulateRollPhysics(
       });
     };
     for (let step = 0; step <= steps; step += 1) {
-      const t = Math.round(step * STEP * 1000);
+      const t = Math.round(step * FIXED_STEP_SECONDS * 1000);
       // Before observation, releaseAtMs is only the waiting deadline. Do not
       // let that placeholder start the exit path and pull a blocked cup away.
       if (!released && t > cup.releaseAtMs) {
@@ -211,7 +211,7 @@ export function simulateRollPhysics(
         // Each die must have crossed the mouth, but an earlier die may now be
         // below/beside the finite cup after bouncing. It need not remain in the
         // mouth's infinite half-space. Current full-shape clearance still gates exit.
-        cup.releaseAtMs = t + Math.round(STEP * 1000);
+        cup.releaseAtMs = t + Math.round(FIXED_STEP_SECONDS * 1000);
         cup.exitAtMs = cup.releaseAtMs + CUP_EXIT_HOLD_MS + CUP_EXIT_TAIL_MS;
       }
       if (cupRemoved) assistance.apply(t);
@@ -253,7 +253,11 @@ export function simulateRollPhysics(
       }
     }
     if (!released) {
-      throw new CupReleaseError(Math.round(steps * STEP * 1000), exitedDice.size, diceCount);
+      throw new CupReleaseError(
+        Math.round(steps * FIXED_STEP_SECONDS * 1000),
+        exitedDice.size,
+        diceCount,
+      );
     }
     const rest = runPhysicsRest(
       {

@@ -1,21 +1,21 @@
 import type { Collider, Rotation, Vector, World } from '@dimforge/rapier3d-deterministic';
 
-import { hasLowerSupportContact, hasTouchingWallContact } from './contact-query';
-import type { PhysicsDie, TrayWall } from './physics-environment';
-import { topFaceAlignment } from './result-recognition';
-import { DIE_SIZE, FLOOR_TOP_Y } from './roll-simulation-constants';
+import { hasLowerSupportContact, hasTouchingWallContact } from '../contact-query';
+import type { PhysicsDie, TrayWall } from '../physics-environment';
+import { topFaceAlignment } from '../result-recognition';
+import { DIE_SIZE, FLOOR_TOP_Y } from '../roll-simulation-constants';
+import {
+  quatDistance,
+  type QuaternionTuple,
+  rotateVectorByQuat,
+  type VectorTuple,
+} from '../simulation-math';
 import {
   POSE_POSITION_TOLERANCE,
   POSE_ROTATION_TOLERANCE,
   SLOW_ANGULAR_SPEED,
   SLOW_LINEAR_SPEED,
 } from './settling-criteria';
-import {
-  quatDistance,
-  type QuaternionTuple,
-  rotateVectorByQuat,
-  type VectorTuple,
-} from './simulation-math';
 
 export interface GroundEdgeReleaseState {
   stationarySinceMs: number | null;

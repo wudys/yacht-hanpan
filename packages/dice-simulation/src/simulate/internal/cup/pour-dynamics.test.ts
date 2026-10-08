@@ -1,15 +1,15 @@
 import RAPIER from '@dimforge/rapier3d-deterministic';
 import { beforeAll, expect, test } from 'bun:test';
 
-import { DEFAULT_CUP_GEOMETRY } from '../../contract/cup-geometry';
-import { initializeDeterministicRapierForBun } from '../../rapier/bun';
-import { simulateRollTimeline } from '../simulate-physics';
+import { DEFAULT_CUP_GEOMETRY } from '../../../contract/cup-geometry';
+import { initializeDeterministicRapierForBun } from '../../../rapier/bun';
+import { simulateRollTimeline } from '../../simulate-physics';
+import { createRollPhysicsConfig } from '../physics-config';
+import { createDieInCup } from '../physics-environment';
+import { FIXED_STEP_SECONDS } from '../roll-simulation-constants';
+import { rotateVectorByQuat } from '../simulation-math';
 import { createCupMotion, cupTransformAt } from './cup-motion';
 import { applyCupPourAssist, createPhysicsCup } from './physics-cup';
-import { createDieInCup } from './physics-environment';
-import { createRollPhysicsConfig } from './roll-physics';
-import { STEP } from './roll-simulation-constants';
-import { rotateVectorByQuat } from './simulation-math';
 
 beforeAll(initializeDeterministicRapierForBun);
 
@@ -41,10 +41,10 @@ test.each(['classic', 'burst', 'oblique'] as const)(
       expect(apply(start + 450, 0)).toBe(0);
       expect(apply(t, DEFAULT_CUP_GEOMETRY.innerHeight / 2 + 0.1)).toBe(0);
       expect(apply(t, 0, true)).toBe(0);
-      expect(apply(t, 0)).toBeCloseTo(20 * STEP, 5);
+      expect(apply(t, 0)).toBeCloseTo(20 * FIXED_STEP_SECONDS, 5);
       const v = die.body.linvel();
-      expect(v.x).toBeCloseTo(axis[0] * 20 * STEP, 5);
-      expect(v.y).toBeCloseTo(axis[1] * 20 * STEP, 5);
+      expect(v.x).toBeCloseTo(axis[0] * 20 * FIXED_STEP_SECONDS, 5);
+      expect(v.y).toBeCloseTo(axis[1] * 20 * FIXED_STEP_SECONDS, 5);
       expect(die.body.angvel()).toEqual({ x: 0, y: 0, z: 0 });
       die.body.setTranslation(
         { x: pose.x, y: pose.y, z: pose.z + DEFAULT_CUP_GEOMETRY.innerRadius + 0.1 },

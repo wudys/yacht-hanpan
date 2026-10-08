@@ -1,10 +1,10 @@
 import RAPIER from '@dimforge/rapier3d-deterministic';
 import { beforeAll, expect, spyOn, test } from 'bun:test';
 
-import { initializeDeterministicRapierForBun } from '../../rapier/bun';
-import { hasActualLowerSupportContact } from './contact-query';
-import type { PhysicsDie } from './physics-environment';
-import { DIE_SIZE, FLOOR_TOP_Y } from './roll-simulation-constants';
+import { initializeDeterministicRapierForBun } from '../../../rapier/bun';
+import { hasActualLowerSupportContact } from '../contact-query';
+import type { PhysicsDie } from '../physics-environment';
+import { DIE_SIZE, FLOOR_TOP_Y } from '../roll-simulation-constants';
 import { createSettlementPolicy } from './settlement-policy';
 
 beforeAll(initializeDeterministicRapierForBun);
@@ -40,7 +40,7 @@ function fixture(positions: readonly { x: number; y: number; angle?: number }[])
 const floorY = FLOOR_TOP_Y + DIE_SIZE / 2 - 0.001;
 const tiltedY = FLOOR_TOP_Y + (DIE_SIZE / 2) * Math.SQRT2 - 0.001;
 
-test('D requires actual floor support and a global150ms pose anchor', () => {
+test('readable stability requires actual floor support and a global 150ms pose anchor', () => {
   const { world, floor, dice, refresh } = fixture([
     { x: -1, y: floorY },
     { x: 1, y: floorY },
@@ -68,7 +68,7 @@ test('D requires actual floor support and a global150ms pose anchor', () => {
   }
 });
 
-test('a separated predictive floor contact cannot start D', () => {
+test('a separated predictive floor contact cannot start readable stability', () => {
   const { world, floor, dice } = fixture([{ x: 0, y: floorY + 0.04 }]);
   try {
     world.integrationParameters.normalizedPredictionDistance = 0.1;
@@ -82,7 +82,7 @@ test('a separated predictive floor contact cannot start D', () => {
   }
 });
 
-test('G200 waits for all support participant poses and restarts when a lower die moves', () => {
+test('stable stack rejection waits for all support participant poses and restarts when a lower die moves', () => {
   const { world, floor, dice, refresh } = fixture([
     { x: 0, y: floorY },
     { x: 0, y: floorY + DIE_SIZE - 0.001 },
@@ -105,7 +105,7 @@ test('G200 waits for all support participant poses and restarts when a lower die
   }
 });
 
-test('moving support and inactive cup phases cannot count towards G200', () => {
+test('moving support and inactive cup phases cannot count towards stable stack rejection', () => {
   const { world, floor, dice } = fixture([
     { x: 0, y: floorY },
     { x: 0, y: floorY + DIE_SIZE - 0.001 },
@@ -124,7 +124,7 @@ test('moving support and inactive cup phases cannot count towards G200', () => {
   }
 });
 
-test('G200 requires every support branch to reach the floor', () => {
+test('stable stack rejection requires every support branch to reach the floor', () => {
   const {
     world,
     floor: initialFloor,
@@ -168,7 +168,7 @@ test('G200 requires every support branch to reach the floor', () => {
   }
 });
 
-test('flat readiness requires its stricter speeds and cannot bypass the global D anchor', () => {
+test('flat readiness requires its stricter speeds and cannot bypass the global readable stability anchor', () => {
   const { world, floor, dice } = fixture([{ x: 0, y: floorY }]);
   try {
     const policy = createSettlementPolicy();
@@ -301,7 +301,7 @@ test('one die recovering cannot erase another die’s unresolved episode', () =>
   }
 });
 
-test('G200 takes priority when it and repeated assistance reach their thresholds together', () => {
+test('stable stack rejection takes priority when it and repeated assistance reach their thresholds together', () => {
   const { world, floor, dice } = fixture([
     { x: 0, y: floorY },
     {

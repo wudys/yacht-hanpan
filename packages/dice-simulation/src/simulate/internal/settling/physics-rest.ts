@@ -1,11 +1,11 @@
 import type { Collider, World } from '@dimforge/rapier3d-deterministic';
 
-import type { DieFrame, RollCandidateRejectionReason } from '../../contract';
-import type { PhysicsDie } from './physics-environment';
-import type { SettlingAssistance } from './physics-settling';
-import { STEP, timelineSampleEverySteps } from './roll-simulation-constants';
+import type { DieFrame, RollCandidateRejectionReason } from '../../../contract';
+import type { PhysicsDie } from '../physics-environment';
+import { FIXED_STEP_SECONDS, timelineSampleEverySteps } from '../roll-simulation-constants';
+import { round } from '../simulation-math';
 import type { SettlementPolicy } from './settlement-policy';
-import { round } from './simulation-math';
+import type { SettlingAssistance } from './settling-assistance';
 
 // The final rest phase requires a longer stable run than the rollout handoff.
 const REST_STABLE_SAMPLES = 10;
@@ -38,7 +38,7 @@ export function runPhysicsRest(
   while (elapsedMs < maxRestMs) {
     world.step();
     step += 1;
-    elapsedMs = Math.round(step * STEP * 1000);
+    elapsedMs = Math.round(step * FIXED_STEP_SECONDS * 1000);
     assistance.apply(simulationMs + elapsedMs);
 
     const observation = policy.observe(world, dice, floor, simulationMs + elapsedMs, true);

@@ -217,15 +217,18 @@ test('real rolls replay inside the board and settle before score input unlocks',
     await page.evaluate(() => {
       const canvasHost = document.querySelector('[data-dice-presentation-phase]')!;
       const observer = new MutationObserver(() => {
-        if (canvasHost.getAttribute('data-dice-presentation-phase') !== 'revealing') return;
+        const phase = canvasHost.getAttribute('data-dice-presentation-phase');
+        if (phase !== 'rolling' && phase !== 'revealing') return;
         const audit = {
           previews: document.querySelectorAll('[data-value-state="preview"]').length,
+          upperMaxima: document.querySelectorAll('[data-score-tab="upper"] span').length,
+          lowerMaxima: document.querySelectorAll('[data-score-tab="lower"] span').length,
           scoresLocked: [
             ...document.querySelectorAll<HTMLButtonElement>('button[data-score-category]'),
           ].every((button) => button.disabled || button.getAttribute('aria-disabled') === 'true'),
         };
-        canvasHost.setAttribute('data-reveal-audit', JSON.stringify(audit));
-        observer.disconnect();
+        canvasHost.setAttribute(`data-${phase}-audit`, JSON.stringify(audit));
+        if (phase === 'revealing') observer.disconnect();
       });
       observer.observe(canvasHost, {
         attributes: true,
@@ -248,8 +251,8 @@ test('real rolls replay inside the board and settle before score input unlocks',
     await expect(host).toHaveAttribute('data-dice-presentation-phase', 'rolling');
     await expect(page.locator('button[data-score-category]').first()).toBeDisabled();
     await expect(page.locator('[data-value-state="preview"]')).toHaveCount(0);
-    // Current ScoreGrid omits the highest-score label until a preview is available.
-    await expect(page.locator('[data-score-tab="lower"] span')).toHaveCount(0);
+    // Both groups and the rendered cells withhold the same unrevealed outcome.
+    await expect(page.locator('[data-score-tab] span')).toHaveCount(0);
     const canvasBounds = await host.boundingBox();
     const boardBounds = await page.locator('.dice-board').boundingBox();
     const scoreBounds = await page.locator('.score-grid').boundingBox();
@@ -268,13 +271,19 @@ test('real rolls replay inside the board and settle before score input unlocks',
     await expect(page.locator('.roll-action-rail')).toBeHidden();
     await expect(page.locator('.held-dice-rack')).toBeVisible();
     await expect(host).toHaveAttribute('data-dice-presentation-phase', 'settled');
-    expect(JSON.parse((await host.getAttribute('data-reveal-audit'))!)).toEqual({
+    const maskedRoll = {
       previews: 0,
+      upperMaxima: 0,
+      lowerMaxima: 0,
       scoresLocked: true,
-    });
+    };
+    expect(JSON.parse((await host.getAttribute('data-rolling-audit'))!)).toEqual(maskedRoll);
+    expect(JSON.parse((await host.getAttribute('data-revealing-audit'))!)).toEqual(maskedRoll);
     await expect(page.locator('button[data-score-category]').first()).toBeEnabled();
     await expect(page.locator('[data-value-state="preview"]')).toHaveCount(6);
-    await expect(page.locator('[data-score-tab="lower"] span')).not.toHaveText(/—$/u);
+    await expect(page.locator('[data-score-tab] span')).toHaveCount(2);
+    await expect(page.locator('[data-score-tab="upper"] span')).toHaveText(/^최대 \d+$/u);
+    await expect(page.locator('[data-score-tab="lower"] span')).toHaveText(/^최대 \d+$/u);
     const scoreTabBounds = await page.locator('[data-score-tab="lower"]').boundingBox();
     const scoreCellBounds = await page.locator('button[data-score-category]').first().boundingBox();
     expect(scoreTabBounds).not.toBeNull();

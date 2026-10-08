@@ -18,10 +18,19 @@ export interface ScoreFeedbackObservation {
 interface ScoreFeedbackAudit {
   readonly observations: ScoreFeedbackObservation[];
   readonly sweep: { playState: string | null; advanced: boolean };
+  readonly effects: ScoreFeedbackEffectObservation[];
   readonly grid: Element | null;
   readonly summary: Element | null;
   readonly canvas: Element | null;
   readonly dispose: () => void;
+}
+
+interface ScoreFeedbackEffectObservation {
+  readonly kind: 'sweep' | 'particle';
+  status:
+    'pending' | 'finished' | 'unanimated' | 'cancelled' | 'detached' | 'disposed' | 'restarted';
+  confirmationConnected: boolean;
+  opacity: string | null;
 }
 
 /** Records the real rendered handoff, including short phases that polling can miss. */
@@ -29,6 +38,11 @@ export async function observeScoreFeedback(page: Page): Promise<JSHandle<ScoreFe
   return page.evaluateHandle(() => {
     const observations: ScoreFeedbackObservation[] = [];
     const sweep: ScoreFeedbackAudit['sweep'] = { playState: null, advanced: false };
+    const effects: ScoreFeedbackEffectObservation[] = [];
+    const observedEffects = new WeakMap<
+      Element,
+      { animations: Animation[]; observation: ScoreFeedbackEffectObservation }
+    >();
     const grid = document.querySelector('[data-score-grid]');
     const summary = document.querySelector('[data-player-summary]');
     const canvas = document.querySelector('.web-dice-canvas-host canvas');
@@ -36,6 +50,7 @@ export async function observeScoreFeedback(page: Page): Promise<JSHandle<ScoreFe
     let frame = 0;
     let disposed = false;
     const record = () => {
+      if (disposed) return;
       const currentSummary = document.querySelector('[data-player-summary]');
       const confirmed = document.querySelector('[data-score-confirmed="true"]');
       const observation = {
@@ -68,8 +83,10 @@ export async function observeScoreFeedback(page: Page): Promise<JSHandle<ScoreFe
           () => {
             if (disposed) return;
             frame = requestAnimationFrame(() => {
+              if (disposed) return;
               const initialTime = animation.currentTime;
               frame = requestAnimationFrame(() => {
+                if (disposed) return;
                 sweep.advanced =
                   typeof initialTime === 'number' &&
                   typeof animation.currentTime === 'number' &&
@@ -80,6 +97,50 @@ export async function observeScoreFeedback(page: Page): Promise<JSHandle<ScoreFe
           },
           () => {
             // A cancelled animation cannot establish running progress.
+          },
+        );
+      }
+      for (const effect of confirmed?.querySelectorAll(
+        '.score-feedback__sweep, .score-feedback__particle',
+      ) ?? []) {
+        const animations = effect.getAnimations();
+        const tracked = observedEffects.get(effect);
+        if (tracked) {
+          if (
+            animations.some((animation) => !tracked.animations.includes(animation)) ||
+            (tracked.observation.status === 'finished' &&
+              animations.some((animation) => animation.playState !== 'finished'))
+          )
+            tracked.observation.status = 'restarted';
+          continue;
+        }
+        const observation: ScoreFeedbackEffectObservation = {
+          kind: effect.matches('.score-feedback__sweep') ? 'sweep' : 'particle',
+          status: animations.length > 0 ? 'pending' : 'unanimated',
+          confirmationConnected: false,
+          opacity: null,
+        };
+        observedEffects.set(effect, { animations, observation });
+        effects.push(observation);
+        if (animations.length === 0) continue;
+        void Promise.all(animations.map((animation) => animation.finished)).then(
+          () => {
+            if (disposed || observation.status !== 'pending') return;
+            observation.confirmationConnected =
+              confirmed!.isConnected &&
+              confirmed!.matches('[data-score-confirmed="true"]') &&
+              effect.isConnected &&
+              effect.closest('[data-score-confirmed="true"]') === confirmed;
+            observation.opacity = getComputedStyle(effect).opacity;
+            observation.status = !observation.confirmationConnected
+              ? 'detached'
+              : animations.every((animation) => animation.playState === 'finished')
+                ? 'finished'
+                : 'restarted';
+          },
+          () => {
+            // Rejection is cancellation, never proof that the visual finished.
+            if (!disposed && observation.status === 'pending') observation.status = 'cancelled';
           },
         );
       }
@@ -95,11 +156,15 @@ export async function observeScoreFeedback(page: Page): Promise<JSHandle<ScoreFe
     return {
       observations,
       sweep,
+      effects,
       grid,
       summary,
       canvas,
       dispose() {
         disposed = true;
+        for (const effect of effects) {
+          if (effect.status === 'pending') effect.status = 'disposed';
+        }
         observer.disconnect();
         cancelAnimationFrame(frame);
       },
@@ -109,6 +174,10 @@ export async function observeScoreFeedback(page: Page): Promise<JSHandle<ScoreFe
 
 export async function readScoreFeedback(audit: JSHandle<ScoreFeedbackAudit>) {
   return audit.evaluate(({ observations }) => observations);
+}
+
+export async function readScoreFeedbackEffects(audit: JSHandle<ScoreFeedbackAudit>) {
+  return audit.evaluate(({ effects }) => effects);
 }
 
 export async function disposeScoreFeedback(audit: JSHandle<ScoreFeedbackAudit>): Promise<void> {

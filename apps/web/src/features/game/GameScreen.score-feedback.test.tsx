@@ -16,7 +16,7 @@ import { Profiler } from 'react';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 
 import GameScreen from '@/features/game/GameScreen';
-import { LOCALE } from '@/i18n';
+import { LOCALE, translate } from '@/i18n';
 import { startGameAudioFeedback } from '@/runtime/audio/game-audio-feedback';
 import { PRODUCT_CUE } from '@/runtime/audio/product-cues';
 import { createPreferencesStore } from '@/runtime/preferences/preferences-store';
@@ -396,16 +396,32 @@ test.each([false, true])(
     harness.publish(scoreTransition());
     advance(1000);
     expect(screen.getByText('YOUR TURN')).not.toBeNull();
+    expect(
+      screen.getByText(translate(LOCALE.EN, 'game.turnStartCue'), { selector: '[role="status"]' }),
+    ).not.toBeNull();
     expect(screen.getByRole('button', { name: 'Roll' }).getAttribute('aria-disabled')).toBe(
       'false',
     );
     advance(649);
     expect(screen.getByText('YOUR TURN')).not.toBeNull();
+    expect(
+      screen.getByText(translate(LOCALE.EN, 'game.turnStartCue'), { selector: '[role="status"]' }),
+    ).not.toBeNull();
     advance(fractional ? 2 : 1);
     expect(screen.queryByText('YOUR TURN')).toBeNull();
+    expect(
+      screen.queryByText(translate(LOCALE.EN, 'game.turnStartCue'), {
+        selector: '[role="status"]',
+      }),
+    ).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Scoreboard' }));
     fireEvent.click(screen.getByRole('button', { name: 'Close' }));
     expect(screen.queryByText('YOUR TURN')).toBeNull();
+    expect(
+      screen.queryByText(translate(LOCALE.EN, 'game.turnStartCue'), {
+        selector: '[role="status"]',
+      }),
+    ).toBeNull();
     expect(
       harness.audio.playCue.mock.calls.filter(([cue]) => cue === PRODUCT_CUE.SCORE),
     ).toHaveLength(1);

@@ -30,8 +30,8 @@ export default defineConfig({
       timeout: 120_000,
     },
     {
-      command: `VITE_GAME_SERVER_URL=${PRODUCT_SERVER_ORIGIN} bun --bun --filter @repo/web dev:anchors --port=${PRODUCT_GAME_PORT}`,
-      url: `${PRODUCT_GAME_ORIGIN}/dev/anchors.html`,
+      command: `VITE_GAME_SERVER_URL=${PRODUCT_SERVER_ORIGIN} bun --bun --filter @repo/web dev --host=127.0.0.1 --port=${PRODUCT_GAME_PORT}`,
+      url: PRODUCT_GAME_ORIGIN,
       reuseExistingServer: false,
       timeout: 120_000,
     },

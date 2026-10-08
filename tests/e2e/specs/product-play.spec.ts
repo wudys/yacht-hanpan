@@ -1,4 +1,4 @@
-import { expect } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
 
 import { joinProductGame, PRODUCT_GAME_ORIGIN } from '../helpers/product-game';
 import {
@@ -7,6 +7,74 @@ import {
   readScoreFeedback,
 } from '../helpers/score-feedback';
 import { test } from '../helpers/test';
+import { frameFit, visibleTextIssues } from '../helpers/visual-geometry';
+
+async function expectResultLayout(page: Page) {
+  const result = page.locator('[data-product-view="result"]');
+  const body = result.locator('[data-scroll-body]');
+  await body.evaluate((node) => node.scrollTo({ top: 0 }));
+  const neighbors =
+    '.score-table-player__avatar, [data-result-crown], .scrollable-panel__footer button';
+  const text = result.locator(
+    'h1, .score-table-player__heading, .score-table-player__total, .score-table-player__summary, thead th, .scrollable-panel__footer button',
+  );
+  const reason = result.locator('[data-result-reason]');
+  const items = [...(await text.all()), reason];
+  const textRegions = [];
+  for (const item of items) {
+    const name = await item.evaluate((node) => node.getAttribute('class') ?? node.tagName);
+    expect(
+      await visibleTextIssues(item, neighbors, { allowWrapping: item === reason }),
+      name,
+    ).toEqual([]);
+    expect((await frameFit(page, item)).inside, name).toBe(true);
+    const bounds = await item.boundingBox();
+    expect(bounds, name).not.toBeNull();
+    textRegions.push({ name, bounds: bounds! });
+  }
+  // DOM Range font metrics can extend beyond a tight line-height without visible ink
+  // overlap. Compare text layout regions separately from text/decorative collisions.
+  for (const [index, region] of textRegions.entries()) {
+    for (const other of textRegions.slice(index + 1)) {
+      const a = region.bounds;
+      const b = other.bounds;
+      const overlaps =
+        a.x < b.x + b.width - 0.5 &&
+        b.x < a.x + a.width - 0.5 &&
+        a.y < b.y + b.height - 0.5 &&
+        b.y < a.y + a.height - 0.5;
+      expect(overlaps, JSON.stringify({ region, other })).toBe(false);
+    }
+  }
+  const footerAction = result.locator('.scrollable-panel__footer button');
+  const fit = await frameFit(page, footerAction);
+  expect(fit.logicalHeight).toBeGreaterThanOrEqual(43.9);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
+  expect(
+    await footerAction.evaluate((element) => {
+      const box = element.getBoundingClientRect();
+      const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
+      return hit === element || element.contains(hit);
+    }),
+  ).toBe(true);
+  const lastRow = result.locator('[data-score-row]').last();
+  await lastRow.evaluate((node) => node.scrollIntoView({ block: 'end' }));
+  const [lastBox, bodyBox, footerBox] = await Promise.all([
+    lastRow.boundingBox(),
+    body.boundingBox(),
+    footerAction.boundingBox(),
+  ]);
+  expect(lastBox).not.toBeNull();
+  expect(bodyBox).not.toBeNull();
+  expect(footerBox).not.toBeNull();
+  expect(lastBox!.y + lastBox!.height).toBeLessThanOrEqual(bodyBox!.y + bodyBox!.height + 0.5);
+  expect(lastBox!.y + lastBox!.height).toBeLessThanOrEqual(footerBox!.y + 0.5);
+  for (const value of await lastRow.locator('td').all()) {
+    expect(await visibleTextIssues(value, '.scrollable-panel__footer button')).toEqual([]);
+    expect((await frameFit(page, value)).inside).toBe(true);
+  }
+  await body.evaluate((node) => node.scrollTo({ top: 0 }));
+}
 
 test('held dice survive rerolls and a zero score remains selectable after the last roll', async ({
   page,
@@ -199,6 +267,32 @@ test('explicit forfeit renders both authoritative Result perspectives at 320px',
         Promise.all(node.getAnimations({ subtree: true }).map((animation) => animation.finished)),
       );
     }
+    for (const resultPage of [page, guest]) await expectResultLayout(resultPage);
+
+    // The text observation must reject horizontal and vertical clipping, then recover.
+    const heading = forfeiterResult.getByRole('heading');
+    const originalStyle = await heading.getAttribute('style');
+    for (const dimension of ['width', 'height'] as const) {
+      try {
+        await heading.evaluate((node: HTMLElement, axis) => {
+          node.style[axis] = '1px';
+          node.style.overflow = 'hidden';
+          node.style.whiteSpace = 'nowrap';
+        }, dimension);
+        const issues = await visibleTextIssues(heading);
+        if (dimension === 'width') expect(issues).toContain('scroll width exceeds text box');
+        else
+          expect(issues).toEqual(
+            expect.arrayContaining([expect.stringMatching(/^text clipped by /u)]),
+          );
+      } finally {
+        await heading.evaluate((node, style) => {
+          if (style === null) node.removeAttribute('style');
+          else node.setAttribute('style', style);
+        }, originalStyle);
+      }
+      expect(await visibleTextIssues(heading)).toEqual([]);
+    }
     await page.screenshot({
       path: `/tmp/hanpan-forfeit-result-loser-ko-320-${test.info().project.name}.png`,
     });
@@ -217,6 +311,7 @@ test('explicit forfeit renders both authoritative Result perspectives at 320px',
             .evaluate((node) => node.getBoundingClientRect().width),
         )
         .toBeCloseTo(640, 1);
+      await expectResultLayout(resultPage);
       await resultPage.screenshot({
         path: `/tmp/hanpan-fidelity-result-${locale}-desktop-${test.info().project.name}.png`,
       });
@@ -345,6 +440,40 @@ test('two browsers finish all twelve turns and return from the authoritative res
         await expect(rows.nth(index).locator('td').last()).toHaveText(
           String(recorded[1 - seat]![index]),
         );
+      }
+      const contrastSamples = await result
+        .locator('td[data-score-state="recorded"]')
+        .evaluateAll((cells) => {
+          const luminance = (color: string) => {
+            const values = color.match(/[\d.]+/gu)!.map(Number);
+            if (values.length > 3 && values[3] !== 1)
+              throw new Error(`Contrast needs an opaque color: ${color}`);
+            const channels = values.slice(0, 3).map((value) => {
+              const channel = value / 255;
+              return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+            });
+            return channels[0]! * 0.2126 + channels[1]! * 0.7152 + channels[2]! * 0.0722;
+          };
+          return cells.map((cell) => {
+            const style = getComputedStyle(cell);
+            const ink = luminance(style.color);
+            const surface = luminance(style.backgroundColor);
+            const row = cell.closest('tr') as HTMLTableRowElement;
+            return {
+              category: row.dataset.scoreCategory,
+              player: (cell as HTMLTableCellElement).cellIndex === 1 ? 'viewer' : 'opponent',
+              parity: row.sectionRowIndex % 2 === 0 ? 'odd' : 'even',
+              ink: style.color,
+              surface: style.backgroundColor,
+              ratio: (Math.max(ink, surface) + 0.05) / (Math.min(ink, surface) + 0.05),
+            };
+          });
+        });
+      expect(new Set(contrastSamples.map(({ player, parity }) => `${player}-${parity}`))).toEqual(
+        new Set(['viewer-odd', 'viewer-even', 'opponent-odd', 'opponent-even']),
+      );
+      for (const sample of contrastSamples) {
+        expect(sample.ratio, JSON.stringify({ seat, ...sample })).toBeGreaterThanOrEqual(4.5);
       }
       await current.screenshot({
         path: `/tmp/hanpan-normal-result-seat-${seat}-320-${test.info().project.name}.png`,

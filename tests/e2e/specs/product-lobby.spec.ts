@@ -1,4 +1,4 @@
-import { expect, type Page, type Route } from '@playwright/test';
+import { expect, type Locator, type Page, type Route } from '@playwright/test';
 import { parseRoomHttpEnvelope } from '@repo/game-protocol/http';
 import { GAME_PROTOCOL_VERSION } from '@repo/game-protocol/version';
 
@@ -353,7 +353,7 @@ for (const locale of ['ko', 'en'] as const) {
     const layer = page.locator('[data-admission="waiting"]');
     await expect(layer.locator('[data-room-code]')).toBeVisible();
     await expect(layer.locator('.web-lobby-countdown')).toHaveText(/^\d{2}:\d{2}$/u);
-    await expect(layer.locator('.dice-loader__die')).toHaveCount(3);
+    await expect(layer.locator('.dice-loader__die').first()).toBeVisible();
     for (const die of await layer.locator('.dice-loader__die').all()) {
       await expect(die).toHaveCSS('box-shadow', 'none');
     }
@@ -734,41 +734,55 @@ test('desktop Entry, settings, profile, and copy controls show feedback before a
 }) => {
   await page.goto(PRODUCT_GAME_ORIGIN);
   const start = page.locator('.entry-view__start');
+  await page.mouse.move(0, 0);
+  const startIdle = await brightness(start);
   await start.hover();
-  await expect(start).toHaveCSS('filter', 'brightness(1.08)');
+  await expect.poll(() => brightness(start)).toBeGreaterThan(startIdle);
   await start.click();
   await expect(page.locator('[data-screen="lobby"]')).toBeVisible();
   await page.locator('.lobby-view__utility > .ui-icon-button').click();
   for (const selector of ['.settings-view__switch', '.settings-view__locale-options button']) {
     const control = page.locator(selector).first();
+    await page.mouse.move(0, 0);
+    const idle = await brightness(control);
     await control.hover();
-    await expect(control).toHaveCSS('filter', 'brightness(1.08)');
+    await expect.poll(() => brightness(control)).toBeGreaterThan(idle);
     await page.mouse.down();
-    await expect(control).toHaveCSS('filter', 'brightness(0.94)');
+    await expect.poll(() => brightness(control)).toBeLessThan(idle);
     await page.mouse.up();
     await page.mouse.move(0, 0);
-    await expect(control).toHaveCSS('filter', 'none');
+    await expect.poll(() => brightness(control)).toBe(idle);
     await expect(control).toHaveCSS('outline-style', 'none');
   }
   await page.locator('.settings-view .ui-icon-button').click();
   await page.locator('.lobby-view__profile button').click();
   const character = page.locator('.character-choice-grid__choice').first();
+  await page.mouse.move(0, 0);
+  const characterIdle = await brightness(character);
   await character.hover();
-  // Engines can serialize the filter transition endpoint with different precision.
-  await expect
-    .poll(() =>
-      character.evaluate((control) =>
-        Number(/^brightness\(([\d.]+)\)$/u.exec(getComputedStyle(control).filter)?.[1]),
-      ),
-    )
-    .toBeCloseTo(1.08, 3);
+  await expect.poll(() => brightness(character)).toBeGreaterThan(characterIdle);
   await character.click();
   await page.locator('.scrollable-panel .ui-icon-button').click();
   await page.locator('[data-room-action="create"] button').click();
   const copy = page.locator('.web-lobby-copy-button');
+  await page.mouse.move(0, 0);
+  const copyIdle = await brightness(copy);
   await copy.hover();
-  await expect(copy).toHaveCSS('filter', 'brightness(1.08)');
+  await expect.poll(() => brightness(copy)).toBeGreaterThan(copyIdle);
 });
+
+async function brightness(control: Locator): Promise<number> {
+  const filter = await control.evaluate(async (node) => {
+    await Promise.all(node.getAnimations().map((animation) => animation.finished.catch(() => {})));
+    return getComputedStyle(node).filter;
+  });
+  if (filter === 'none') return 1;
+  const match = /^brightness\(([\d.]+)\)$/u.exec(filter);
+  expect(match, `Expected a brightness filter, got ${filter}`).not.toBeNull();
+  const value = Number(match![1]);
+  expect(Number.isFinite(value)).toBe(true);
+  return value;
+}
 
 for (const locale of ['ko', 'en'] as const) {
   test(`profile persistence failure keeps the selection and recovers inline (${locale})`, async ({

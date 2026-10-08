@@ -2,6 +2,7 @@ import { expect, type Page } from '@playwright/test';
 
 import { joinProductGame, PRODUCT_GAME_ORIGIN } from '../helpers/product-game';
 import { test } from '../helpers/test';
+import { frameFit, visibleTextIssues } from '../helpers/visual-geometry';
 
 const boundaryViewports = [
   { width: 320, height: 568 },
@@ -107,7 +108,40 @@ test('bonus popover stays anchored through resize, locale changes and reopening'
         await page.getByRole('button', { name: 'Close', exact: true }).click();
       }
       const action = page.locator('[data-bonus-info-action]');
+      await page.setViewportSize({ width: 320, height: 568 });
+      await expect
+        .poll(() =>
+          page
+            .locator('[data-game-logical-canvas]')
+            .evaluate((node) => node.getBoundingClientRect().width),
+        )
+        .toBeCloseTo(320, 1);
+      await expect(action).toHaveText(locale === 'ko' ? '보너스' : 'Bonus');
+      await expect(action).toHaveAccessibleDescription(
+        locale === 'ko' ? '보너스 미달성' : 'Bonus not earned',
+      );
+      expect(await visibleTextIssues(action.locator('.player-summary__bonus'))).toEqual([]);
+      const badgeHit = await action.evaluate((button) => {
+        const tag = button.querySelector('.player-summary__bonus')!;
+        const surface = tag.getBoundingClientRect();
+        const hit = button.getBoundingClientRect();
+        const frame = button.closest('[data-game-logical-canvas]')!.getBoundingClientRect();
+        const scale = frame.width / 360;
+        const center = document.elementFromPoint(hit.x + hit.width / 2, hit.y + hit.height / 2);
+        return {
+          fits:
+            surface.x >= hit.x &&
+            surface.right <= hit.right &&
+            surface.y >= hit.y &&
+            surface.bottom <= hit.bottom &&
+            tag.scrollWidth <= tag.clientWidth,
+          largeEnough: hit.width / scale >= 43.9 && hit.height / scale >= 43.9,
+          reachable: center === button || (center !== null && button.contains(center)),
+        };
+      });
+      expect(badgeHit).toEqual({ fits: true, largeEnough: true, reachable: true });
       await action.click();
+      await expect(page.getByRole('dialog')).toBeVisible();
       for (const viewport of boundaryViewports) {
         await page.setViewportSize(viewport);
         await expect
@@ -194,38 +228,28 @@ test('bonus popover stays anchored through resize, locale changes and reopening'
   }
 });
 
-test('settings, profile and admission share the same panel and header treatment', async ({
-  page,
-}) => {
+test('settings, profile and admission share the same close alignment', async ({ page }) => {
   await page.goto(PRODUCT_GAME_ORIGIN);
   await page.getByRole('button', { name: '게임 시작', exact: true }).click();
-  const surfaces = [];
+  const closeInsets = [];
   for (const action of ['설정', '프로필 설정', '게임 참가']) {
     await page.getByRole('button', { name: action, exact: true }).click();
     const panel = page.locator('.scrollable-panel');
     await expect(panel).toBeVisible();
-    surfaces.push(
+    closeInsets.push(
       await panel.evaluate((surface) => {
-        const style = getComputedStyle(surface);
         const header = surface.querySelector('.scrollable-panel__header')!;
-        const title = header.querySelector('h1')!;
         const icon = header.querySelector('.ui-icon-button__surface')!;
         const scale = surface.getBoundingClientRect().width / (surface as HTMLElement).offsetWidth;
-        return {
-          background: style.backgroundColor,
-          border: style.borderTopColor,
-          radius: style.borderTopLeftRadius,
-          titleSize: getComputedStyle(title).fontSize,
-          closeInset: Math.round(
-            (icon.getBoundingClientRect().left - surface.getBoundingClientRect().left) / scale,
-          ),
-        };
+        return Math.round(
+          (icon.getBoundingClientRect().left - surface.getBoundingClientRect().left) / scale,
+        );
       }),
     );
     await page.getByRole('button', { name: '닫기', exact: true }).click();
   }
-  expect(surfaces[1]).toEqual(surfaces[0]);
-  expect(surfaces[2]).toEqual(surfaces[0]);
+  expect(closeInsets[1]).toEqual(closeInsets[0]);
+  expect(closeInsets[2]).toEqual(closeInsets[0]);
 });
 
 async function captureLargerViewports(page: Page, name: string): Promise<void> {
@@ -347,6 +371,15 @@ test('opaque scoreboard covers the persistent dice Canvas without remounting it'
     await page.getByRole('button', { name: '점수판', exact: true }).click();
     const scoreboard = page.locator('[data-game-layer="scoreboard"]');
     await expect(scoreboard).toBeVisible();
+    const colors = await page.locator('[data-game-logical-canvas]').evaluate((canvas) => {
+      const probe = document.createElement('span');
+      probe.style.backgroundColor = 'var(--product-base-deep)';
+      canvas.append(probe);
+      const productBase = getComputedStyle(probe).backgroundColor;
+      probe.remove();
+      return { canvas: getComputedStyle(canvas).backgroundColor, productBase };
+    });
+    expect(colors.canvas).toBe(colors.productBase);
     await page.evaluate(() => document.fonts.ready);
     await expect(scoreboard.locator('.player-avatar img')).toHaveCount(2);
     await scoreboard.locator('img').evaluateAll((images) =>
@@ -389,6 +422,20 @@ test('opaque scoreboard covers the persistent dice Canvas without remounting it'
       path: `/tmp/hanpan-fidelity-scoreboard-${test.info().project.name}.png`,
     });
     await captureLargerViewports(page, 'scoreboard');
+    const last = scoreboard.locator('tbody tr').last();
+    await last.scrollIntoViewIfNeeded();
+    const footerClose = scoreboard
+      .locator('[data-layer-footer]')
+      .getByRole('button', { name: '닫기', exact: true });
+    const [lastBox, footerBox] = await Promise.all([last.boundingBox(), footerClose.boundingBox()]);
+    expect(lastBox).not.toBeNull();
+    expect(footerBox).not.toBeNull();
+    expect(lastBox!.y + lastBox!.height).toBeLessThanOrEqual(footerBox!.y + 0.5);
+    expect(await frameFit(page, footerClose)).toMatchObject({ inside: true });
+    await page.screenshot({ path: test.info().outputPath('scoreboard-last-row-desktop.png') });
+    await footerClose.click();
+    await expect(scoreboard).toHaveCount(0);
+    expect(await canvas!.evaluate((element) => element.isConnected)).toBe(true);
   } finally {
     await guest.close();
   }

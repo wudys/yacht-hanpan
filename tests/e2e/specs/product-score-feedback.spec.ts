@@ -6,10 +6,12 @@ import {
   holdScorePublication,
   observeScoreFeedback,
   readScoreFeedback,
+  readScoreFeedbackEffects,
   scoreFeedbackNodesRetained,
 } from '../helpers/score-feedback';
 import { createSocketPacketObserver } from '../helpers/socket-packets';
 import { test } from '../helpers/test';
+import { visibleTextIssues } from '../helpers/visual-geometry';
 
 async function rollAndSettle(page: Page, english: boolean = false) {
   await page.getByRole('button', { name: english ? 'Roll' : '굴리기', exact: true }).click();
@@ -35,6 +37,60 @@ async function readScoreOptions(page: Page) {
       value: tab.querySelector('span')?.textContent?.match(/\d+/u)?.[0] ?? null,
     })),
   }));
+}
+
+async function assertSummaryAndScoreboardHit(client: Page, viewerTurn: boolean, english: boolean) {
+  await client.setViewportSize({ width: 320, height: 568 });
+  await client.evaluate(() => document.fonts.ready);
+  const summary = client.locator('[data-player-summary]');
+  const identity = summary.locator('.player-summary__identity-label');
+  await expect(summary).toHaveAttribute('data-player-summary', viewerTurn ? 'viewer' : 'opponent');
+  await expect(identity).toHaveText(
+    english ? (viewerTurn ? 'You' : 'Opponent') : viewerTurn ? '나' : '상대',
+  );
+  await expect(summary.locator('.player-avatar img')).toHaveAttribute(
+    'alt',
+    english ? (viewerTurn ? 'You' : 'Opponent') : viewerTurn ? '나' : '상대',
+  );
+  await expect(summary.locator('.player-summary__score')).toHaveText(
+    english ? /^Total \d+$/u : /^총점 \d+$/u,
+  );
+  const neighbors =
+    '.player-summary__identity, .player-summary__score, .player-summary__bonus-anchor, .player-summary > button';
+  expect(await visibleTextIssues(identity, neighbors)).toEqual([]);
+  expect(await visibleTextIssues(summary.locator('.player-summary__score'), neighbors)).toEqual([]);
+  const layout = await summary.evaluate((node) => {
+    const identity = node.querySelector('.player-summary__identity')!.getBoundingClientRect();
+    const score = node.querySelector('.player-summary__score')!.getBoundingClientRect();
+    const bonus = node.querySelector('.player-summary__bonus-anchor')!.getBoundingClientRect();
+    const action = node.querySelector('button.ui-icon-button')!.getBoundingClientRect();
+    const face = node.querySelector('.ui-icon-button__surface')!.getBoundingClientRect();
+    const row = node.getBoundingClientRect();
+    return {
+      ordered:
+        identity.right <= score.left && score.right <= bonus.left && bonus.right <= action.left,
+      faceAtEnd: Math.abs(face.right - row.right) < 0.5,
+      entireRowHit:
+        Math.abs(action.top - row.top) < 0.5 && Math.abs(action.height - row.height) < 0.5,
+      coversFace: action.width >= face.width,
+    };
+  });
+  expect(layout).toEqual({ ordered: true, faceAtEnd: true, entireRowHit: true, coversFace: true });
+  const action = summary.locator('button.ui-icon-button');
+  for (const edge of ['top', 'bottom'] as const) {
+    const hit = await action.boundingBox();
+    expect(hit).not.toBeNull();
+    await action.click({
+      position: { x: hit!.width / 2, y: edge === 'top' ? 1 : hit!.height - 1 },
+    });
+    const scoreboard = client.locator('[data-game-layer="scoreboard"]');
+    await expect(scoreboard).toBeVisible();
+    await scoreboard
+      .locator('[data-layer-footer]')
+      .getByRole('button', { name: english ? 'Close' : '닫기', exact: true })
+      .click();
+    await expect(scoreboard).toHaveCount(0);
+  }
 }
 
 test('both clients confirm zero and normal records with the source owner, then YOUR TURN permits an immediate roll', async ({
@@ -87,6 +143,9 @@ test('both clients confirm zero and normal records with the source owner, then Y
         'data-dice-presentation-phase',
         'settled',
       );
+      for (const [viewer, client] of players.entries()) {
+        await assertSummaryAndScoreboardHit(client, viewer === seat, viewer === 1);
+      }
       for (const group of ['upper', 'lower']) {
         await recorder.locator(`[data-score-tab="${group}"]`).click();
         await next.locator(`[data-score-tab="${group}"]`).click();
@@ -94,6 +153,14 @@ test('both clients confirm zero and normal records with the source owner, then Y
         expect(options.cells.some((cell) => cell.state === 'preview')).toBe(true);
         expect(options.maxima.every((maximum) => maximum.value !== null)).toBe(true);
         expect(await readScoreOptions(next)).toEqual(options);
+        for (const [viewer, client] of players.entries()) {
+          const maxima = client.locator('.score-group-tab span');
+          await expect(maxima).toHaveCount(2);
+          for (const maximum of await maxima.all()) {
+            await expect(maximum).toHaveText(viewer === 1 ? /^Max \d+$/u : /^최대 \d+$/u);
+            expect(await visibleTextIssues(maximum, '.score-group-tab strong')).toEqual([]);
+          }
+        }
       }
       const readonlyCell = next.locator('[data-score-cell][data-value-state="preview"]').first();
       await expect(readonlyCell).toBeDisabled();
@@ -182,6 +249,17 @@ test('both clients confirm zero and normal records with the source owner, then Y
           playState: 'running',
           advanced: true,
         });
+        const effects = await readScoreFeedbackEffects(audits[viewer]!);
+        expect(effects.map((effect) => effect.kind)).toEqual(
+          expect.arrayContaining(['sweep', 'particle']),
+        );
+        for (const effect of effects) {
+          expect(effect).toMatchObject({
+            status: 'finished',
+            confirmationConnected: true,
+            opacity: '0',
+          });
+        }
         expect(
           observations
             .filter((event) => event.phase !== null)

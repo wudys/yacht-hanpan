@@ -7,7 +7,6 @@
     "assets:sync": "bun ../../packages/game-assets/scripts/sync-public.mjs --target ../../packages/game-assets/public && bun ../../packages/dice-simulation/scripts/sync-browser-rapier.mjs --target ../../packages/game-assets/public/runtime",
     "build": "bun run assets:sync && vite build && bun scripts/check-public-build.mjs",
     "dev": "bun run assets:sync && vite --port 3001 --strictPort",
-    "dev:anchors": "bun run assets:sync && vite --host 127.0.0.1 --port 49330 --strictPort",
     "preview": "vite preview --port 4173 --strictPort",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "typecheck": "tsc --noEmit",

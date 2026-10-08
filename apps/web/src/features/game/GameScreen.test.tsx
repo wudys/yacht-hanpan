@@ -77,6 +77,14 @@ const resultCases = [
     winnerSeatIndex: 0,
   },
   {
+    label: 'normal opponent win',
+    outcome: 'opponent-win',
+    reason: 'scoresCompleted',
+    reasonKind: null,
+    reasonMessageKey: null,
+    winnerSeatIndex: 1,
+  },
+  {
     label: 'normal draw',
     outcome: 'draw',
     reason: 'scoresCompleted',
@@ -1403,27 +1411,54 @@ test('detaches the authoritative Result from transport before returning to the l
   });
 });
 
-test.each(resultCases)(
-  'projects the authoritative $label Result semantics',
-  ({ outcome, reason, reasonKind, reasonMessageKey, winnerSeatIndex }) => {
+test.each(
+  resultCases.flatMap((result) => [LOCALE.KO, LOCALE.EN].map((locale) => ({ ...result, locale }))),
+)(
+  'projects the authoritative $label Result semantics in $locale',
+  ({ outcome, reason, reasonKind, reasonMessageKey, winnerSeatIndex, locale }) => {
     const harness = createHarness(finishedGame(reason, winnerSeatIndex));
 
-    render(<GameScreen {...harness} locale={LOCALE.EN} />);
+    render(<GameScreen {...harness} locale={locale} />);
 
     const result = screen.getByRole('main');
+    expect(
+      screen.getByRole('heading', { name: translate(locale, 'game.view.result') }),
+    ).not.toBeNull();
+    expect(
+      screen.getByRole('button', { name: translate(locale, 'game.backToLobby') }),
+    ).not.toBeNull();
     expect(result.getAttribute('data-result-outcome')).toBe(outcome);
     expect(result.getAttribute('data-winner')).toBe(
       winnerSeatIndex === null ? 'none' : winnerSeatIndex === 0 ? 'viewer' : 'opponent',
     );
-    expect(
-      screen.queryAllByText(translate(LOCALE.EN, 'game.win'), {
-        selector: '.score-table-player__heading strong',
-      }),
-    ).toHaveLength(winnerSeatIndex === null ? 0 : 1);
+    for (const [player, seatIndex] of [
+      ['viewer', 0],
+      ['opponent', 1],
+    ] as const) {
+      const labelKey = player === 'viewer' ? 'game.you' : 'game.opponent';
+      const outcomeKey =
+        winnerSeatIndex === null
+          ? 'game.draw'
+          : winnerSeatIndex === seatIndex
+            ? 'game.win'
+            : 'game.loss';
+      expect(
+        screen.getByText(translate(locale, labelKey), {
+          selector: `[data-score-player="${player}"] .score-table-player__label`,
+        }),
+      ).not.toBeNull();
+      expect(
+        screen.getByText(translate(locale, outcomeKey), {
+          selector: `[data-score-player="${player}"] .score-table-player__heading strong`,
+        }),
+      ).not.toBeNull();
+    }
     if (reasonMessageKey !== null) {
       expect(
-        screen.getByText(translate(LOCALE.EN, reasonMessageKey)).getAttribute('data-result-reason'),
+        screen.getByText(translate(locale, reasonMessageKey)).getAttribute('data-result-reason'),
       ).toBe(reasonKind);
+    } else {
+      expect(screen.queryAllByText(/./u, { selector: '[data-result-reason]' })).toHaveLength(0);
     }
   },
 );

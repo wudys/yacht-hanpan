@@ -42,7 +42,7 @@ test('preserves open bonus content and action identity while summary values hand
     identity: 'record-1',
     categoryId: 'sixes' as const,
     score: 18,
-    timing: { mode: 'running' as const, startedAt: 0 },
+    timing: { startedAt: 0 },
     bonusEarned: true,
   };
   const { rerender } = render(
@@ -73,6 +73,7 @@ test('preserves open bonus content and action identity while summary values hand
 
 /* eslint-disable testing-library/no-node-access -- Popover geometry and label replacement are local DOM contracts. */
 test('keeps the open bonus popover anchored to the replacement label when only record identity changes', () => {
+  vi.spyOn(performance, 'now').mockReturnValue(850);
   const observers: { notify: () => void; disconnect: ReturnType<typeof vi.fn> }[] = [];
   vi.stubGlobal(
     'ResizeObserver',
@@ -123,7 +124,7 @@ test('keeps the open bonus popover anchored to the replacement label when only r
     identity: 'record-1',
     categoryId: 'sixes' as const,
     score: 18,
-    timing: { mode: 'paused' as const, elapsedMs: 850 },
+    timing: { startedAt: 0 },
     phase: 'outgoing' as const,
     bonusEarned: true,
   };
@@ -178,7 +179,7 @@ test('shows the first-bonus gain only for the admitted record confirmation', () 
     identity: 'record-1',
     categoryId: 'sixes' as const,
     score: 18,
-    timing: { mode: 'running' as const, startedAt: 0 },
+    timing: { startedAt: 0 },
     phase: 'confirming' as const,
   };
   const { rerender } = render(

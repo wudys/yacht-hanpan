@@ -276,7 +276,7 @@ test('keeps the score cell, icon and label stable through the record handoff', (
     identity: 'record-1',
     categoryId: 'ones' as const,
     score: 0,
-    timing: { mode: 'running' as const, startedAt: 0 },
+    timing: { startedAt: 0 },
     bonusEarned: false,
   };
   const { rerender } = render(
@@ -320,7 +320,7 @@ test('does not restart expired record effects after a manual tab round trip', ()
       categoryId: 'choice' as const,
       score: 20,
       phase: 'confirming' as const,
-      timing: { mode: 'running' as const, startedAt: 0 },
+      timing: { startedAt: 0 },
       bonusEarned: false,
     },
   };
@@ -355,7 +355,7 @@ test('Yacht availability and record feedback do not grant scoring input', () => 
         categoryId: 'yacht',
         score: 50,
         phase: 'confirming',
-        timing: { mode: 'running' as const, startedAt: 0 },
+        timing: { startedAt: 0 },
         bonusEarned: false,
       }}
     />,

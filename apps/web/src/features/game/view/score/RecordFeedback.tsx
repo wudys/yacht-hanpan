@@ -28,7 +28,7 @@ export function RecordTransition({
   style,
   ...props
 }: ComponentProps<'span'> & Readonly<{ feedback?: ScoreRecordFeedback | null }>) {
-  const { elapsedMs: elapsed, playState } = useFeedbackTiming(feedback?.timing);
+  const { elapsedMs: elapsed } = useFeedbackTiming(feedback?.timing);
   const outgoing = feedback?.phase === 'outgoing';
   const phaseStart = outgoing ? RECORD_FADE_OUT_MS : RECORD_SWAP_MS;
   const phaseDuration = outgoing
@@ -41,7 +41,6 @@ export function RecordTransition({
       style={
         {
           ...style,
-          '--feedback-play-state': playState,
           '--record-transition-duration': `${phaseDuration}ms`,
           animationDelay: feedback ? `${phaseStart - elapsed}ms` : undefined,
         } as CSSProperties
@@ -52,7 +51,7 @@ export function RecordTransition({
 
 export function YachtRing({ timing }: Readonly<{ timing?: FeedbackTiming }>) {
   const gradientId = useId();
-  const { elapsedMs: elapsed, playState } = useFeedbackTiming(timing);
+  const { elapsedMs: elapsed } = useFeedbackTiming(timing);
   const looping = timing === undefined;
   if (!looping && elapsed >= RECORD_YACHT_RING_DURATION_MS) return null;
   return (
@@ -64,7 +63,6 @@ export function YachtRing({ timing }: Readonly<{ timing?: FeedbackTiming }>) {
       data-yacht-ring={looping ? 'available' : 'recorded'}
       style={
         {
-          '--feedback-play-state': playState,
           '--record-ring-duration': `${RECORD_YACHT_RING_DURATION_MS}ms`,
           animationDelay: `${-elapsed}ms`,
         } as CSSProperties
@@ -97,10 +95,9 @@ export function YachtRing({ timing }: Readonly<{ timing?: FeedbackTiming }>) {
 }
 
 export function ScoreRecordEffect({ feedback }: Readonly<{ feedback: ScoreRecordFeedback }>) {
-  const { elapsedMs: elapsed, playState } = useFeedbackTiming(feedback.timing);
+  const { elapsedMs: elapsed } = useFeedbackTiming(feedback.timing);
   if (elapsed >= RECORD_SCORE_EFFECT_END_MS) return null;
   const style = {
-    '--feedback-play-state': playState,
     '--record-delay': `${-elapsed}ms`,
     '--record-sweep-duration': `${RECORD_SWEEP_DURATION_MS}ms`,
     '--record-particle-duration': `${RECORD_PARTICLE_DURATION_MS}ms`,
@@ -122,7 +119,7 @@ export function ScoreRecordEffect({ feedback }: Readonly<{ feedback: ScoreRecord
 }
 
 export function BonusRecordEffect({ feedback }: Readonly<{ feedback: ScoreRecordFeedback }>) {
-  const { elapsedMs: elapsed, playState } = useFeedbackTiming(feedback.timing);
+  const { elapsedMs: elapsed } = useFeedbackTiming(feedback.timing);
   if (elapsed >= RECORD_BONUS_EFFECT_END_MS) return null;
   return (
     <span
@@ -130,7 +127,6 @@ export function BonusRecordEffect({ feedback }: Readonly<{ feedback: ScoreRecord
       aria-hidden='true'
       style={
         {
-          '--feedback-play-state': playState,
           '--record-delay': `${-elapsed}ms`,
           '--record-bonus-glow-duration': `${RECORD_BONUS_GLOW_DURATION_MS}ms`,
           '--record-bonus-star-duration': `${RECORD_BONUS_STAR_DURATION_MS}ms`,

@@ -514,7 +514,7 @@ export default function GameScreen({
               ? null
               : {
                   identity: turnFeedback.turnCue.turnId,
-                  timing: { mode: 'running', startedAt: turnFeedback.turnCue.startedAt },
+                  timing: { startedAt: turnFeedback.turnCue.startedAt },
                 }
           }
           turnCueLabel={translate(locale, 'game.turnStartCue')}

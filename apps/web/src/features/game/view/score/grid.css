@@ -167,12 +167,10 @@
 
 [data-score-transition='outgoing'] {
   animation: score-value-out var(--record-transition-duration) linear both;
-  animation-play-state: var(--feedback-play-state, running);
 }
 
 [data-score-transition='incoming'] {
   animation: score-value-in var(--record-transition-duration) linear both;
-  animation-play-state: var(--feedback-play-state, running);
 }
 
 @keyframes score-value-out {
@@ -227,7 +225,6 @@
   background: linear-gradient(100deg, transparent, #cce7dd77, transparent);
   transform: skew(-15deg);
   animation: score-record-sweep var(--record-sweep-duration) linear both;
-  animation-play-state: var(--feedback-play-state, running);
   animation-delay: var(--record-delay);
 }
 
@@ -256,7 +253,6 @@
   background: #ffe0a0;
   box-shadow: 0 0 5px #eec76077;
   animation: score-value-particle var(--record-particle-duration) linear both;
-  animation-play-state: var(--feedback-play-state, running);
   animation-delay: calc(var(--record-particle-delay) + var(--record-delay));
 }
 
@@ -300,14 +296,12 @@
 
 .score-feedback__ring rect {
   animation: yacht-ring-tail var(--record-ring-duration) linear both;
-  animation-play-state: var(--feedback-play-state, running);
   animation-delay: inherit;
 }
 
 .score-feedback__ring[data-yacht-ring='available'] rect {
   opacity: 0.9;
   animation: yacht-ring-loop 1800ms linear infinite;
-  animation-play-state: var(--feedback-play-state, running);
 }
 
 @keyframes yacht-ring-tail {

@@ -26,10 +26,4 @@ export const RECORD_BONUS_EFFECT_END_MS = Math.max(
   RECORD_BONUS_GAIN_DELAY_MS + RECORD_BONUS_GAIN_DURATION_MS,
 );
 
-export type FeedbackTiming =
-  | Readonly<{ mode: 'running'; startedAt: number }>
-  | Readonly<{ mode: 'paused'; elapsedMs: number }>;
-
-export function feedbackElapsed(timing: FeedbackTiming, now: number): number {
-  return timing.mode === 'paused' ? timing.elapsedMs : Math.max(0, now - timing.startedAt);
-}
+export type FeedbackTiming = Readonly<{ startedAt: number }>;

@@ -36,7 +36,7 @@ export function createGameFeedbackPresentation({
           categoryId: record.record.categoryId,
           score: record.record.score,
           phase: record.phase,
-          timing: { mode: 'running', startedAt: record.startedAt },
+          timing: { startedAt: record.startedAt },
           bonusEarned: record.bonusEarned,
         }
       : null,

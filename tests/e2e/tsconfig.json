@@ -8,5 +8,5 @@
     "rootDir": ".",
     "types": ["bun"]
   },
-  "include": ["*.ts", "scripts", "specs"]
+  "include": ["*.ts", "helpers", "scripts", "specs"]
 }

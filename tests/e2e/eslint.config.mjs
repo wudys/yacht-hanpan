@@ -5,7 +5,7 @@ export default [
   ...baseConfig,
   {
     settings: {
-      'import-x/core-modules': ['@playwright/test'],
+      'import-x/core-modules': ['@playwright/test', 'bun:test'],
     },
   },
 ];

@@ -9,8 +9,9 @@
   ],
   "scripts": {
     "build": "turbo run build",
-    "check": "bun run check:scripts && turbo run lint typecheck test build",
-    "check:core": "bun run check:scripts && turbo run lint typecheck test build --filter=!@repo/web",
+    "check": "bun run check:scripts && bun run check:e2e-helpers && turbo run lint typecheck test build",
+    "check:core": "bun run check:scripts && bun run check:e2e-helpers && turbo run lint typecheck test build --filter=!@repo/web",
+    "check:e2e-helpers": "bun run --cwd tests/e2e test:unit",
     "check:product": "bun run check --filter='!@repo/e2e'",
     "check:product:core": "bun run check:core --filter='!@repo/e2e'",
     "check:scripts": "eslint scripts --ext mjs --max-warnings 0 && bun test ./scripts",

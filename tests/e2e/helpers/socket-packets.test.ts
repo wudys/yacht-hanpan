@@ -1,12 +1,12 @@
-import { expect, test } from '@playwright/test';
 import { SOCKET_EVENT } from '@repo/game-protocol/socket';
 import { GAME_PROTOCOL_VERSION } from '@repo/game-protocol/version';
+import { expect, test } from 'bun:test';
 
 import {
   createSocketPacketObserver,
   decodeSocketPacket,
   readRoomStatePacket,
-} from '../helpers/socket-packets';
+} from './socket-packets';
 
 const roomId = '01890f47-e89b-7cc3-98c5-4c5da03f78ab';
 const actionId = '550e8400-e29b-41d4-a716-446655440000';
@@ -130,9 +130,9 @@ test('a successful command ACK keeps its receipt and current view distinct from 
 
 test('idless room updates are validated without treating other event payloads as authority', () => {
   const update = { type: 'state:committed', view };
-  expect(readRoomStatePacket(`42${JSON.stringify([SOCKET_EVENT.ROOM_STATE, update])}`)).toEqual(
-    update,
-  );
+  expect<unknown>(
+    readRoomStatePacket(`42${JSON.stringify([SOCKET_EVENT.ROOM_STATE, update])}`),
+  ).toEqual(update);
   expect(decodeSocketPacket('42["session:replaced"]')).toEqual({
     kind: 'event',
     ackId: null,

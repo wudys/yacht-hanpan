@@ -19,6 +19,8 @@ export interface PhysicsCup {
 
 // The invisible mouth constraint is independent of the cup's reinforced base.
 const SHAKE_LID_THICKNESS = 0.08;
+const SMALL_ROLL_POUR_ASSIST_MULTIPLIER = 1.5;
+const SMALL_ROLL_EXIT_SPEED_DELTA = 1;
 let defaultCupWallVertices: Float32Array[] | undefined;
 
 export function createPhysicsCup(
@@ -139,15 +141,17 @@ export function applyCupPourAssist(
   dice: readonly PhysicsDie[],
   motion: CupMotionState,
   timeMs: number,
-  exitedDice: ReadonlySet<string>,
+  clearedDieIds: ReadonlySet<string>,
 ): void {
   const start = motion.pourAtMs + motion.pourAssistDelayMs;
   if (timeMs < start || timeMs >= start + 450) return;
   const center = cup.body.translation();
   const axis = rotateVectorByQuat([0, 1, 0], cup.body.rotation());
   if (axis[1] >= 0) return;
+  // The original roll count stays fixed as individual dice clear the mouth.
+  const multiplier = dice.length < 5 ? SMALL_ROLL_POUR_ASSIST_MULTIPLIER : 1;
   for (const die of dice) {
-    if (exitedDice.has(die.id)) continue;
+    if (clearedDieIds.has(die.id)) continue;
     const p = die.body.translation();
     const dx = p.x - center.x;
     const dy = p.y - center.y;
@@ -158,9 +162,9 @@ export function applyCupPourAssist(
       dx * dx + dy * dy + dz * dz - along * along >= cup.geometry.innerRadius ** 2
     )
       continue;
-    // Equal acceleration regardless of count, mass, orientation or face value.
-    // Stop at the mouth centre plane; the remaining exit and flight stay unassisted.
-    const impulse = die.body.mass() * 20 * FIXED_STEP_SECONDS;
+    // Mass-scaled assistance stops at the mouth centre plane. The separate exit
+    // impulse waits until the complete shape clears the mouth.
+    const impulse = die.body.mass() * 20 * multiplier * FIXED_STEP_SECONDS;
     die.body.applyImpulse(
       { x: axis[0] * impulse, y: axis[1] * impulse, z: axis[2] * impulse },
       true,
@@ -168,8 +172,19 @@ export function applyCupPourAssist(
   }
 }
 
+/** One inward velocity increment in world units/s; the caller owns mouth clearance and once-only use. */
+export function applyDieExitImpulse(
+  die: PhysicsDie,
+  motion: CupMotionState,
+  diceCount: number,
+): void {
+  if (diceCount >= 5) return;
+  const impulse = die.body.mass() * SMALL_ROLL_EXIT_SPEED_DELTA;
+  die.body.applyImpulse({ x: -Math.sign(motion.tilt) * impulse, y: 0, z: 0 }, true);
+}
+
 /** Full rounded shape outside the mouth, with no remaining cup contact. */
-export function haveDiceClearedCup(cup: PhysicsCup, dice: PhysicsDie[]): boolean {
+export function haveDiceClearedCupMouth(cup: PhysicsCup, dice: PhysicsDie[]): boolean {
   return dice.every(
     (die) =>
       dieBoundsAlongCupAxis(cup, die, [0, 1, 0]).min > cup.geometry.innerHeight / 2 + 0.005 &&

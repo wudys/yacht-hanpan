@@ -7,7 +7,7 @@ import { DIE_GEOMETRY } from '../contract/roll-geometry';
 import { measureCupBottomBoundary } from '../quality/cup-boundary-audit';
 import { initializeDeterministicRapierForBun } from '../rapier/bun';
 import { createCupMotion } from './internal/cup/cup-motion';
-import { createPhysicsCup, haveDiceClearedCup } from './internal/cup/physics-cup';
+import { createPhysicsCup, haveDiceClearedCupMouth } from './internal/cup/physics-cup';
 import { createRollPhysicsConfig } from './internal/physics-config';
 import { createDiceInCup } from './internal/physics-environment';
 import { FLOOR_Y } from './internal/roll-simulation-constants';
@@ -212,7 +212,7 @@ test.each(cases)(
       };
       for (const body of bodies.filter((body) => body.isDynamic())) {
         const die = { body, collider: body.collider(0), id: String(body.handle) };
-        if (haveDiceClearedCup(cup, [die])) exited.add(body.handle);
+        if (haveDiceClearedCupMouth(cup, [die])) exited.add(body.handle);
         // Observe floor pinch even after mouth exit, while the remaining dice leave.
         if (
           hasActualSolverContact(this, die.collider, floor) &&

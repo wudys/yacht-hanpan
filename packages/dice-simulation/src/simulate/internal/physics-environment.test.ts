@@ -10,7 +10,7 @@ import {
   areDiceOutsideCup,
   createCupShakeLid,
   createPhysicsCup,
-  haveDiceClearedCup,
+  haveDiceClearedCupMouth,
   updatePhysicsCup,
 } from './cup/physics-cup';
 import { createRollPhysicsConfig } from './physics-config';
@@ -124,7 +124,7 @@ test('distinguishes finite cup clearance from crossing the mouth or only its cen
     const check = (x: number, y: number) => {
       die.body.setTranslation({ x: pose.x + x, y: pose.y + y, z: pose.z }, true);
       world.propagateModifiedBodyPositionsToColliders();
-      return [haveDiceClearedCup(cup, [die]), areDiceOutsideCup(cup, [die])];
+      return [haveDiceClearedCupMouth(cup, [die]), areDiceOutsideCup(cup, [die])];
     };
     expect(check(0, 0)).toEqual([false, false]);
     expect(check(0, 1.1)).toEqual([false, false]); // Centre past the rim, body still inside.
@@ -172,7 +172,7 @@ test.each([0.003, 0.012])(
       }
       expect(distances.length).toBeGreaterThan(0);
       expect(Math.min(...distances)).toBeGreaterThan(0);
-      expect(haveDiceClearedCup(cup, [die])).toBe(gap > 0.005);
+      expect(haveDiceClearedCupMouth(cup, [die])).toBe(gap > 0.005);
       expect(areDiceOutsideCup(cup, [die])).toBe(gap > 0.005);
     } finally {
       world.free();

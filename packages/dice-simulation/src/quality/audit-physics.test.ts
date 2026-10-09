@@ -14,11 +14,11 @@ test.each([
     simulationMs: 2717,
   },
   {
-    seed: 'rejection-regression-v37-burst-4-281',
+    seed: 'small-roll-assist-b-burst-4-199',
     pourStyle: 'burst',
     rolledSlots: [0, 1, 2, 3],
     reason: 'repeated-assist',
-    simulationMs: 3350,
+    simulationMs: 3233,
   },
 ] as const)('audit classifies $reason with its raw stopping pose and time', (fixture) => {
   const report = auditPhysics({

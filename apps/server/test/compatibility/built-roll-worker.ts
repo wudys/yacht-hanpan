@@ -123,7 +123,7 @@ async function verifyBuiltAuthorityReseeding(): Promise<void> {
     workerUrl: builtWorkerUrl,
     reportUnexpected: (error) => reports.push(error),
   });
-  const seeds = ['rejection-regression-v37-burst-4-281', 'ad8a8e1d054b30cb5f30ec3ca4ed8754'];
+  const seeds = ['small-roll-assist-b-burst-4-199', 'ad8a8e1d054b30cb5f30ec3ca4ed8754'];
   let createdSeeds = 0;
   let createdIds = 0;
   let createdStyles = 0;
@@ -175,10 +175,10 @@ async function verifyBuiltAuthorityReseeding(): Promise<void> {
     assert.equal(result.artifact.replay.pourStyle, 'burst');
     assert.deepEqual(result.artifact.replay.rolledSlots, [0, 1, 2, 3]);
     assert.deepEqual(result.artifact.outcome.authoritativeValuesBySlot, [
-      { slot: 0, value: 2 },
+      { slot: 0, value: 3 },
       { slot: 1, value: 1 },
       { slot: 2, value: 5 },
-      { slot: 3, value: 2 },
+      { slot: 3, value: 3 },
     ]);
     assert.equal(JSON.stringify(result).includes(seeds[0]!), false);
     assert.deepEqual(reports, []);
@@ -200,7 +200,7 @@ async function verifyBuiltWorkerCandidateRejections(): Promise<void> {
   });
   try {
     await executor.start();
-    // Reviewed v37 regression inputs verify both real built/WASM rejection reasons.
+    // Reviewed regression inputs verify both real built/WASM rejection reasons.
     for (const fixture of [
       {
         seed: 'rejection-regression-v37-burst-5-3008',
@@ -210,11 +210,11 @@ async function verifyBuiltWorkerCandidateRejections(): Promise<void> {
         simulationMs: 2717,
       },
       {
-        seed: 'rejection-regression-v37-burst-4-281',
+        seed: 'small-roll-assist-b-burst-4-199',
         pourStyle: 'burst',
         rolledSlots: [0, 1, 2, 3],
         reason: 'repeated-assist',
-        simulationMs: 3350,
+        simulationMs: 3233,
       },
     ] as const) {
       const input = {

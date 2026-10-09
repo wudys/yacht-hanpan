@@ -9,10 +9,11 @@ import { FIXED_STEP_SECONDS } from '../roll-simulation-constants';
 import { createCupMotion } from './cup-motion';
 import {
   applyCupPourAssist,
+  applyDieExitImpulse,
   areDiceOutsideCup,
   createCupShakeLid,
   createPhysicsCup,
-  haveDiceClearedCup,
+  haveDiceClearedCupMouth,
   stepWorldWithCup,
   updatePhysicsCup,
 } from './physics-cup';
@@ -112,7 +113,7 @@ test.each([
       body,
     );
     const dice = [{ id: 'inside-custom', body, collider }];
-    expect(haveDiceClearedCup(cup, dice)).toBe(false);
+    expect(haveDiceClearedCupMouth(cup, dice)).toBe(false);
     expect(areDiceOutsideCup(cup, dice)).toBe(false);
   } finally {
     world.free();
@@ -139,7 +140,7 @@ test('retains its creation geometry for subsequent lid and clearance queries', (
       RAPIER.ColliderDesc.roundCuboid(0.235, 0.235, 0.235, 0.025),
       body,
     );
-    expect(haveDiceClearedCup(cup, [{ id: 'snapshot', body, collider }])).toBe(false);
+    expect(haveDiceClearedCupMouth(cup, [{ id: 'snapshot', body, collider }])).toBe(false);
     expect(areDiceOutsideCup(cup, [{ id: 'snapshot', body, collider }])).toBe(false);
   } finally {
     world.free();
@@ -167,8 +168,67 @@ test.each([
       motion.pourAtMs + motion.pourAssistDelayMs + 100,
       new Set(),
     );
-    expect(body.linvel().y).toBeCloseTo(-20 * FIXED_STEP_SECONDS, 6);
+    expect(body.linvel().y).toBeCloseTo(-30 * FIXED_STEP_SECONDS, 6);
     expect(body.angvel()).toEqual({ x: 0, y: 0, z: 0 });
+  } finally {
+    world.free();
+  }
+});
+
+test.each(
+  [1, 2, 3, 4].flatMap((count) =>
+    [0.5, 2].flatMap((mass) => [
+      { count, mass, tilt: (Math.PI * 145) / 180, deltaX: -1 },
+      { count, mass, tilt: (-Math.PI * 145) / 180, deltaX: 1 },
+    ]),
+  ),
+)(
+  'adds inward velocity for $count dice at mass $mass and tilt $tilt',
+  ({ count, mass, tilt, deltaX }) => {
+    const world = new RAPIER.World({ x: 0, y: 0, z: 0 });
+    try {
+      const body = world.createRigidBody(RAPIER.RigidBodyDesc.dynamic());
+      const collider = world.createCollider(
+        RAPIER.ColliderDesc.cuboid(0.26, 0.26, 0.26).setMass(mass),
+        body,
+      );
+      body.setLinvel({ x: 0.25, y: -0.5, z: 0.75 }, false);
+      body.setAngvel({ x: 0.2, y: 0.4, z: -0.6 }, false);
+      const before = body.linvel();
+      const angularBefore = body.angvel();
+      applyDieExitImpulse(
+        { id: 'exit', body, collider },
+        { ...createCupMotion('exit', 'oblique'), tilt },
+        count,
+      );
+      expect(body.mass()).toBeCloseTo(mass, 6);
+      expect(body.linvel().x - before.x).toBeCloseTo(deltaX, 6);
+      expect(body.linvel().y).toBe(before.y);
+      expect(body.linvel().z).toBe(before.z);
+      expect(body.angvel()).toEqual(angularBefore);
+    } finally {
+      world.free();
+    }
+  },
+);
+
+test.each([false, true])('leaves a five-die body untouched when sleeping is %s', (sleeping) => {
+  const world = new RAPIER.World({ x: 0, y: 0, z: 0 });
+  try {
+    const body = world.createRigidBody(RAPIER.RigidBodyDesc.dynamic());
+    const collider = world.createCollider(RAPIER.ColliderDesc.cuboid(0.26, 0.26, 0.26), body);
+    body.setLinvel({ x: 0.25, y: -0.5, z: 0.75 }, false);
+    body.setAngvel({ x: 0.2, y: 0.4, z: -0.6 }, false);
+    if (sleeping) body.sleep();
+    const before = { linear: body.linvel(), angular: body.angvel(), sleeping: body.isSleeping() };
+    applyDieExitImpulse(
+      { id: 'unchanged-five', body, collider },
+      createCupMotion('exit', 'burst'),
+      5,
+    );
+    expect({ linear: body.linvel(), angular: body.angvel(), sleeping: body.isSleeping() }).toEqual(
+      before,
+    );
   } finally {
     world.free();
   }

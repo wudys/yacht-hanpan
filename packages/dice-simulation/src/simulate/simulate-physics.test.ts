@@ -139,9 +139,9 @@ describe('deterministic physics roll', () => {
       seed: 'gesture-explore-20260921-1',
       pourStyle: 'oblique' as const,
       crossed: false,
-      values: [3, 6],
+      values: [4, 3],
     },
-    { seed: 'slot-crossing-1', pourStyle: 'oblique' as const, crossed: true, values: [2, 6] },
+    { seed: 'slot-crossing-1', pourStyle: 'oblique' as const, crossed: true, values: [6, 3] },
   ])(
     'keeps supplied slot identity instead of sorting by final x ($seed)',
     ({ seed, pourStyle, crossed, values }) => {

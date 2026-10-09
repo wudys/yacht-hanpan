@@ -6,7 +6,7 @@ test('raw sampling retains rejected attempts and reason/time without fabricating
   const report = await sampleRollInputs([
     {
       rollId: 'sample-rejected',
-      seed: 'rejection-regression-v37-burst-4-281',
+      seed: 'small-roll-assist-b-burst-4-199',
       pourStyle: 'burst',
       rolledSlots: [0, 1, 2, 3],
     },
@@ -21,7 +21,7 @@ test('raw sampling retains rejected attempts and reason/time without fabricating
   expect(report[0].attempted).toBe(2);
   expect(report[0].accepted).toBe(1);
   expect(report[0].rejected).toEqual([
-    { attemptSequence: 0, reason: 'repeated-assist', simulationMs: 3350 },
+    { attemptSequence: 0, reason: 'repeated-assist', simulationMs: 3233 },
   ]);
   expect(report[0].samples).toHaveLength(4);
   expect(report[0].samples.every(({ attemptSequence }) => attemptSequence === 1)).toBe(true);

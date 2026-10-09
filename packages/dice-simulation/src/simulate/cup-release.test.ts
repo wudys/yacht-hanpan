@@ -12,7 +12,8 @@ import { DEFAULT_CUP_GEOMETRY } from '../contract/cup-geometry';
 import { DIE_GEOMETRY } from '../contract/roll-geometry';
 import { initializeDeterministicRapierForBun } from '../rapier/bun';
 import { createCupMotion, cupTransformAt } from './internal/cup/cup-motion';
-import { haveDiceClearedCup } from './internal/cup/physics-cup';
+import * as cupPhysics from './internal/cup/physics-cup';
+import { haveDiceClearedCupMouth } from './internal/cup/physics-cup';
 import { recognizeTopFace } from './internal/result-recognition';
 import { FIXED_STEP_SECONDS } from './internal/roll-simulation-constants';
 import { rotateVectorByQuat } from './internal/simulation-math';
@@ -120,6 +121,58 @@ test.each(POUR_STYLES.flatMap((style) => [1, 2, 3, 4, 5].map((count) => [style, 
       expect(timeline.cup.releaseAtMs).toBeGreaterThan(motion.pourAtMs);
     } finally {
       observer.mockRestore();
+    }
+  },
+);
+
+test.each(POUR_STYLES.flatMap((style) => [1, 2, 3, 4, 5].map((count) => [style, count] as const)))(
+  'adds one inward impulse only after each %s %i-die roll clears the mouth',
+  (pourStyle, count) => {
+    const createCup = cupPhysics.createPhysicsCup;
+    const { applyImpulse } = RAPIER.RigidBody.prototype;
+    let cup: cupPhysics.PhysicsCup | undefined;
+    const applications = new Map<number, number>();
+    const createSpy = spyOn(cupPhysics, 'createPhysicsCup').mockImplementation((...args) => {
+      cup = createCup(...args);
+      return cup;
+    });
+    const impulseSpy = spyOn(RAPIER.RigidBody.prototype, 'applyImpulse').mockImplementation(
+      function (this: RAPIER.RigidBody, ...args: Parameters<typeof applyImpulse>) {
+        const [impulse] = args;
+        // Interior assistance has a vertical component; settling starts after removal.
+        const exitImpulse =
+          cup?.body.isValid() && impulse.x !== 0 && impulse.y === 0 && impulse.z === 0;
+        const before = this.linvel();
+        const angularBefore = this.angvel();
+        applyImpulse.apply(this, args);
+        if (!exitImpulse || !cup) return;
+        expect(
+          haveDiceClearedCupMouth(cup, [
+            { id: String(this.handle), body: this, collider: this.collider(0) },
+          ]),
+        ).toBe(true);
+        const after = this.linvel();
+        const inward = cup.body.translation().x > 0 ? -1 : 1;
+        expect(after.x - before.x).toBeCloseTo(inward, 5);
+        expect(after.y).toBe(before.y);
+        expect(after.z).toBe(before.z);
+        expect(this.angvel()).toEqual(angularBefore);
+        applications.set(this.handle, (applications.get(this.handle) ?? 0) + 1);
+      },
+    );
+    try {
+      const timeline = simulateRollTimeline({
+        rollId: 'cup-exit-impulse',
+        seed: 'cup-exit-impulse',
+        pourStyle,
+        rolledSlots: [0, 1, 2, 3, 4].slice(0, count) as DieSlot[],
+      });
+      expect(timeline.dice).toHaveLength(count);
+      expect(applications.size).toBe(count === 5 ? 0 : count);
+      expect([...applications.values()]).toEqual(count === 5 ? [] : Array(count).fill(1));
+    } finally {
+      impulseSpy.mockRestore();
+      createSpy.mockRestore();
     }
   },
 );
@@ -262,7 +315,8 @@ test.each(['oblique', 'burst'] as const)(
         };
         for (const body of bodies.filter((body) => body.isDynamic())) {
           const die = { id: String(body.handle), body, collider: body.collider(0) };
-          if (!exits.has(body.handle) && haveDiceClearedCup(cup, [die])) exits.set(body.handle, t);
+          if (!exits.has(body.handle) && haveDiceClearedCupMouth(cup, [die]))
+            exits.set(body.handle, t);
         }
       });
       try {

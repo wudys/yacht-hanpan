@@ -23,6 +23,7 @@ export function IconButton({
       aria-disabled={disabled || interactionLocked}
       disabled={disabled}
       data-interaction-locked={!disabled && interactionLocked ? 'true' : 'false'}
+      onDragStart={(event) => event.preventDefault()}
       onClick={() => {
         if (!disabled && !interactionLocked) onClick?.();
       }}

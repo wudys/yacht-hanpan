@@ -9,17 +9,6 @@ import { EntryView } from '@/features/entry/ui/EntryView';
 
 afterEach(cleanup);
 
-test('renders the product brand, a screen-reader title, and one start action', () => {
-  const view = renderToStaticMarkup(
-    <EntryView title='Start Hanpan' startLabel='Start game' pending={false} onStart={() => {}} />,
-  );
-
-  expect(view).toContain('<h1 class="entry-view__title">Start Hanpan</h1>');
-  expect(view.match(/<button/g)).toHaveLength(1);
-  expect(view).toContain('>Start game<');
-  expect(view).not.toContain('role="alert"');
-});
-
 test('accepts only a primary pointer-generated click and locks duplicate pending intent', () => {
   const intents: string[] = [];
   const { rerender } = render(
@@ -30,6 +19,8 @@ test('accepts only a primary pointer-generated click and locks duplicate pending
       onStart={() => intents.push('start')}
     />,
   );
+  expect(screen.getByRole('heading', { name: 'Start Hanpan', level: 1 })).toBeTruthy();
+  expect(screen.queryByRole('alert')).toBeNull();
   const button = screen.getByRole('button', { name: 'Start game' });
   expect(button.tabIndex).toBe(-1);
 

@@ -4,13 +4,28 @@ import type { Locator, Page } from '@playwright/test';
 export async function visibleTextIssues(
   locator: Locator,
   neighborSelector: string = '',
-  options: Readonly<{ allowWrapping?: boolean }> = {},
+  options: Readonly<{ allowWrapping?: boolean; minimumOpacity?: number }> = {},
 ): Promise<string[]> {
   const observation = {
     neighbors: neighborSelector,
     allowWrapping: options.allowWrapping ?? false,
+    minimumOpacity: options.minimumOpacity ?? 0,
   };
-  return locator.evaluate((node, { neighbors, allowWrapping }) => {
+  return locator.evaluate(async (node, { neighbors, allowWrapping, minimumOpacity }) => {
+    if (minimumOpacity > 0) {
+      const startedAt = performance.now();
+      while (true) {
+        if (!node.isConnected) throw new Error('Text disappeared before reaching minimum opacity');
+        let opacity = 1;
+        for (let parent: Element | null = node; parent; parent = parent.parentElement) {
+          opacity *= Number.parseFloat(getComputedStyle(parent).opacity);
+        }
+        if (opacity >= minimumOpacity) break;
+        if (performance.now() - startedAt >= 10_000)
+          throw new Error('Text did not reach minimum opacity');
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      }
+    }
     const issues: string[] = [];
     const tolerance = 0.5; // Viewport CSS pixels, including the frame transform.
     const textRects: DOMRect[] = [];

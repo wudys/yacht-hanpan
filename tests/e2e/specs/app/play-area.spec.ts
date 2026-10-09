@@ -755,10 +755,17 @@ test('a roll pending at size loss preserves its real receipt, Canvas and single 
 test('clipboard completion under the guard preserves copy status without native SFX or return catchup', async ({
   page,
   context,
+  browserName,
 }) => {
-  await context.grantPermissions(['clipboard-read', 'clipboard-write'], {
-    origin: PRODUCT_GAME_ORIGIN,
-  });
+  // Firefox uses the trusted copy click; WebKit can grant read permission only.
+  const permissions =
+    browserName === 'chromium'
+      ? ['clipboard-read', 'clipboard-write']
+      : browserName === 'webkit'
+        ? ['clipboard-read']
+        : [];
+  if (permissions.length > 0)
+    await context.grantPermissions(permissions, { origin: PRODUCT_GAME_ORIGIN });
   await observeNativeCues(page);
   await page.addInitScript(() => {
     const nativeWrite = navigator.clipboard.writeText.bind(navigator.clipboard);
@@ -766,11 +773,13 @@ test('clipboard completion under the guard preserves copy status without native 
       hold: true,
       calls: 0,
       completed: 0,
+      writtenText: null as string | null,
       release: undefined as (() => void) | undefined,
     };
     Reflect.set(window, '__playAreaClipboard', probe);
     navigator.clipboard.writeText = async (text: string) => {
       probe.calls += 1;
+      probe.writtenText = text;
       await nativeWrite(text);
       probe.completed += 1;
       if (probe.hold) {
@@ -800,10 +809,14 @@ test('clipboard completion under the guard preserves copy status without native 
     )
     .toEqual({ calls: 1, completed: 1, held: true });
   expect(
-    await page.evaluate(async () => {
+    await page.evaluate(async (canRead) => {
       const code = document.querySelector('[data-room-code]')?.getAttribute('data-room-code');
-      return (await navigator.clipboard.readText()) === code;
-    }),
+      if (canRead) return (await navigator.clipboard.readText()) === code;
+      // Firefox has no automation read grant. Retain the real write and verify
+      // its completed argument instead of substituting a clipboard fake.
+      const probe = Reflect.get(window, '__playAreaClipboard') as { writtenText: string | null };
+      return probe.writtenText === code;
+    }, browserName !== 'firefox'),
   ).toBe(true);
   await page.setViewportSize({ width: 740, height: 320 });
   await expect(page.locator('[data-play-area-blocker]')).toBeVisible();

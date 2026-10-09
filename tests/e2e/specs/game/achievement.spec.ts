@@ -64,6 +64,14 @@ for (const locale of ['ko', 'en'] as const) {
         const host = page.locator('[data-dice-presentation-phase]');
         await expect(host).toHaveAttribute('data-dice-canvas-state', 'ready');
         audit = await observeAchievement(page);
+        const title = page.locator(
+          `[data-achievement-kind="${kind}"] .achievement-sequence__title`,
+        );
+        // Register before the roll: a retained opacity peak may be polled after
+        // the short-lived title has already disappeared.
+        const textObservation = visibleTextIssues(title, '', { minimumOpacity: 0.8 });
+        // Keep early observation failures handled until the retained result is read.
+        void textObservation.catch(() => {});
         await page
           .getByRole('button', { name: locale === 'ko' ? '굴리기' : 'Roll', exact: true })
           .click();
@@ -71,17 +79,11 @@ for (const locale of ['ko', 'en'] as const) {
           .poll(() => audit!.evaluate((value) => value.maximumOpacity))
           .toBeGreaterThanOrEqual(0.8);
 
-        const title = page.locator(
-          `[data-achievement-kind="${kind}"] .achievement-sequence__title`,
-        );
-        // Collect while opaque; the pre-roll observer retains short-phase evidence
-        // while the screenshot and text inspection run together.
-        const [textIssues] = await Promise.all([
-          visibleTextIssues(title),
-          page.screenshot({ path: testInfo.outputPath(`achievement-${kind}-${locale}-320.png`) }),
-        ]);
-        expect(textIssues).toEqual([]);
+        await page.screenshot({
+          path: testInfo.outputPath(`achievement-${kind}-${locale}-320.png`),
+        });
         await expect(host).toHaveAttribute('data-dice-presentation-phase', 'settled');
+        expect(await textObservation).toEqual([]);
         const observed = await audit.evaluate(({ dispose: _dispose, ...value }) => value);
         expect(observed.samples.length).toBeGreaterThan(0);
         expect(

@@ -338,6 +338,7 @@ for (const [method, chosenGroup, width] of [
       await guest.locator('[data-score-tab="upper"]').click();
       const chosenTab = guest.locator(`[data-score-tab="${chosenGroup}"]`);
       await chosenTab.focus();
+      await expect(chosenTab).toBeFocused();
       const audit = await observeScoreFeedback(guest);
       await page.locator('button[data-score-category="choice"]').click();
       await expect(guest.locator('[data-score-confirmed="true"]')).toBeVisible();
@@ -347,10 +348,14 @@ for (const [method, chosenGroup, width] of [
       );
       if (method === 'click') await chosenTab.click();
       else await chosenTab.press('Enter');
+      // WebKit may clear mouse-click focus; the handoff must preserve the native input result.
+      const selectionFocus = await guest.evaluateHandle(() => document.activeElement);
+      if (method === 'keyboard') await expect(chosenTab).toBeFocused();
       await expect(chosenTab).toHaveAttribute('aria-selected', 'true');
       await expect(guest.locator('[data-turn-cue]')).toBeVisible();
       await expect(chosenTab).toHaveAttribute('aria-selected', 'true');
-      await expect(chosenTab).toBeFocused();
+      expect(await selectionFocus.evaluate((node) => node === document.activeElement)).toBe(true);
+      await selectionFocus.dispose();
       const events = await readScoreFeedback(audit);
       expect(
         events.some(

@@ -71,7 +71,11 @@ export default defineConfig(({ mode, command }) => {
           ]
         : []),
     ],
-    build: { sourcemap: uploadMaps ? 'hidden' : false },
+    build: {
+      // WebKit retains failed modulepreloads across reloads, preventing startup recovery.
+      modulePreload: false,
+      sourcemap: uploadMaps ? 'hidden' : false,
+    },
     publicDir: fileURLToPath(new URL('../../packages/game-assets/public', import.meta.url)),
     resolve: {
       alias: [

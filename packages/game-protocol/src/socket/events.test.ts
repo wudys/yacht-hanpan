@@ -74,7 +74,7 @@ const rollUpdate = {
       mode: 'seeded-physics',
       rollId: '8184fc0a-4e59-455d-a7c1-579a9ee96403',
       seed: 'server-seed',
-      pourStyle: POUR_STYLE.CLASSIC,
+      pourStyle: POUR_STYLE.OBLIQUE,
       rolledSlots: [0, 4],
       contract: {
         releaseId: '2026-08-12.1-a5905df',

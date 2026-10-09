@@ -139,7 +139,7 @@ export function resolvedRollArtifact() {
       mode: 'seeded-physics',
       rollId: ROLL_ID,
       seed: 'ab'.repeat(32),
-      pourStyle: POUR_STYLE.CLASSIC,
+      pourStyle: POUR_STYLE.OBLIQUE,
       rolledSlots: [0, 1, 2, 3, 4],
       contract: createCompatibilityContract('test-release'),
     },

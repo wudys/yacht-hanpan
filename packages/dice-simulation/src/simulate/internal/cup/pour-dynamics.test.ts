@@ -1,11 +1,12 @@
 import RAPIER from '@dimforge/rapier3d-deterministic';
 import { beforeAll, expect, test } from 'bun:test';
 
+import { POUR_STYLES } from '../../../contract';
 import { DEFAULT_CUP_GEOMETRY } from '../../../contract/cup-geometry';
 import { initializeDeterministicRapierForBun } from '../../../rapier/bun';
 import { simulateRollTimeline } from '../../simulate-physics';
 import { createRollPhysicsConfig } from '../physics-config';
-import { createDieInCup } from '../physics-environment';
+import { createDiceInCup } from '../physics-environment';
 import { FIXED_STEP_SECONDS } from '../roll-simulation-constants';
 import { rotateVectorByQuat } from '../simulation-math';
 import { createCupMotion, cupTransformAt } from './cup-motion';
@@ -13,7 +14,7 @@ import { applyCupPourAssist, createPhysicsCup } from './physics-cup';
 
 beforeAll(initializeDeterministicRapierForBun);
 
-test.each(['classic', 'burst', 'oblique'] as const)(
+test.each([...POUR_STYLES])(
   'confines %s pour assistance to the tilted cup interior and its short release window',
   (style) => {
     const seed = 'pour-assist-boundary';
@@ -24,7 +25,7 @@ test.each(['classic', 'burst', 'oblique'] as const)(
       const t = start + 100;
       const pose = cupTransformAt(motion, t);
       const cup = createPhysicsCup(world, pose, DEFAULT_CUP_GEOMETRY);
-      const die = createDieInCup(world, seed, 0, 1, motion, createRollPhysicsConfig());
+      const die = createDiceInCup(world, seed, 1, motion, createRollPhysicsConfig())[0]!;
       const axis = rotateVectorByQuat([0, 1, 0], cup.body.rotation());
       const apply = (time: number, along: number, exited = false) => {
         die.body.setTranslation(
@@ -67,7 +68,7 @@ test('physically tumbles the single die during actual shaking before pouring sta
     rollId: seed,
     seed,
     rolledSlots: [0],
-    pourStyle: 'classic',
+    pourStyle: 'oblique',
   });
   const { frames } = timeline.dice[0]!;
   const first = frames[0]!.q;

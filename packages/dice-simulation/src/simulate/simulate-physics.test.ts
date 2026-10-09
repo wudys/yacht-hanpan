@@ -22,7 +22,7 @@ describe('deterministic physics roll', () => {
     const moduleUrl = new URL('./simulate-physics.ts', import.meta.url).href;
     const script = [
       `import { simulateRollTimeline } from ${JSON.stringify(moduleUrl)};`,
-      "try { simulateRollTimeline({ rollId: 'roll', seed: 'seed', rolledSlots: [0], pourStyle: 'classic' }); }",
+      "try { simulateRollTimeline({ rollId: 'roll', seed: 'seed', rolledSlots: [0], pourStyle: 'oblique' }); }",
       'catch (error) { console.log(error?.code ?? error?.name); }',
     ].join('\n');
     const child = Bun.spawn([process.execPath, '--eval', script], {
@@ -34,7 +34,7 @@ describe('deterministic physics roll', () => {
     expect(await child.exited).toBe(0);
   });
 
-  test.each(POUR_STYLES)('produces finite slot-aware timelines for %s', (pourStyle) => {
+  test.each([...POUR_STYLES])('produces finite slot-aware timelines for %s', (pourStyle) => {
     for (const rolledSlots of [[0], [0, 2, 4], [0, 1, 2, 3, 4]] as const) {
       const timeline = simulateRollTimeline({
         rollId: `roll-${pourStyle}-${rolledSlots.length}`,
@@ -108,7 +108,7 @@ describe('deterministic physics roll', () => {
         rollId: 'after-cup-failure',
         seed: 'seed-classic-1',
         rolledSlots: [0],
-        pourStyle: 'classic',
+        pourStyle: 'oblique',
       });
       expect(next.dice).toHaveLength(1);
       expect(free).toHaveBeenCalledTimes(2);
@@ -137,11 +137,11 @@ describe('deterministic physics roll', () => {
   test.each([
     {
       seed: 'gesture-explore-20260921-1',
-      pourStyle: 'classic' as const,
+      pourStyle: 'oblique' as const,
       crossed: false,
-      values: [6, 6],
+      values: [3, 6],
     },
-    { seed: 'slot-crossing-1', pourStyle: 'oblique' as const, crossed: true, values: [6, 1] },
+    { seed: 'slot-crossing-1', pourStyle: 'oblique' as const, crossed: true, values: [2, 6] },
   ])(
     'keeps supplied slot identity instead of sorting by final x ($seed)',
     ({ seed, pourStyle, crossed, values }) => {
@@ -167,7 +167,7 @@ describe('deterministic physics roll', () => {
       rollId: 'roll-targeted',
       seed: 'seed-targeted',
       rolledSlots: [0],
-      pourStyle: 'classic',
+      pourStyle: 'oblique',
       targetValues: [6],
     };
 

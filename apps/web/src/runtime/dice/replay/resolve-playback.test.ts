@@ -21,7 +21,7 @@ const artifact: ResolvedRollPlaybackArtifact = {
   replay: {
     rollId: 'roll-1',
     seed: 'server-seed',
-    pourStyle: POUR_STYLE.CLASSIC,
+    pourStyle: POUR_STYLE.OBLIQUE,
     rolledSlots: [0, 2],
   },
   outcome: {
@@ -72,7 +72,7 @@ describe('resolveRollPlayback', () => {
       rollId: 'roll-1',
       seed: 'server-seed',
       rolledSlots: [0, 2],
-      pourStyle: POUR_STYLE.CLASSIC,
+      pourStyle: POUR_STYLE.OBLIQUE,
     });
     expect(playback.status).toBe('verified');
   });

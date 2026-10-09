@@ -2,6 +2,8 @@ import { DEFAULT_CUP_GEOMETRY } from '../../../contract/cup-geometry';
 import type { RollArea } from '../../../contract/types';
 import { seededNumber } from '../seed-expander';
 
+const POUR_INWARD_DISTANCE = 0.075;
+
 export type CupPourProfile = {
   stageX: number;
   releaseX: number;
@@ -24,7 +26,7 @@ export function createCupPourProfile(
       DEFAULT_CUP_GEOMETRY.innerRadius + DEFAULT_CUP_GEOMETRY.wallThickness,
     ) + 0.12;
   const maxCupCenterX = Math.max(0, halfWidth - cupSideClearance);
-  const releaseX = side * Math.max(0, Math.min(maxCupCenterX, 2.05) - 0.3);
+  const releaseX = side * Math.max(0, Math.min(maxCupCenterX, 2.05) - POUR_INWARD_DISTANCE);
   const stageX = side * Math.min(maxCupCenterX, 2.05);
 
   return {

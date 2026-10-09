@@ -157,7 +157,7 @@ function rollArtifact() {
       mode: 'seeded-physics',
       rollId: '8184fc0a-4e59-455d-a7c1-579a9ee96403',
       seed: 'ab'.repeat(32),
-      pourStyle: POUR_STYLE.CLASSIC,
+      pourStyle: POUR_STYLE.OBLIQUE,
       rolledSlots: [0, 1, 2, 3, 4],
       contract,
     },

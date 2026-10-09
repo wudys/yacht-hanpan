@@ -3,22 +3,22 @@
   "cases": [
     {
       "recipe": {
-        "rollId": "golden-classic-1",
-        "seed": "golden-classic-1",
+        "rollId": "golden-oblique-1",
+        "seed": "golden-oblique-1",
         "rolledSlots": [0],
-        "pourStyle": "classic"
+        "pourStyle": "oblique"
       },
       "expected": {
         "authoritativeValuesBySlot": [
           {
             "slot": 0,
-            "value": 3
+            "value": 6
           }
         ],
-        "replayDigest": "sha256-q4-v2:030a09732a22707dd698f7b27ec2de975130f3817bdfccf414b6cf8c0d47ef59",
-        "durationMs": 3250,
-        "dieFrameCounts": [114],
-        "cupFrameCount": 108
+        "replayDigest": "sha256-q4-v2:ffcbcf9f89a01212be7e0d38a608583ce1c5973ba8691e759a81e2fdc1ab9d68",
+        "durationMs": 3117,
+        "dieFrameCounts": [110],
+        "cupFrameCount": 104
       }
     },
     {
@@ -36,17 +36,17 @@
           },
           {
             "slot": 2,
-            "value": 1
+            "value": 4
           },
           {
             "slot": 4,
-            "value": 1
+            "value": 6
           }
         ],
-        "replayDigest": "sha256-q4-v2:96df9b5707861538a26f5c6313cfa55374c0df4d974aceafacd7b7cae035e3cc",
-        "durationMs": 3317,
-        "dieFrameCounts": [117, 117, 117],
-        "cupFrameCount": 111
+        "replayDigest": "sha256-q4-v2:9415f0ddfe44a023309e42202a9bbba9296c4122218695514fbf6e1227542040",
+        "durationMs": 3817,
+        "dieFrameCounts": [132, 132, 132],
+        "cupFrameCount": 126
       }
     },
     {
@@ -60,29 +60,29 @@
         "authoritativeValuesBySlot": [
           {
             "slot": 0,
-            "value": 2
+            "value": 5
           },
           {
             "slot": 1,
-            "value": 5
+            "value": 6
           },
           {
             "slot": 2,
-            "value": 5
+            "value": 2
           },
           {
             "slot": 3,
-            "value": 3
+            "value": 6
           },
           {
             "slot": 4,
-            "value": 5
+            "value": 4
           }
         ],
-        "replayDigest": "sha256-q4-v2:1523b0c1d007e7f6c8be9bdfc4b6aeb0c4d9c399dd63f4bcbdeb02744a16d116",
-        "durationMs": 3384,
-        "dieFrameCounts": [116, 116, 116, 116, 116],
-        "cupFrameCount": 110
+        "replayDigest": "sha256-q4-v2:919e85fd1cb8da0d2b8779461eb729c7d6f88641fb6b6a1c2515ee0ae2bba9f3",
+        "durationMs": 3417,
+        "dieFrameCounts": [118, 118, 118, 118, 118],
+        "cupFrameCount": 112
       }
     },
     {
@@ -96,17 +96,17 @@
         "authoritativeValuesBySlot": [
           {
             "slot": 1,
-            "value": 4
+            "value": 6
           },
           {
             "slot": 3,
-            "value": 2
+            "value": 3
           }
         ],
-        "replayDigest": "sha256-q4-v2:c48f8b10ff8cdc6826abc9d419638cca76115d235f88c945b8550b1e2ca5678c",
-        "durationMs": 3284,
-        "dieFrameCounts": [116, 116],
-        "cupFrameCount": 110
+        "replayDigest": "sha256-q4-v2:21ec22cea2a672f9d3a1fe5dc508064ca7f4802cca7ce31850afb2ef9d25e99b",
+        "durationMs": 3184,
+        "dieFrameCounts": [113, 113],
+        "cupFrameCount": 107
       }
     }
   ]

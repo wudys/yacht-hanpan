@@ -537,7 +537,7 @@ describe('authoritative Socket server', () => {
         recipeSource: {
           createRollId: () => '8184fc0a-4e59-455d-a7c1-579a9ee96403',
           createRollSeed: () => 'recovery-queue-seed',
-          createPourStyle: () => POUR_STYLE.CLASSIC,
+          createPourStyle: () => POUR_STYLE.OBLIQUE,
         },
         simulation: {
           execute: (input, budget) => {

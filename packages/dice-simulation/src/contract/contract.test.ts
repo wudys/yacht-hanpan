@@ -27,13 +27,13 @@ const validInput = {
   rollId: 'roll-1',
   seed: 'seed-1',
   rolledSlots: [0, 2, 4],
-  pourStyle: POUR_STYLE.CLASSIC,
+  pourStyle: POUR_STYLE.OBLIQUE,
 } as const;
 
 describe('dice simulation contract', () => {
   test('keeps independent runtime and artifact versions', () => {
     expect(DICE_SIMULATION_CONTRACT).toEqual({
-      simulationVersion: 'dice-simulation-v36',
+      simulationVersion: 'dice-simulation-v37',
       timelineSchemaVersion: 'dice-timeline-v4',
       replayDigestVersion: 'sha256-q4-v2',
       prngVersion: 'sha256-counter53-v1',
@@ -75,6 +75,7 @@ describe('dice simulation contract', () => {
     [{ ...validInput, seed: '' }],
     [{ ...validInput, seed: 'seed-1 ' }],
     [{ ...validInput, pourStyle: 'unknown' }],
+    [{ ...validInput, pourStyle: 'classic' }],
     [{ ...validInput, pourStyle: 'toss' }],
     [{ ...validInput, pourStyle: 'ricochet' }],
   ])('rejects invalid or non-canonical input %#', (input) => {

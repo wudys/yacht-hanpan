@@ -1,18 +1,20 @@
 import RAPIER from '@dimforge/rapier3d-deterministic';
 import { beforeAll, expect, test } from 'bun:test';
 
+import { POUR_STYLES } from '../../contract';
 import { DEFAULT_CUP_GEOMETRY } from '../../contract/cup-geometry';
 import { initializeDeterministicRapierForBun } from '../../rapier/bun';
 import { type PhysicsCompletionSnapshot, simulateRollTimeline } from '../simulate-physics';
 import { createCupFrame, createCupMotion, cupTransformAt } from './cup/cup-motion';
 import {
   areDiceOutsideCup,
+  createCupShakeLid,
   createPhysicsCup,
   haveDiceClearedCup,
   updatePhysicsCup,
 } from './cup/physics-cup';
 import { createRollPhysicsConfig } from './physics-config';
-import { createDieInCup, createRollWorld, createTray } from './physics-environment';
+import { createDiceInCup, createRollWorld, createTray } from './physics-environment';
 import { DIE_COLLIDER_RADIUS, DIE_SIZE, trayGeometry } from './roll-simulation-constants';
 import { rotateVectorByQuat } from './simulation-math';
 
@@ -23,14 +25,13 @@ test.each([false, true])('preserves material rebound at a direct wall strike (CC
   const world = createRollWorld(physics);
   try {
     createTray(world, physics);
-    const { body } = createDieInCup(
+    const { body } = createDiceInCup(
       world,
       'wall-rebound',
-      0,
       1,
-      createCupMotion('wall-rebound', 'classic'),
+      createCupMotion('wall-rebound', 'oblique'),
       physics,
-    );
+    )[0]!;
     body.setTranslation({ x: 0, y: 1, z: trayGeometry.centerZ }, true);
     body.setRotation({ x: 0, y: 0, z: 0, w: 1 }, true);
     body.setLinvel({ x: 6, y: 0, z: 0 }, true);
@@ -115,10 +116,10 @@ test('keeps the complete rotating die within one logical pixel of the visible wa
 test('distinguishes finite cup clearance from crossing the mouth or only its centre', () => {
   const world = new RAPIER.World({ x: 0, y: 0, z: 0 });
   try {
-    const motion = createCupMotion('cup-clearance', 'classic');
+    const motion = createCupMotion('cup-clearance', 'oblique');
     const pose = cupTransformAt(motion, 0);
     const cup = createPhysicsCup(world, pose, DEFAULT_CUP_GEOMETRY);
-    const die = createDieInCup(world, 'cup-clearance', 0, 1, motion, createRollPhysicsConfig());
+    const die = createDiceInCup(world, 'cup-clearance', 1, motion, createRollPhysicsConfig())[0]!;
     die.body.setRotation({ x: 0, y: 0, z: 0, w: 1 }, true);
     const check = (x: number, y: number) => {
       die.body.setTranslation({ x: pose.x + x, y: pose.y + y, z: pose.z }, true);
@@ -142,13 +143,13 @@ test.each([0.003, 0.012])(
     const physics = { ...createRollPhysicsConfig(), gravity: 0 };
     const world = createRollWorld(physics);
     try {
-      const motion = createCupMotion('predictive-rim-contact', 'classic');
+      const motion = createCupMotion('predictive-rim-contact', 'oblique');
       const cup = createPhysicsCup(
         world,
         { x: 0, y: 0, z: 0, tilt: 0, yaw: 0 },
         DEFAULT_CUP_GEOMETRY,
       );
-      const die = createDieInCup(world, 'predictive-rim-contact', 0, 1, motion, physics);
+      const die = createDiceInCup(world, 'predictive-rim-contact', 1, motion, physics)[0]!;
       die.body.setRotation({ x: 0, y: 0, z: 0, w: 1 }, true);
       die.body.setTranslation(
         {
@@ -183,14 +184,13 @@ test('keeps solid-die mass and rotational response when its collider has rounded
   const world = new RAPIER.World({ x: 0, y: 0, z: 0 });
   try {
     const seed = 'solid-die-mass';
-    const die = createDieInCup(
+    const die = createDiceInCup(
       world,
       seed,
-      0,
       1,
-      createCupMotion(seed, 'classic'),
+      createCupMotion(seed, 'oblique'),
       createRollPhysicsConfig(),
-    );
+    )[0]!;
     // Unit-density solid cube approximation, independent of the rounded inner core.
     expect(die.body.mass()).toBeCloseTo(DIE_SIZE ** 3, 5);
     die.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
@@ -203,30 +203,39 @@ test('keeps solid-die mass and rotational response when its collider has rounded
   }
 });
 
-test.each([1, 2, 3, 4, 5])('starts %i dice without intersecting each other or the cup', (count) => {
-  let deepestContact = 0;
-  for (let sequence = 0; sequence < 20; sequence += 1) {
-    const seed = `cup-capacity-${count}-${sequence}`;
-    const world = new RAPIER.World({ x: 0, y: -9.8, z: 0 });
-    try {
-      const motion = createCupMotion(seed, 'classic');
-      const cup = createPhysicsCup(world, cupTransformAt(motion, 0), DEFAULT_CUP_GEOMETRY);
-      const physics = createRollPhysicsConfig();
-      const dice = Array.from({ length: count }, (_, i) =>
-        createDieInCup(world, seed, i, count, motion, physics),
+test.each(POUR_STYLES.flatMap((style) => [1, 2, 3, 4, 5].map((count) => [style, count] as const)))(
+  'starts %s %i dice without intersecting each other, the cup or its shake lid',
+  (style, count) => {
+    let deepestContact = 0;
+    const seeds = Array.from({ length: 20 }, (_, sequence) => `cup-capacity-${count}-${sequence}`);
+    if (count === 5)
+      seeds.push(
+        'layout-coverage-0',
+        'layout-coverage-1',
+        'layout-coverage-3',
+        'layout-coverage-8',
       );
-      dice.forEach((die, i) => {
-        for (const other of [...cup.colliders, ...dice.slice(i + 1).map((d) => d.collider)]) {
-          const contact = die.collider.contactCollider(other, 0);
-          if (contact) deepestContact = Math.min(deepestContact, contact.distance);
-        }
-      });
-    } finally {
-      world.free();
+    for (const seed of seeds) {
+      const world = new RAPIER.World({ x: 0, y: -9.8, z: 0 });
+      try {
+        const motion = createCupMotion(seed, style);
+        const cup = createPhysicsCup(world, cupTransformAt(motion, 0), DEFAULT_CUP_GEOMETRY);
+        createCupShakeLid(world, cup);
+        const physics = createRollPhysicsConfig();
+        const dice = createDiceInCup(world, seed, count, motion, physics);
+        dice.forEach((die, i) => {
+          for (const other of [...cup.colliders, ...dice.slice(i + 1).map((d) => d.collider)]) {
+            const contact = die.collider.contactCollider(other, 0);
+            if (contact) deepestContact = Math.min(deepestContact, contact.distance);
+          }
+        });
+      } finally {
+        world.free();
+      }
     }
-  }
-  expect(deepestContact).toBeGreaterThanOrEqual(-0.001);
-});
+    expect(deepestContact).toBeGreaterThanOrEqual(-0.001);
+  },
+);
 
 test('pairs each physical side wall with its inward direction and excludes the ceiling', () => {
   const world = new RAPIER.World({ x: 0, y: -9.8, z: 0 });

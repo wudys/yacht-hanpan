@@ -9,13 +9,13 @@ import {
 } from './index';
 
 const result: SimulationResult = {
-  input: { rollId: 'roll', seed: 'seed', rolledSlots: [2], pourStyle: 'classic' },
+  input: { rollId: 'roll', seed: 'seed', rolledSlots: [2], pourStyle: 'oblique' },
   timeline: {
     rollId: 'roll',
     seed: 'seed',
     durationMs: 100,
     cup: {
-      style: 'classic',
+      style: 'oblique',
       shakeAmplitude: 1,
       shakeFrequency: 24,
       pourAtMs: 10,

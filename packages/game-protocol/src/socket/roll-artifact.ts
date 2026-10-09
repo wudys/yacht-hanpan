@@ -1,4 +1,4 @@
-import { type DieSlot, POUR_STYLE } from '@repo/dice-simulation/contract';
+import { type DieSlot, POUR_STYLES } from '@repo/dice-simulation/contract';
 import * as v from 'valibot';
 
 import { parseWith } from '../internal/parse';
@@ -30,7 +30,7 @@ const resolvedRollArtifactSchema = v.pipe(
         v.maxLength(128),
         v.check((value) => value.trim() === value),
       ),
-      pourStyle: v.picklist([POUR_STYLE.CLASSIC, POUR_STYLE.BURST, POUR_STYLE.OBLIQUE]),
+      pourStyle: v.picklist(POUR_STYLES),
       rolledSlots: rolledSlotsSchema,
       contract: compatibilityContractSchema,
     }),

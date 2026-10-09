@@ -8,15 +8,19 @@ import {
 import { measurePhysicsCompletion, physicsCompletionIssues } from './physical-roll-audit';
 
 const REGRESSIONS: readonly SimulationInput[] = [
-  ['classic', 'classic', '103'],
-  ['burst', 'toss', '14'],
-  ['oblique', 'ricochet', '397'],
-].map(([style, seedStyle, sequence]) => ({
-  rollId: `quality-regression-${style}-${sequence}`,
-  seed: `flow-audit-batch-20260918-${seedStyle}-${sequence}`,
-  rolledSlots: [0, 1, 2, 3, 4],
-  pourStyle: style as SimulationInput['pourStyle'],
-}));
+  {
+    rollId: 'quality-regression-burst-14',
+    seed: 'flow-audit-batch-20260918-toss-14',
+    rolledSlots: [0, 1, 2, 3, 4],
+    pourStyle: 'burst',
+  },
+  {
+    rollId: 'quality-regression-oblique-397',
+    seed: 'flow-audit-batch-20260918-ricochet-397',
+    rolledSlots: [0, 1, 2, 3, 4],
+    pourStyle: 'oblique',
+  },
+];
 
 export function auditPhysics(input: SimulationInput) {
   let raw: PhysicsCompletionSnapshot | undefined;

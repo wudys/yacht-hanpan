@@ -22,7 +22,7 @@ function deferred<T>() {
   return { promise, resolve: resolvePromise };
 }
 
-const input = { seed: 'physics-diagnostic', pourStyle: 'classic', count: 2 };
+const input = { seed: 'physics-diagnostic', pourStyle: 'oblique', count: 2 };
 const result = { replayDigest: 'diagnostic-result' } as SimulationResult;
 
 beforeEach(() => {

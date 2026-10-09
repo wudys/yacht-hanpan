@@ -410,7 +410,7 @@ test.each([
           durationMs: 100,
           rollArea: ROLL_AREA,
           cup: {
-            style: 'classic',
+            style: 'oblique',
             shakeAmplitude: 0,
             shakeFrequency: 0,
             pourAtMs: 0,
@@ -507,7 +507,7 @@ test('reuses prepared resources across verified replays without disposing siblin
       durationMs: 100,
       rollArea: ROLL_AREA,
       cup: {
-        style: 'classic',
+        style: 'oblique',
         shakeAmplitude: 0,
         shakeFrequency: 0,
         pourAtMs: 0,

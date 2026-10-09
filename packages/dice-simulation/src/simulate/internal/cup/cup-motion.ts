@@ -4,8 +4,11 @@ import { TRAY_FLOOR_TOP_Y } from '../../../contract/roll-geometry';
 import { rollAreaMeta, trayGeometry } from '../roll-simulation-constants';
 import { seededNumber } from '../seed-expander';
 import { quatFromEuler, round } from '../simulation-math';
-import { CUP_EXIT_TAIL_MS, CUP_GATHER_MS, cupPourProgress } from './cup-motion-progress';
 import { createCupPourProfile } from './cup-pour-profile';
+
+const CUP_GATHER_MS = 80;
+const CUP_EXIT_TAIL_MS = 360;
+const FINAL_POUR_ANGLE_DEGREES = 145;
 
 export interface CupTransform {
   x: number;
@@ -15,7 +18,7 @@ export interface CupTransform {
   yaw: number;
 }
 
-export type SimulatedCupMotion = {
+export type CupMotionState = {
   style: PourStyle;
   shakeAmplitude: number;
   shakeFrequency: number;
@@ -36,10 +39,10 @@ export type SimulatedCupMotion = {
   exitAtMs: number;
 };
 
-export function createCupMotion(seed: string, style: PourStyle): SimulatedCupMotion {
+export function createCupMotion(seed: string, style: PourStyle): CupMotionState {
   const profile = createCupPourProfile(seed, rollAreaMeta());
   const { side } = profile;
-  // All three gestures share the selected shake, then gather for 80ms.
+  // Both gestures share the selected shake, then gather for 80ms.
   const pourAtMs =
     Math.round(700 + 150 * seededNumber(`${seed}:shake-duration`, 0)) + CUP_GATHER_MS;
   // An upper bound until the physics loop observes every die outside the mouth.
@@ -57,20 +60,27 @@ export function createCupMotion(seed: string, style: PourStyle): SimulatedCupMot
     pourFloorClearance: 1.85,
     pourYaw: 0,
     // Burst retains its raised clearance so dice can separate during release.
-    heightOffset:
-      (style === 'burst' ? 0.25 : 0) +
-      (style === 'classic' ? 0 : style === 'burst' ? 0.443053 : 0.369182),
+    heightOffset: (style === 'burst' ? 0.25 : 0) + (style === 'burst' ? 0.443053 : 0.369182),
     releaseAtMs,
     exitAtMs: releaseAtMs + CUP_EXIT_HOLD_MS + CUP_EXIT_TAIL_MS,
     stageX: profile.stageX,
     stageZ: trayGeometry.centerZ,
     releaseX: profile.releaseX,
     releaseZ: trayGeometry.centerZ,
-    tilt: side * (((style === 'classic' ? 155 : 135) * Math.PI) / 180),
+    tilt: side * ((FINAL_POUR_ANGLE_DEGREES * Math.PI) / 180),
   };
 }
 
-export function cupTransformAt(cup: SimulatedCupMotion, timeMs: number): CupTransform {
+export function setCupReleaseTime(cupMotion: CupMotionState, releaseAtMs: number): void {
+  cupMotion.releaseAtMs = releaseAtMs;
+  cupMotion.exitAtMs = releaseAtMs + CUP_EXIT_HOLD_MS + CUP_EXIT_TAIL_MS;
+}
+
+function cupPourProgress(timeMs: number, pourAtMs: number, endAtMs: number): number {
+  return Math.min(1, Math.max(0, (timeMs - pourAtMs) / Math.max(1, endAtMs - pourAtMs)));
+}
+
+export function cupTransformAt(cup: CupMotionState, timeMs: number): CupTransform {
   const shakeEnd = cup.pourAtMs - CUP_GATHER_MS;
   const motionTime =
     timeMs < shakeEnd ? timeMs : timeMs < cup.pourAtMs ? shakeEnd : timeMs - CUP_GATHER_MS;
@@ -124,8 +134,8 @@ export function cupTransformAt(cup: SimulatedCupMotion, timeMs: number): CupTran
   const elapsed = timeMs - cup.pourAtMs;
   const withdraw = smoothstep((timeMs - cup.releaseAtMs) / CUP_EXIT_HOLD_MS);
   const exit = smoothstep((timeMs - cup.releaseAtMs) / (cup.exitAtMs - cup.releaseAtMs));
-  // Burst opens to 120° then gently finishes the remaining 15°. Both joins
-  // have zero angular velocity; classic and oblique use one smooth tilt.
+  // Burst opens to 120° then gently finishes the final tip. Both joins
+  // have zero angular velocity; oblique uses one smooth tilt.
   const angle =
     cup.style === 'burst'
       ? elapsed < 260
@@ -157,7 +167,7 @@ function smoothstep(value: number): number {
   return t * t * (3 - 2 * t);
 }
 
-export function createCupFrame(cup: SimulatedCupMotion, timeMs: number): CupFrame {
+export function createCupFrame(cup: CupMotionState, timeMs: number): CupFrame {
   const transform = cupTransformAt(cup, timeMs);
   const mode = timeMs < cup.pourAtMs ? 'shake' : timeMs < cup.releaseAtMs ? 'pour' : 'exit';
   const { tilt, yaw } = transform;

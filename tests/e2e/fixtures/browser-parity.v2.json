@@ -1,0 +1,139 @@
+{
+  "schemaVersion": 2,
+  "playwrightVersion": "1.63.0",
+  "browsers": {
+    "chromium": "153.0.8010.12",
+    "firefox": "155.0",
+    "webkit": "26.6"
+  },
+  "cases": [
+    {
+      "name": "five-dice-p02-burst",
+      "seed": "layout-coverage-3",
+      "count": 5,
+      "pourStyle": "burst",
+      "replayDigest": "sha256-q4-v2:515a46fcadafa2cf2322b3ba4b7458f9507c5d9aedbd702be08913cda8d6ecee",
+      "authoritativeValues": [1, 2, 2, 6, 2]
+    },
+    {
+      "name": "five-dice-p02-oblique",
+      "seed": "layout-coverage-3",
+      "count": 5,
+      "pourStyle": "oblique",
+      "replayDigest": "sha256-q4-v2:a4e659be031703892d116dbf4b5a2a0dffb0b45859317da28a6a104d3df01459",
+      "authoritativeValues": [3, 5, 5, 4, 5]
+    },
+    {
+      "name": "five-dice-p26-burst",
+      "seed": "layout-coverage-0",
+      "count": 5,
+      "pourStyle": "burst",
+      "replayDigest": "sha256-q4-v2:6bb34f36270eb33ebbbc9b5b8290bbacbe1d53c2bf3920cf2c0061c565ad0291",
+      "authoritativeValues": [6, 3, 6, 1, 1]
+    },
+    {
+      "name": "five-dice-p26-oblique",
+      "seed": "layout-coverage-0",
+      "count": 5,
+      "pourStyle": "oblique",
+      "replayDigest": "sha256-q4-v2:7b3f1b22719aafb6dc02fbcf0daafb71e951e8683d8e061abd4409f0de10ca04",
+      "authoritativeValues": [5, 4, 3, 3, 4]
+    },
+    {
+      "name": "five-dice-p13-burst",
+      "seed": "layout-coverage-8",
+      "count": 5,
+      "pourStyle": "burst",
+      "replayDigest": "sha256-q4-v2:4475e2208154fead945864f20c5b8c3e03879d6f7287d4caef46affde7adb274",
+      "authoritativeValues": [2, 4, 2, 1, 2]
+    },
+    {
+      "name": "five-dice-p13-oblique",
+      "seed": "layout-coverage-8",
+      "count": 5,
+      "pourStyle": "oblique",
+      "replayDigest": "sha256-q4-v2:7e8a81f81dc8640813aa43e1d68f4797027fafdb7de1f501209ee4518a782d58",
+      "authoritativeValues": [1, 2, 5, 1, 5]
+    },
+    {
+      "name": "five-dice-p32-burst",
+      "seed": "layout-coverage-1",
+      "count": 5,
+      "pourStyle": "burst",
+      "replayDigest": "sha256-q4-v2:713de1da332d51a73044358c15a8b8d2a307b93a1a5f440ef63efcddc40bcbaa",
+      "authoritativeValues": [4, 2, 4, 4, 3]
+    },
+    {
+      "name": "five-dice-p32-oblique",
+      "seed": "layout-coverage-1",
+      "count": 5,
+      "pourStyle": "oblique",
+      "replayDigest": "sha256-q4-v2:557f12af9f831abf29e4a97d8d6d3007e9aae4f86f902e9e508ddb7da805bb7e",
+      "authoritativeValues": [4, 1, 4, 6, 5]
+    },
+    {
+      "name": "1-dice-burst",
+      "seed": "cup-adoption-parity-small-1-burst-0",
+      "count": 1,
+      "pourStyle": "burst",
+      "replayDigest": "sha256-q4-v2:196bc8061a45b6102d9d709962862829f9ea640aa93fb253ca3328af0e5560e8",
+      "authoritativeValues": [6]
+    },
+    {
+      "name": "1-dice-oblique",
+      "seed": "cup-adoption-parity-small-1-oblique-0",
+      "count": 1,
+      "pourStyle": "oblique",
+      "replayDigest": "sha256-q4-v2:c95b2a07cf5f257a23ae72c3456cfae4848d15d6b26810c0522d29e4c0a4a0b7",
+      "authoritativeValues": [4]
+    },
+    {
+      "name": "2-dice-burst",
+      "seed": "cup-adoption-parity-small-2-burst-0",
+      "count": 2,
+      "pourStyle": "burst",
+      "replayDigest": "sha256-q4-v2:5b51736719ac8bb7be2db2f201d6548ec1422cbefc0659fe08f8db5665cac2b4",
+      "authoritativeValues": [6, 2]
+    },
+    {
+      "name": "2-dice-oblique",
+      "seed": "cup-adoption-parity-small-2-oblique-0",
+      "count": 2,
+      "pourStyle": "oblique",
+      "replayDigest": "sha256-q4-v2:f8da3a37108e7639bee4668b2528fdcc21790783589630a0686df479c049ddf2",
+      "authoritativeValues": [1, 1]
+    },
+    {
+      "name": "3-dice-burst",
+      "seed": "cup-adoption-parity-small-3-burst-0",
+      "count": 3,
+      "pourStyle": "burst",
+      "replayDigest": "sha256-q4-v2:7a4c107fcddbfb01d4c86b462ade85a27b433f1942cccd7289411918c4765b02",
+      "authoritativeValues": [1, 4, 2]
+    },
+    {
+      "name": "3-dice-oblique",
+      "seed": "cup-adoption-parity-small-3-oblique-0",
+      "count": 3,
+      "pourStyle": "oblique",
+      "replayDigest": "sha256-q4-v2:c499b78ee240fb73d059440e45427f27263ce1a2e80ec78d2c6340f349b7d1df",
+      "authoritativeValues": [6, 1, 6]
+    },
+    {
+      "name": "4-dice-burst",
+      "seed": "cup-adoption-parity-small-4-burst-0",
+      "count": 4,
+      "pourStyle": "burst",
+      "replayDigest": "sha256-q4-v2:ec5c05bbc0193130cb7c3822852aa8a52bb4a0bd66707366d05e05c4f1b31ac0",
+      "authoritativeValues": [6, 2, 4, 3]
+    },
+    {
+      "name": "4-dice-oblique",
+      "seed": "cup-adoption-parity-small-4-oblique-0",
+      "count": 4,
+      "pourStyle": "oblique",
+      "replayDigest": "sha256-q4-v2:9020c9282441ad242402e2ce78915c84656e102e6e1b62a33c808acd9a2308f5",
+      "authoritativeValues": [3, 5, 1, 1]
+    }
+  ]
+}

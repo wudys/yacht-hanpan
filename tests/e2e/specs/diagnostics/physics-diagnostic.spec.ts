@@ -77,10 +77,11 @@ test('runs submitted physics inputs and repeats their raw Canvas without a new c
   await expect(page.locator('[data-physics-die-slot]')).toHaveCount(5);
 
   await page.getByRole('textbox', { name: 'Seed' }).fill('anchor-query');
-  await page.getByRole('combobox', { name: 'Pour style' }).selectOption('classic');
+  await page.getByRole('combobox', { name: 'Pour style' }).selectOption('oblique');
   await page.getByRole('spinbutton', { name: 'Dice count' }).fill('2');
   await run.click();
   await expect(page.getByTestId('physics-current-seed')).toHaveText('anchor-query');
+  await expect(page.getByTestId('physics-current-style')).toHaveText('oblique');
   await expect(page.getByTestId('physics-current-count')).toHaveText('2');
   await expect(replay).toHaveAttribute('data-physics-complete', 'true', { timeout: 20_000 });
   await expectRawCanvas(page);

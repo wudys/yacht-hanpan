@@ -9,7 +9,7 @@ const input: SimulationInput = {
   rollId: 'roll-digest',
   seed: 'seed-digest',
   rolledSlots: [0],
-  pourStyle: POUR_STYLE.CLASSIC,
+  pourStyle: POUR_STYLE.OBLIQUE,
 };
 
 const timeline: RollTimeline = {
@@ -17,7 +17,7 @@ const timeline: RollTimeline = {
   seed: input.seed,
   durationMs: 1200,
   cup: {
-    style: POUR_STYLE.CLASSIC,
+    style: POUR_STYLE.OBLIQUE,
     shakeAmplitude: 0.1,
     shakeFrequency: 2,
     pourAtMs: 300,

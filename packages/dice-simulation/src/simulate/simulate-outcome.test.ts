@@ -30,7 +30,7 @@ describe('optional replay recording', () => {
   );
   inputs.push(
     ...[
-      ['classic', 'flow-audit-batch-20260918-classic-103'],
+      ['oblique', 'flow-audit-batch-20260918-classic-103'],
       ['burst', 'flow-audit-batch-20260918-toss-14'],
       ['oblique', 'flow-audit-batch-20260918-ricochet-397'],
     ].map(([pourStyle, seed]) => ({
@@ -96,6 +96,45 @@ describe('optional replay recording', () => {
       }
     });
   }
+
+  test('maps every nonempty slot subset without changing count-based physics', async () => {
+    for (const pourStyle of POUR_STYLES) {
+      const baselines = new Map<number, Awaited<ReturnType<typeof simulateRollReplay>>>();
+      const subsets: DieSlot[][] = [[]];
+      for (const slot of [0, 1, 2, 3, 4] as const) {
+        subsets.push(...subsets.map((subset) => [...subset, slot]));
+      }
+      for (const rolledSlots of subsets.slice(1)) {
+        const count = rolledSlots.length;
+        const input: SimulationInput = {
+          rollId: `slot-layout-${pourStyle}-${count}`,
+          seed: `slot-layout-${pourStyle}-${count}`,
+          pourStyle,
+          rolledSlots,
+        };
+        let baseline = baselines.get(count);
+        if (!baseline) {
+          baseline = await simulateRollReplay({
+            ...input,
+            rolledSlots: Array.from({ length: count }, (_, slot) => slot as DieSlot),
+          });
+          baselines.set(count, baseline);
+        }
+        const replay = await simulateRollReplay(input);
+        const outcome = await simulateRollOutcome(input);
+        expect(replay.timeline.dice.map(({ slot }) => slot)).toEqual(rolledSlots);
+        expect(outcome.authoritativeValuesBySlot).toEqual(replay.authoritativeValuesBySlot);
+        expect(replay.timeline.cup).toEqual(baseline.timeline.cup);
+        expect(replay.timeline.durationMs).toBe(baseline.timeline.durationMs);
+        replay.timeline.dice.forEach((die, dieIndex) => {
+          expect(die).toEqual({
+            ...baseline.timeline.dice[dieIndex]!,
+            slot: rolledSlots[dieIndex],
+          });
+        });
+      }
+    }
+  });
 
   test('recording density changes frames without changing physical completion', () => {
     const cadence = spyOn(recording, 'timelineSampleEverySteps');

@@ -1,11 +1,11 @@
 import { createHash } from 'node:crypto';
 
 import {
-  AUTOMATIC_POUR_STYLES,
   type DieSlot,
   isRollCandidateEvaluation,
   isSimulationInput,
   isSimulationOutcome,
+  POUR_STYLES,
   type PourStyle,
   type RollCandidateEvaluation,
   type RolledFace,
@@ -159,7 +159,7 @@ export function parseAuthoritativeRollCorpus(value: unknown): AuthoritativeRollC
   value.groups.forEach((group: unknown, index: number) => {
     check(record(group), `groups[${index}]`, 'expected object');
     check(
-      AUTOMATIC_POUR_STYLES.some((style) => style === group.pourStyle) &&
+      POUR_STYLES.some((style) => style === group.pourStyle) &&
         slots(group.rolledSlots) &&
         positiveInteger(group.plannedCommands),
       `groups[${index}]`,

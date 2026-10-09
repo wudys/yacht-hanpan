@@ -12,7 +12,7 @@ const replay = {
   mode: 'seeded-physics',
   rollId: ROLL_ID,
   seed: 'server-csprng-seed',
-  pourStyle: POUR_STYLE.CLASSIC,
+  pourStyle: POUR_STYLE.OBLIQUE,
   rolledSlots: [0, 2, 4],
   contract: {
     releaseId: RELEASE_ID,
@@ -94,6 +94,12 @@ describe('resolved roll artifact', () => {
       expect(() => parse({ type: 'roll:resolved', replay, outcome })).not.toThrow();
     });
 
+    test('rejects a retired classic recipe without remapping it', () => {
+      expect(() =>
+        parse({ type: 'roll:resolved', replay: { ...replay, pourStyle: 'classic' }, outcome }),
+      ).toThrow(GameApiParseError);
+    });
+
     test('rejects a retired full-timeline digest field', () => {
       expect(() => parse({ type: 'roll:resolved', replay, outcome, replayDigest })).toThrow(
         GameApiParseError,
@@ -159,7 +165,7 @@ describe('resolved roll artifact', () => {
     });
   });
 
-  test.each(['classic', 'burst', 'oblique'])('accepts selected %s recipe', (pourStyle) => {
+  test.each(['burst', 'oblique'])('accepts selected %s recipe', (pourStyle) => {
     expect(
       parseResolvedRollArtifact({
         type: 'roll:resolved',

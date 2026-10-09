@@ -2,9 +2,9 @@ import RAPIER from '@dimforge/rapier3d-deterministic';
 import { beforeAll, expect, spyOn, test } from 'bun:test';
 
 import {
-  AUTOMATIC_POUR_STYLES,
   CUP_EXIT_HOLD_MS,
   type DieSlot,
+  POUR_STYLES,
   type QuaternionTuple,
   type Vector3Tuple,
 } from '../contract';
@@ -17,6 +17,7 @@ import { recognizeTopFace } from './internal/result-recognition';
 import { FIXED_STEP_SECONDS } from './internal/roll-simulation-constants';
 import { rotateVectorByQuat } from './internal/simulation-math';
 import { simulateRollTimeline } from './simulate-physics';
+import { evaluateRollCandidate } from './simulate-roll';
 
 beforeAll(initializeDeterministicRapierForBun);
 
@@ -25,11 +26,11 @@ test.each([
   ['burst', 3, '4784dec7144e75efeab828872fca6b46ff1b083f940cef555cb3771c2efe5aad'],
   ['burst', 3, '81629ce8e7ca36b160b19ed5a40de42ba2205c987d6b6bb5c83676725cc565c9'],
   ['burst', 3, 'a08e4eb983405c53f9fe27895447b35a5edfebf8928bc7fe7ddbe91d057d82cc'],
-  ['classic', 4, 'f6456f17981b40171b1418bde30ae0d5f5a99681467f519dc5a5d5aefe1e52b1'],
+  ['oblique', 4, 'f6456f17981b40171b1418bde30ae0d5f5a99681467f519dc5a5d5aefe1e52b1'],
   ['oblique', 5, '0f983d52407e097276f343be76137484967e6118962e2a39bb1ad7b1fb52f3ff'],
   ['oblique', 5, '9cba47b0031dae07923363b555ad2b0c64ac1632e34de021c759742d844e4f2e'],
-  ['classic', 5, '09f803d73b17ab82d26895b1374bf828e61e53408667a16aacfb4f98445643a8'],
-  ['classic', 5, 'a817e9de94909efed949d872b44be0f5ef4b1f69768b1c65fee5b73a4e9188c9'],
+  ['oblique', 5, '09f803d73b17ab82d26895b1374bf828e61e53408667a16aacfb4f98445643a8'],
+  ['oblique', 5, 'a817e9de94909efed949d872b44be0f5ef4b1f69768b1c65fee5b73a4e9188c9'],
   ['oblique', 4, '0601513f8d98fa4fbf0698a8799e5811af3a242b143cfe92d12a634ad84fa803'],
   ['oblique', 5, '0da2621d62547f5ee880f4f5c850e84e2737332f600d72e52ab77ad05913e192'],
 ] as const)(
@@ -47,99 +48,124 @@ test.each([
   },
 );
 
-test.each(
-  (['classic', 'burst', 'oblique'] as const).flatMap((style) =>
-    [1, 2, 3, 4, 5].map((count) => [style, count] as const),
-  ),
-)('keeps the mouth closed through shaking/gathering, then opens for %s %i dice', (style, count) => {
-  const seed = '4784dec7144e75efeab828872fca6b46ff1b083f940cef555cb3771c2efe5aad';
-  const motion = createCupMotion(seed, style);
-  const stepWorld = RAPIER.World.prototype.step;
-  let substep = 0;
-  let closedThroughoutShake = true;
-  let openThroughoutPour = true;
-  let lastClosedAt = -1;
-  let firstOpenAt = Infinity;
-  let escapedWhileShaking = false;
-  const observer = spyOn(RAPIER.World.prototype, 'step').mockImplementation(function (
-    this: RAPIER.World,
-    ...args: Parameters<typeof stepWorld>
-  ) {
-    stepWorld.apply(this, args);
-    const bodies: RAPIER.RigidBody[] = [];
-    this.forEachRigidBody((body) => bodies.push(body));
-    const cup = bodies.find((body) => body.isKinematic());
-    if (!cup) return;
-    const substeps = Math.round(FIXED_STEP_SECONDS / this.timestep);
-    const t = Math.round(Math.floor(substep++ / substeps) * FIXED_STEP_SECONDS * 1000);
-    const center = cup.translation();
-    const normal = rotateVectorByQuat([0, 1, 0], cup.rotation());
-    const ray = new RAPIER.Ray(center, { x: normal[0], y: normal[1], z: normal[2] });
-    const blockedMouth = Array.from({ length: cup.numColliders() }, (_, i) => cup.collider(i)).some(
-      (collider) => collider.castRay(ray, DEFAULT_CUP_GEOMETRY.innerHeight / 2 + 0.02, true) >= 0,
-    );
-    if (t >= motion.pourAtMs) {
-      openThroughoutPour &&= !blockedMouth;
-      if (!blockedMouth) firstOpenAt = Math.min(firstOpenAt, t);
-      return;
-    }
-    closedThroughoutShake &&= blockedMouth;
-    if (blockedMouth) lastClosedAt = t;
-    for (const die of bodies.filter((body) => body.isDynamic())) {
-      const p = die.translation();
-      const q = die.rotation();
-      const core = DIE_GEOMETRY.size / 2 - DIE_GEOMETRY.colliderRadius;
-      const support =
-        DIE_GEOMETRY.colliderRadius +
-        core *
-          (
-            [
-              [1, 0, 0],
-              [0, 1, 0],
-              [0, 0, 1],
-            ] as Vector3Tuple[]
-          ).reduce((sum, axis) => sum + Math.abs(dot(rotateVectorByQuat(axis, q), normal)), 0);
-      const projection = dot([p.x - center.x, p.y - center.y, p.z - center.z], normal);
-      escapedWhileShaking ||= projection - support > DEFAULT_CUP_GEOMETRY.innerHeight / 2 + 0.005;
-    }
-  });
-  try {
-    const timeline = simulateRollTimeline({
-      rollId: 'shake-containment-regression',
-      seed,
-      pourStyle: style,
-      rolledSlots: [0, 1, 2, 3, 4].slice(0, count) as DieSlot[],
+test.each(POUR_STYLES.flatMap((style) => [1, 2, 3, 4, 5].map((count) => [style, count] as const)))(
+  'keeps the mouth closed through shaking/gathering, then opens for %s %i dice',
+  (style, count) => {
+    const seed = '4784dec7144e75efeab828872fca6b46ff1b083f940cef555cb3771c2efe5aad';
+    const motion = createCupMotion(seed, style);
+    const stepWorld = RAPIER.World.prototype.step;
+    let substep = 0;
+    let closedThroughoutShake = true;
+    let openThroughoutPour = true;
+    let lastClosedAt = -1;
+    let firstOpenAt = Infinity;
+    let escapedWhileShaking = false;
+    const observer = spyOn(RAPIER.World.prototype, 'step').mockImplementation(function (
+      this: RAPIER.World,
+      ...args: Parameters<typeof stepWorld>
+    ) {
+      stepWorld.apply(this, args);
+      const bodies: RAPIER.RigidBody[] = [];
+      this.forEachRigidBody((body) => bodies.push(body));
+      const cup = bodies.find((body) => body.isKinematic());
+      if (!cup) return;
+      const substeps = Math.round(FIXED_STEP_SECONDS / this.timestep);
+      const t = Math.round(Math.floor(substep++ / substeps) * FIXED_STEP_SECONDS * 1000);
+      const center = cup.translation();
+      const normal = rotateVectorByQuat([0, 1, 0], cup.rotation());
+      const ray = new RAPIER.Ray(center, { x: normal[0], y: normal[1], z: normal[2] });
+      const blockedMouth = Array.from({ length: cup.numColliders() }, (_, i) =>
+        cup.collider(i),
+      ).some(
+        (collider) => collider.castRay(ray, DEFAULT_CUP_GEOMETRY.innerHeight / 2 + 0.02, true) >= 0,
+      );
+      if (t >= motion.pourAtMs) {
+        openThroughoutPour &&= !blockedMouth;
+        if (!blockedMouth) firstOpenAt = Math.min(firstOpenAt, t);
+        return;
+      }
+      closedThroughoutShake &&= blockedMouth;
+      if (blockedMouth) lastClosedAt = t;
+      for (const die of bodies.filter((body) => body.isDynamic())) {
+        const p = die.translation();
+        const q = die.rotation();
+        const core = DIE_GEOMETRY.size / 2 - DIE_GEOMETRY.colliderRadius;
+        const support =
+          DIE_GEOMETRY.colliderRadius +
+          core *
+            (
+              [
+                [1, 0, 0],
+                [0, 1, 0],
+                [0, 0, 1],
+              ] as Vector3Tuple[]
+            ).reduce((sum, axis) => sum + Math.abs(dot(rotateVectorByQuat(axis, q), normal)), 0);
+        const projection = dot([p.x - center.x, p.y - center.y, p.z - center.z], normal);
+        escapedWhileShaking ||= projection - support > DEFAULT_CUP_GEOMETRY.innerHeight / 2 + 0.005;
+      }
     });
-    expect(closedThroughoutShake).toBe(true);
-    expect(lastClosedAt).toBeGreaterThanOrEqual(motion.pourAtMs - FIXED_STEP_SECONDS * 1000 - 1);
-    expect(openThroughoutPour).toBe(true);
-    expect(firstOpenAt).toBeGreaterThanOrEqual(motion.pourAtMs);
-    expect(firstOpenAt).toBeLessThanOrEqual(motion.pourAtMs + FIXED_STEP_SECONDS * 1000 + 1);
-    expect(escapedWhileShaking).toBe(false);
-    expect(timeline.cup.releaseAtMs).toBeGreaterThan(motion.pourAtMs);
-  } finally {
-    observer.mockRestore();
-  }
-});
+    try {
+      const timeline = simulateRollTimeline({
+        rollId: 'shake-containment-regression',
+        seed,
+        pourStyle: style,
+        rolledSlots: [0, 1, 2, 3, 4].slice(0, count) as DieSlot[],
+      });
+      expect(closedThroughoutShake).toBe(true);
+      expect(lastClosedAt).toBeGreaterThanOrEqual(motion.pourAtMs - FIXED_STEP_SECONDS * 1000 - 1);
+      expect(openThroughoutPour).toBe(true);
+      expect(firstOpenAt).toBeGreaterThanOrEqual(motion.pourAtMs);
+      expect(firstOpenAt).toBeLessThanOrEqual(motion.pourAtMs + FIXED_STEP_SECONDS * 1000 + 1);
+      expect(escapedWhileShaking).toBe(false);
+      expect(timeline.cup.releaseAtMs).toBeGreaterThan(motion.pourAtMs);
+    } finally {
+      observer.mockRestore();
+    }
+  },
+);
 
-test('mixes more than a lone top die during five-die cup shaking', () => {
+test('mixes more than a lone top die during five-die cup shaking', async () => {
   let tumbledDice = 0;
   for (let sequence = 0; sequence < 20; sequence += 1) {
     const seed = `cup-shake-mixing-${sequence}`;
-    const timeline = simulateRollTimeline({
-      rollId: seed,
-      seed,
-      rolledSlots: [0, 1, 2, 3, 4],
-      pourStyle: 'classic',
+    const motion = createCupMotion(seed, 'oblique');
+    const initialFaces = new Map<number, number>();
+    const tumbled = new Set<number>();
+    let elapsedSeconds = 0;
+    const stepWorld = RAPIER.World.prototype.step;
+    const topFace = (body: RAPIER.RigidBody) => {
+      const q = body.rotation();
+      return recognizeTopFace([q.x, q.y, q.z, q.w]);
+    };
+    const observer = spyOn(RAPIER.World.prototype, 'step').mockImplementation(function (
+      this: RAPIER.World,
+      ...args: Parameters<typeof stepWorld>
+    ) {
+      this.forEachRigidBody((body) => {
+        if (body.isDynamic() && !initialFaces.has(body.handle))
+          initialFaces.set(body.handle, topFace(body));
+      });
+      stepWorld.apply(this, args);
+      elapsedSeconds += this.timestep;
+      if (elapsedSeconds * 1000 > motion.pourAtMs) return;
+      this.forEachRigidBody((body) => {
+        if (body.isDynamic() && topFace(body) !== initialFaces.get(body.handle))
+          tumbled.add(body.handle);
+      });
     });
-    for (const die of timeline.dice) {
-      const initialTop = recognizeTopFace(die.frames[0]!.q);
-      if (
-        die.frames.some(
-          (frame) => frame.t <= timeline.cup.pourAtMs && recognizeTopFace(frame.q) !== initialTop,
-        )
-      )
-        tumbledDice += 1;
+    try {
+      // Shaking is observable even if this candidate is later rejected at rest.
+      const candidate = await evaluateRollCandidate({
+        rollId: seed,
+        seed,
+        rolledSlots: [0, 1, 2, 3, 4],
+        pourStyle: 'oblique',
+      });
+      expect(['accepted', 'rejected']).toContain(candidate.status);
+      expect(initialFaces.size).toBe(5);
+      tumbledDice += tumbled.size;
+    } finally {
+      observer.mockRestore();
     }
   }
   // Detect the four-die locked bed, not a desired final face or score distribution.
@@ -149,7 +175,7 @@ test('mixes more than a lone top die during five-die cup shaking', () => {
 
 test('remembers a mouth crossing during shaking when the die later rests behind the cup', () => {
   const seed = 'early-mouth-crossing';
-  const motion = createCupMotion(seed, 'classic');
+  const motion = createCupMotion(seed, 'oblique');
   const stepWorld = RAPIER.World.prototype.step;
   let elapsedSeconds = 0;
   let placedOnTray = false;
@@ -196,7 +222,7 @@ test('remembers a mouth crossing during shaking when the die later rests behind 
       rollId: seed,
       seed,
       rolledSlots: [0],
-      pourStyle: 'classic',
+      pourStyle: 'oblique',
     });
     expect(timeline.cup.releaseAtMs).toBeGreaterThanOrEqual(motion.pourAtMs);
     expect(timeline.cup.releaseAtMs - motion.pourAtMs).toBeLessThan(100);
@@ -206,11 +232,11 @@ test('remembers a mouth crossing during shaking when the die later rests behind 
   }
 });
 
-test.each(['classic', 'burst'] as const)(
+test.each(['oblique', 'burst'] as const)(
   'pours five %s dice without a late second batch',
   (style) => {
     const seeds =
-      style === 'classic'
+      style === 'oblique'
         ? Array.from({ length: 10 }, (_, sequence) => `coherent-pour-baseline-5-${sequence}`)
         : ['browser-parity-v1', 'coherent-pour-baseline-5-4', 'pour-direction-1'];
     for (const seed of seeds) {
@@ -260,7 +286,7 @@ test.each(['classic', 'burst'] as const)(
   },
 );
 
-test.each([...AUTOMATIC_POUR_STYLES])(
+test.each([...POUR_STYLES])(
   'exposes the %s die beyond the opaque cup before its exit fade',
   (pourStyle) => {
     const timeline = simulateRollTimeline({
@@ -292,7 +318,7 @@ test.each([...AUTOMATIC_POUR_STYLES])(
 
 test('fails a physically blocked cup without starting a timed exit', () => {
   const seed = 'blocked-cup-exit';
-  const expected = cupTransformAt(createCupMotion(seed, 'classic'), 3000);
+  const expected = cupTransformAt(createCupMotion(seed, 'oblique'), 3000);
   const createBody = RAPIER.World.prototype.createRigidBody;
   const stepWorld = RAPIER.World.prototype.step;
   let cupBody: RAPIER.RigidBody | undefined;
@@ -324,7 +350,7 @@ test('fails a physically blocked cup without starting a timed exit', () => {
   });
   try {
     expect(() =>
-      simulateRollTimeline({ rollId: seed, seed, rolledSlots: [0], pourStyle: 'classic' }),
+      simulateRollTimeline({ rollId: seed, seed, rolledSlots: [0], pourStyle: 'oblique' }),
     ).toThrow('Cup did not empty through its mouth');
     expect(lastPosition!.x).toBeCloseTo(expected.x, 5);
     expect(lastPosition!.y).toBeCloseTo(expected.y, 5);
@@ -349,15 +375,14 @@ test('allows a released die to bounce below the cup while the remaining dice lea
 test.each([
   { count: 1, seed: 't5-final-classic-1' },
   { count: 5, seed: 't5-final-classic-5' },
-  // Explicit classic remains physically supported; the product visibility guarantee
-  // now belongs to the selected automatic styles above. Keep its historical input.
+  // Retain the historical seed while exercising a supported gesture.
   { count: 1, seed: 't7-tuning-1-1' },
-])('empties $count classic dice through the mouth before exit ($seed)', ({ count, seed }) => {
+])('empties $count oblique dice through the mouth before exit ($seed)', ({ count, seed }) => {
   const timeline = simulateRollTimeline({
     rollId: `natural-cup-release-${count}`,
     seed,
     rolledSlots: Array.from({ length: count }, (_, i) => i as DieSlot),
-    pourStyle: 'classic',
+    pourStyle: 'oblique',
   });
   const cupFrame = [...timeline.cup.frames].reverse().find((frame) => frame.mode === 'pour')!;
   expect(cupFrame).toBeDefined();

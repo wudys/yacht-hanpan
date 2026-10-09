@@ -1,8 +1,8 @@
 import { createHash } from 'node:crypto';
 
 import {
-  AUTOMATIC_POUR_STYLES,
   isRollCandidateEvaluation,
+  POUR_STYLES,
   type RollCandidateEvaluation,
   type SimulationInput,
 } from '@repo/dice-simulation/contract';
@@ -75,7 +75,7 @@ export function createRollCorpusPlan(prefix: string, perGroup: number) {
   }
   const groups: CorpusGroup[] = [];
   const commands: PlannedRollCommand[] = [];
-  for (const pourStyle of AUTOMATIC_POUR_STYLES) {
+  for (const pourStyle of POUR_STYLES) {
     for (let count = 1; count <= 5; count += 1) {
       const rolledSlots = ([0, 1, 2, 3, 4] as const).slice(0, count);
       const groupOrdinal = groups.length;

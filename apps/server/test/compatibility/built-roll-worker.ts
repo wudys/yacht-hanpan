@@ -123,7 +123,7 @@ async function verifyBuiltAuthorityReseeding(): Promise<void> {
     workerUrl: builtWorkerUrl,
     reportUnexpected: (error) => reports.push(error),
   });
-  const seeds = ['21f806f9d20df7231635b433a1dc99aa', 'ad8a8e1d054b30cb5f30ec3ca4ed8754'];
+  const seeds = ['rejection-regression-v37-burst-4-281', 'ad8a8e1d054b30cb5f30ec3ca4ed8754'];
   let createdSeeds = 0;
   let createdIds = 0;
   let createdStyles = 0;
@@ -175,10 +175,10 @@ async function verifyBuiltAuthorityReseeding(): Promise<void> {
     assert.equal(result.artifact.replay.pourStyle, 'burst');
     assert.deepEqual(result.artifact.replay.rolledSlots, [0, 1, 2, 3]);
     assert.deepEqual(result.artifact.outcome.authoritativeValuesBySlot, [
-      { slot: 0, value: 1 },
-      { slot: 1, value: 5 },
-      { slot: 2, value: 4 },
-      { slot: 3, value: 4 },
+      { slot: 0, value: 2 },
+      { slot: 1, value: 1 },
+      { slot: 2, value: 5 },
+      { slot: 3, value: 2 },
     ]);
     assert.equal(JSON.stringify(result).includes(seeds[0]!), false);
     assert.deepEqual(reports, []);
@@ -200,21 +200,21 @@ async function verifyBuiltWorkerCandidateRejections(): Promise<void> {
   });
   try {
     await executor.start();
-    // Independent r900 regression inputs verify real built/WASM rejection IPC.
+    // Reviewed v37 regression inputs verify both real built/WASM rejection reasons.
     for (const fixture of [
       {
-        seed: '21f806f9d20df7231635b433a1dc99aa',
+        seed: 'rejection-regression-v37-burst-5-3008',
         pourStyle: 'burst',
-        rolledSlots: [0, 1, 2, 3],
+        rolledSlots: [0, 1, 2, 3, 4],
         reason: 'stable-stack',
-        simulationMs: 2567,
+        simulationMs: 2717,
       },
       {
-        seed: 'd71d816244d19bcfe1cc4af2be4ded05',
-        pourStyle: 'oblique',
-        rolledSlots: [0, 1, 2],
+        seed: 'rejection-regression-v37-burst-4-281',
+        pourStyle: 'burst',
+        rolledSlots: [0, 1, 2, 3],
         reason: 'repeated-assist',
-        simulationMs: 3300,
+        simulationMs: 3350,
       },
     ] as const) {
       const input = {

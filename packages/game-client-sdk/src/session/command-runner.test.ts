@@ -25,7 +25,7 @@ const ROLL = parseResolvedRollArtifact({
     mode: 'seeded-physics',
     rollId: '8184fc0a-4e59-455d-a7c1-579a9ee96403',
     seed: 'server-seed',
-    pourStyle: 'classic',
+    pourStyle: 'oblique',
     rolledSlots: [0],
     contract: createCompatibilityContract('release-1'),
   },

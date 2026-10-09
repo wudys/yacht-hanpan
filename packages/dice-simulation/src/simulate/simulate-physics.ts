@@ -12,8 +12,12 @@ import {
   type SimulationReplay,
 } from '../contract';
 import { assertRapierReady } from '../rapier/state';
-import { createCupFrame, createCupMotion, cupTransformAt } from './internal/cup/cup-motion';
-import { CUP_EXIT_TAIL_MS } from './internal/cup/cup-motion-progress';
+import {
+  createCupFrame,
+  createCupMotion,
+  cupTransformAt,
+  setCupReleaseTime,
+} from './internal/cup/cup-motion';
 import { cupInteriorDimensions } from './internal/cup/cup-timeline-dimensions';
 import {
   applyCupPourAssist,
@@ -27,7 +31,7 @@ import {
   updatePhysicsCup,
 } from './internal/cup/physics-cup';
 import { createRollPhysicsConfig } from './internal/physics-config';
-import { createDieInCup, createRollWorld, createTray } from './internal/physics-environment';
+import { createDiceInCup, createRollWorld, createTray } from './internal/physics-environment';
 import { recognizeTopFace } from './internal/result-recognition';
 import {
   DIE_SIZE,
@@ -110,12 +114,10 @@ export function simulateRollPhysics(
   try {
     const tray = createTray(world, physics);
 
-    const cup = createCupMotion(seed, pourStyle);
-    const physicsCup = createPhysicsCup(world, cupTransformAt(cup, 0), DEFAULT_CUP_GEOMETRY);
+    const cupMotion = createCupMotion(seed, pourStyle);
+    const physicsCup = createPhysicsCup(world, cupTransformAt(cupMotion, 0), DEFAULT_CUP_GEOMETRY);
     const shakeLid = createCupShakeLid(world, physicsCup);
-    const dice = Array.from({ length: diceCount }, (_, index) =>
-      createDieInCup(world, seed, index, diceCount, cup, physics),
-    );
+    const dice = createDiceInCup(world, seed, diceCount, cupMotion, physics);
     const frames: DieFrame[][] | undefined = recordTimeline ? dice.map(() => []) : undefined;
     const cupFrames: CupFrame[] | undefined = recordTimeline ? [] : undefined;
     const rollSimulationMs = Math.round(
@@ -123,7 +125,7 @@ export function simulateRollPhysics(
         Math.max(0, diceCount - 3) * 180 +
         seededNumber(`${seed}:roll-length`, diceCount) * 620,
     );
-    let simulationMs = cup.releaseAtMs + rollSimulationMs;
+    let simulationMs = cupMotion.releaseAtMs + rollSimulationMs;
     const steps = Math.ceil(simulationMs / 1000 / FIXED_STEP_SECONDS);
     const sampleEvery = timelineSampleEverySteps();
     let released = false;
@@ -167,17 +169,17 @@ export function simulateRollPhysics(
       const t = Math.round(step * FIXED_STEP_SECONDS * 1000);
       // Before observation, releaseAtMs is only the waiting deadline. Do not
       // let that placeholder start the exit path and pull a blocked cup away.
-      if (!released && t > cup.releaseAtMs) {
+      if (!released && t > cupMotion.releaseAtMs) {
         throw new CupReleaseError(t, exitedDice.size, diceCount);
       }
-      if (!shakeLidRemoved && t >= cup.pourAtMs) {
+      if (!shakeLidRemoved && t >= cupMotion.pourAtMs) {
         // Open before the first pour substep; the lid never drives the pour.
         removeCupShakeLid(world, physicsCup, shakeLid);
         shakeLidRemoved = true;
       }
       if (!cupRemoved) {
-        updatePhysicsCup(physicsCup, cupTransformAt(cup, t));
-        if (released && t >= cup.exitAtMs) {
+        updatePhysicsCup(physicsCup, cupTransformAt(cupMotion, t));
+        if (released && t >= cupMotion.exitAtMs) {
           removePhysicsCup(world, physicsCup);
           cupRemoved = true;
           // CCD stays active for every visible cup contact, then discrete tray
@@ -186,14 +188,14 @@ export function simulateRollPhysics(
         }
       }
 
-      const rollElapsedSeconds = Math.max(0, (t - cup.releaseAtMs) / 1000);
+      const rollElapsedSeconds = Math.max(0, (t - cupMotion.releaseAtMs) / 1000);
       if (cupRemoved) {
         constrainRolloutVelocity(dice, rollElapsedSeconds);
         constrainRolloutAngularVelocity(dice, rollElapsedSeconds);
       }
       if (cupRemoved) world.step();
       else stepWorldWithCup(world, physicsCup);
-      if (!released) applyCupPourAssist(physicsCup, dice, cup, t, exitedDice);
+      if (!released) applyCupPourAssist(physicsCup, dice, cupMotion, t, exitedDice);
       if (!released) {
         for (const die of dice) {
           if (!exitedDice.has(die.id) && haveDiceClearedCup(physicsCup, [die])) {
@@ -203,7 +205,7 @@ export function simulateRollPhysics(
       }
       if (
         !released &&
-        t >= cup.pourAtMs &&
+        t >= cupMotion.pourAtMs &&
         exitedDice.size === diceCount &&
         areDiceOutsideCup(physicsCup, dice)
       ) {
@@ -211,15 +213,14 @@ export function simulateRollPhysics(
         // Each die must have crossed the mouth, but an earlier die may now be
         // below/beside the finite cup after bouncing. It need not remain in the
         // mouth's infinite half-space. Current full-shape clearance still gates exit.
-        cup.releaseAtMs = t + Math.round(FIXED_STEP_SECONDS * 1000);
-        cup.exitAtMs = cup.releaseAtMs + CUP_EXIT_HOLD_MS + CUP_EXIT_TAIL_MS;
+        setCupReleaseTime(cupMotion, t + Math.round(FIXED_STEP_SECONDS * 1000));
       }
       if (cupRemoved) assistance.apply(t);
       const observation = policy.observe(world, dice, tray.floor, t, cupRemoved);
       if (observation.rejection) return reject(observation.rejection);
       rolloutStableSamples = observation.readable ? rolloutStableSamples + 1 : 0;
 
-      const samplesEveryPourStep = t >= cup.pourAtMs && t < cup.releaseAtMs;
+      const samplesEveryPourStep = t >= cupMotion.pourAtMs && t < cupMotion.releaseAtMs;
       const recordsStep = samplesEveryPourStep || step % sampleEvery === 0 || step === steps;
       if (frames && cupFrames && recordsStep) {
         dice.forEach((die, index) => {
@@ -231,7 +232,7 @@ export function simulateRollPhysics(
             q: [round(q.x), round(q.y), round(q.z), round(q.w)],
           });
         });
-        cupFrames.push(createCupFrame(cup, t));
+        cupFrames.push(createCupFrame(cupMotion, t));
       }
 
       if (!samplesEveryPourStep && step % ROLLOUT_HANDOFF_EVERY_STEPS !== 0 && step !== steps)
@@ -241,10 +242,13 @@ export function simulateRollPhysics(
       const maxVisualRolloutMs = 2400;
       if (
         released &&
-        t > cup.exitAtMs - CUP_EXIT_HOLD_MS + 420 &&
-        ((cupRemoved && t - cup.releaseAtMs > (diceCount >= 5 ? 1400 : 1100) && observation.flat) ||
-          (t - cup.releaseAtMs > minRolloutMs && rolloutStableSamples >= ROLLOUT_STABLE_SAMPLES) ||
-          (t - cup.releaseAtMs > maxVisualRolloutMs &&
+        t > cupMotion.exitAtMs - CUP_EXIT_HOLD_MS + 420 &&
+        ((cupRemoved &&
+          t - cupMotion.releaseAtMs > (diceCount >= 5 ? 1400 : 1100) &&
+          observation.flat) ||
+          (t - cupMotion.releaseAtMs > minRolloutMs &&
+            rolloutStableSamples >= ROLLOUT_STABLE_SAMPLES) ||
+          (t - cupMotion.releaseAtMs > maxVisualRolloutMs &&
             hasReadableHandoffPose(dice, DIE_SIZE * 0.3, 0.88) &&
             !hasElevatedNearbyPair(dice)))
       ) {
@@ -311,13 +315,13 @@ export function simulateRollPhysics(
       seed,
       durationMs,
       cup: {
-        style: cup.style,
-        shakeAmplitude: cup.shakeAmplitude,
-        shakeFrequency: cup.shakeFrequency,
-        pourAtMs: cup.pourAtMs,
-        releaseAtMs: cup.releaseAtMs,
-        exitAtMs: cup.exitAtMs,
-        stageX: cup.stageX,
+        style: cupMotion.style,
+        shakeAmplitude: cupMotion.shakeAmplitude,
+        shakeFrequency: cupMotion.shakeFrequency,
+        pourAtMs: cupMotion.pourAtMs,
+        releaseAtMs: cupMotion.releaseAtMs,
+        exitAtMs: cupMotion.exitAtMs,
+        stageX: cupMotion.stageX,
         ...cupInteriorDimensions(),
         frames: cupFrames,
       },

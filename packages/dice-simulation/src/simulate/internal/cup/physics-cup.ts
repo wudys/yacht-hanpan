@@ -9,7 +9,7 @@ import {
 import type { PhysicsDie } from '../physics-environment';
 import { DIE_COLLIDER_RADIUS, DIE_SIZE, FIXED_STEP_SECONDS } from '../roll-simulation-constants';
 import { quatFromEuler, rotateVectorByQuat } from '../simulation-math';
-import type { CupTransform, SimulatedCupMotion } from './cup-motion';
+import type { CupMotionState, CupTransform } from './cup-motion';
 
 export interface PhysicsCup {
   readonly geometry: CupGeometry;
@@ -137,7 +137,7 @@ export function removePhysicsCup(world: World, cupBody: PhysicsCup): void {
 export function applyCupPourAssist(
   cup: PhysicsCup,
   dice: readonly PhysicsDie[],
-  motion: SimulatedCupMotion,
+  motion: CupMotionState,
   timeMs: number,
   exitedDice: ReadonlySet<string>,
 ): void {

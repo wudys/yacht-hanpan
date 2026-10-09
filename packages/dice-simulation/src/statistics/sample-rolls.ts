@@ -1,8 +1,8 @@
 import {
-  AUTOMATIC_POUR_STYLES,
   type DieFace,
   type DieSlot,
   parseSimulationInput,
+  POUR_STYLES,
   type PourStyle,
   type RollCandidateRejectionReason,
   type SimulationInput,
@@ -37,7 +37,7 @@ export async function sampleRolls(
   seedPrefix: string,
 ): Promise<RollSampleGroup[]> {
   const inputs: SimulationInput[] = [];
-  for (const pourStyle of AUTOMATIC_POUR_STYLES) {
+  for (const pourStyle of POUR_STYLES) {
     for (let count = 1; count <= 5; count += 1) {
       const rolledSlots = Array.from({ length: count }, (_, index) => index as DieSlot);
       for (let attemptSequence = 0; attemptSequence < samplesPerGroup; attemptSequence += 1) {

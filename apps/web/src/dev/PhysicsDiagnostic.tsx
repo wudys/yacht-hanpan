@@ -23,7 +23,7 @@ import { GameFrame } from '@/ui/layout';
 export function PhysicsDiagnostic() {
   const [draft, setDraft] = useState({
     seed: 'gesture-explore-20260921-14',
-    pourStyle: 'classic',
+    pourStyle: 'oblique',
     count: '5',
   });
   const [run, setRun] = useState<Readonly<{

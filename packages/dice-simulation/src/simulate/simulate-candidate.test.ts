@@ -13,21 +13,21 @@ import {
 
 beforeAll(initializeDeterministicRapierForBun);
 
-// Expected times are independently frozen from the adopted 900ms repeated-assistance experiment.
+// Reviewed v37 real-engine inputs preserve both rejection reasons after the layout change.
 test.each([
   {
-    seed: '21f806f9d20df7231635b433a1dc99aa',
+    seed: 'rejection-regression-v37-burst-5-3008',
     pourStyle: 'burst',
-    rolledSlots: [0, 1, 2, 3],
+    rolledSlots: [0, 1, 2, 3, 4],
     reason: 'stable-stack',
-    simulationMs: 2567,
+    simulationMs: 2717,
   },
   {
-    seed: 'd71d816244d19bcfe1cc4af2be4ded05',
-    pourStyle: 'oblique',
-    rolledSlots: [0, 1, 2],
+    seed: 'rejection-regression-v37-burst-4-281',
+    pourStyle: 'burst',
+    rolledSlots: [0, 1, 2, 3],
     reason: 'repeated-assist',
-    simulationMs: 3300,
+    simulationMs: 3350,
   },
 ] as const)('rejects $reason before producing a game outcome', async (fixture) => {
   const input: SimulationInput = {
@@ -71,11 +71,11 @@ test('finishes the former wall guard gap and preserves the physical result hold'
     status: 'accepted',
     outcome: { input, authoritativeValuesBySlot: replay.authoritativeValuesBySlot },
   });
-  expect(replay.authoritativeValuesBySlot.map(({ value }) => value)).toEqual([1, 5, 4, 4]);
+  expect(replay.authoritativeValuesBySlot.map(({ value }) => value)).toEqual([2, 1, 5, 2]);
   for (const die of replay.timeline.dice) {
     const last = die.frames.at(-1)!;
     const physical = die.frames.at(-2)!;
-    expect(physical.t).toBe(3500);
-    expect(last).toEqual({ ...physical, t: 3750 });
+    expect(physical.t).toBe(3167);
+    expect(last).toEqual({ ...physical, t: 3417 });
   }
 });

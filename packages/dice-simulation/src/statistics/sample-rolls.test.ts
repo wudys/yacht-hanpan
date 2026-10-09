@@ -6,7 +6,7 @@ test('raw sampling retains rejected attempts and reason/time without fabricating
   const report = await sampleRollInputs([
     {
       rollId: 'sample-rejected',
-      seed: '21f806f9d20df7231635b433a1dc99aa',
+      seed: 'rejection-regression-v37-burst-4-281',
       pourStyle: 'burst',
       rolledSlots: [0, 1, 2, 3],
     },
@@ -21,13 +21,13 @@ test('raw sampling retains rejected attempts and reason/time without fabricating
   expect(report[0].attempted).toBe(2);
   expect(report[0].accepted).toBe(1);
   expect(report[0].rejected).toEqual([
-    { attemptSequence: 0, reason: 'stable-stack', simulationMs: 2567 },
+    { attemptSequence: 0, reason: 'repeated-assist', simulationMs: 3350 },
   ]);
   expect(report[0].samples).toHaveLength(4);
   expect(report[0].samples.every(({ attemptSequence }) => attemptSequence === 1)).toBe(true);
 });
 
-test('automaticstyle/count groups keep the fixed attempted denominator', async () => {
+test('style/count groups keep the fixed attempted denominator', async () => {
   const groups = await sampleRolls(2, 'sampler-groups');
   expect(groups.map(({ pourStyle, count }) => `${pourStyle}:${count}`)).toEqual([
     'burst:1',

@@ -860,7 +860,7 @@ test('locks gameplay and withholds score previews until physical presentation se
           durationMs: 1_000,
           rollArea: { width: 10, depth: 10, aspectRatio: 1 },
           cup: {
-            style: 'classic',
+            style: 'oblique',
             shakeAmplitude: 1,
             shakeFrequency: 1,
             pourAtMs: 100,
@@ -1625,7 +1625,7 @@ test.each([
             seed: 'achievement-screen',
             durationMs: 1_000,
             cup: {
-              style: 'classic',
+              style: 'oblique',
               shakeAmplitude: 1,
               shakeFrequency: 1,
               pourAtMs: 100,
@@ -1663,7 +1663,7 @@ test.each([
           mode: 'seeded-physics',
           contract: createCompatibilityContract('test'),
           seed: 'achievement-test',
-          pourStyle: 'classic',
+          pourStyle: 'oblique',
           rolledSlots: [0, 1, 2, 3, 4],
         },
         outcome: { authoritativeValuesBySlot: [0, 1, 2, 3, 4].map((slot) => ({ slot, value: 6 })) },

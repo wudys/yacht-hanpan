@@ -24,9 +24,9 @@ import { resolveRollPlayback } from '@/runtime/dice/replay/resolve-playback';
 import type { CanvasFactory } from '@/runtime/dice/resources/canvas-factory';
 import { createProceduralDiceResources } from '@/runtime/dice/resources/procedural-resources';
 
-// These four recipes had the greatest bottom overlap in the earlier candidate
-// audit. Checking product meshes and the public sampler catches replay exposure
-// that a raw physics contact-distance test cannot establish.
+// Fixed historical challenge seeds now run through supported gestures. Product
+// meshes and the public sampler expose replay overlap that raw physics contact
+// distance alone cannot establish.
 const riskInputs: SimulationInput[] = [
   {
     rollId: 'golden-burst-5',
@@ -44,13 +44,13 @@ const riskInputs: SimulationInput[] = [
     rollId: 'golden-classic-5',
     seed: 'golden-classic-5',
     rolledSlots: [0, 1, 2, 3, 4],
-    pourStyle: 'classic',
+    pourStyle: 'oblique',
   },
   {
     rollId: 'golden-classic-3',
     seed: 'bench-classic-3-b',
     rolledSlots: [0, 2, 4],
-    pourStyle: 'classic',
+    pourStyle: 'oblique',
   },
 ];
 
@@ -104,9 +104,9 @@ describe('product replay and displayed bottom', () => {
     }
   });
 
-  test('the accepted 900ms policy recipe reproduces its authoritative outcome through the browser runtime', async () => {
-    // Frozen prototype guard-gap regression: these faces and completion times
-    // are independent expectations, not values sampled from this invocation.
+  test('the accepted recipe reproduces its authoritative outcome through the browser runtime', async () => {
+    // Frozen Bun authority result for the adopted simulation environment;
+    // expected faces and completion times are not sampled in this invocation.
     const artifact = {
       replay: {
         rollId: 'accepted-guard-gap',
@@ -116,33 +116,33 @@ describe('product replay and displayed bottom', () => {
       } satisfies SimulationInput,
       outcome: {
         authoritativeValuesBySlot: [
-          { slot: 0, value: 1 },
-          { slot: 1, value: 5 },
-          { slot: 2, value: 4 },
-          { slot: 3, value: 4 },
+          { slot: 0, value: 2 },
+          { slot: 1, value: 1 },
+          { slot: 2, value: 5 },
+          { slot: 3, value: 2 },
         ] as const,
       },
     };
     const playback = await resolveRollPlayback(artifact);
     expect(playback.status).toBe('verified');
     if (playback.status !== 'verified') throw new Error('Accepted recipe did not verify');
-    expect(playback.timeline.durationMs).toBe(3750);
+    expect(playback.timeline.durationMs).toBe(3417);
     expect(playback.timeline.dice.map((die) => ({ slot: die.slot, value: die.value }))).toEqual(
       artifact.outcome.authoritativeValuesBySlot,
     );
     for (const die of playback.timeline.dice) {
       const physical = die.frames.at(-2)!;
       const held = die.frames.at(-1)!;
-      expect(physical.t).toBe(3500);
-      expect(held).toEqual({ ...physical, t: 3750 });
+      expect(physical.t).toBe(3167);
+      expect(held).toEqual({ ...physical, t: 3417 });
     }
   });
 
-  test('a real stack rejection returns the authoritative static outcome without a second simulation', async () => {
+  test('a real physics rejection returns the authoritative static outcome without a second simulation', async () => {
     const artifact = {
       replay: {
-        rollId: 'rejected-stack',
-        seed: '21f806f9d20df7231635b433a1dc99aa',
+        rollId: 'rejected-assistance',
+        seed: 'rejection-regression-v37-burst-4-281',
         rolledSlots: [0, 1, 2, 3],
         pourStyle: 'burst',
       } satisfies SimulationInput,
@@ -162,7 +162,7 @@ describe('product replay and displayed bottom', () => {
     if (playback.status !== 'static-fallback') throw new Error('Rejected recipe did not fall back');
     expect(playback.reason).toBe('SIMULATION_FAILED');
     expect(playback.cause).toBeInstanceOf(SimulationRejectedError);
-    expect(playback.cause).toMatchObject({ reason: 'stable-stack', simulationMs: 2567 });
+    expect(playback.cause).toMatchObject({ reason: 'repeated-assist', simulationMs: 3350 });
     expect(playback.dice).toEqual(artifact.outcome.authoritativeValuesBySlot);
     expect(playback).not.toHaveProperty('timeline');
   });

@@ -11,7 +11,7 @@ export type RollPhysicsConfig = {
 const BASE_PHYSICS = {
   gravity: -27.2,
   floorRestitution: 0.16,
-  floorFriction: 0.25,
+  floorFriction: 0.28,
   wallRestitution: 0.5,
   wallFriction: 0.06,
   linearDamping: 0.025,

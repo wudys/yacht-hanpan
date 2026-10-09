@@ -40,7 +40,7 @@ describe('authoritative roll command executor', () => {
         recipeSource: {
           createRollId: () => 'server-roll',
           createRollSeed: () => 'server-seed',
-          createPourStyle: () => POUR_STYLE.CLASSIC,
+          createPourStyle: () => POUR_STYLE.OBLIQUE,
         },
         simulation: {
           execute: async (input) => {
@@ -458,7 +458,7 @@ describe('authoritative roll command executor', () => {
         recipeSource: {
           createRollId: () => 'server-roll',
           createRollSeed: () => 'server-seed',
-          createPourStyle: () => POUR_STYLE.CLASSIC,
+          createPourStyle: () => POUR_STYLE.OBLIQUE,
         },
         simulation: {
           execute: async (input) => {
@@ -512,7 +512,7 @@ describe('authoritative roll command executor', () => {
         recipeSource: {
           createRollId: () => '8184fc0a-4e59-455d-a7c1-579a9ee96403',
           createRollSeed: () => 'ef'.repeat(32),
-          createPourStyle: () => POUR_STYLE.CLASSIC,
+          createPourStyle: () => POUR_STYLE.OBLIQUE,
         },
         simulation: {
           execute: () => Promise.reject(new RollSimulationExecutorError(code)),
@@ -541,7 +541,7 @@ describe('authoritative roll command executor', () => {
         recipeSource: {
           createRollId: () => '8184fc0a-4e59-455d-a7c1-579a9ee96403',
           createRollSeed: () => 'ef'.repeat(32),
-          createPourStyle: () => POUR_STYLE.CLASSIC,
+          createPourStyle: () => POUR_STYLE.OBLIQUE,
         },
         simulation: { execute: () => Promise.reject(thrown) },
       });

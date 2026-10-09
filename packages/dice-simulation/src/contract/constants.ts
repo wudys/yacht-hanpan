@@ -1,16 +1,12 @@
 export const POUR_STYLE = {
-  CLASSIC: 'classic',
   BURST: 'burst',
   OBLIQUE: 'oblique',
 } as const;
 
-export const POUR_STYLES = Object.values(POUR_STYLE);
-
-/** Automatic rolls use the two adopted gestures; classic remains an explicit diagnostic input. */
-export const AUTOMATIC_POUR_STYLES = [POUR_STYLE.BURST, POUR_STYLE.OBLIQUE] as const;
+export const POUR_STYLES = Object.freeze(Object.values(POUR_STYLE));
 
 export const DICE_SIMULATION_CONTRACT = Object.freeze({
-  simulationVersion: 'dice-simulation-v36',
+  simulationVersion: 'dice-simulation-v37',
   timelineSchemaVersion: 'dice-timeline-v4',
   replayDigestVersion: 'sha256-q4-v2',
   prngVersion: 'sha256-counter53-v1',

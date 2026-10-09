@@ -9,7 +9,7 @@ import { initializeDeterministicRapierForBun } from '../rapier/bun';
 import { createCupMotion } from './internal/cup/cup-motion';
 import { createPhysicsCup, haveDiceClearedCup } from './internal/cup/physics-cup';
 import { createRollPhysicsConfig } from './internal/physics-config';
-import { createDieInCup } from './internal/physics-environment';
+import { createDiceInCup } from './internal/physics-environment';
 import { FLOOR_Y } from './internal/roll-simulation-constants';
 import { quatFromEuler, rotateVectorByQuat } from './internal/simulation-math';
 import { simulateRollTimeline } from './simulate-physics';
@@ -68,14 +68,13 @@ test.each(geometryCases)(
         expect(base.shapeType()).toBe(RAPIER.ShapeType.Cylinder);
         expect(base.radius()).toBeCloseTo(CUP.bottomRadius + CUP.wallThickness, 6);
         expect(base.halfHeight()).toBeCloseTo(CUP.baseThickness / 2, 6);
-        const die = createDieInCup(
+        const die = createDiceInCup(
           world,
           'finite-base-witness',
-          0,
           1,
-          createCupMotion('finite-base-witness', 'classic'),
+          createCupMotion('finite-base-witness', 'oblique'),
           createRollPhysicsConfig(),
-        );
+        )[0]!;
         expect(die.collider.shapeType()).toBe(RAPIER.ShapeType.RoundCuboid);
         const offset = rotateVectorByQuat([fixture.x, fixture.y, 0], cup.body.rotation());
         die.body.setTranslation(
@@ -111,7 +110,7 @@ test('bottom boundary queries leave recorded physics unchanged', () => {
   const input = {
     rollId: 'cup-bottom-observer-parity',
     seed: 'cup-bottom-probe-0',
-    pourStyle: 'classic' as const,
+    pourStyle: 'oblique' as const,
     rolledSlots: [0, 1, 2, 3, 4] as DieSlot[],
   };
   const baseline = simulateRollTimeline(input);

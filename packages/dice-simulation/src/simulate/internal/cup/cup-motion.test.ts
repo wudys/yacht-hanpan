@@ -1,7 +1,6 @@
 import { describe, expect, it, test } from 'bun:test';
 
 import {
-  AUTOMATIC_POUR_STYLES,
   CUP_EXIT_HOLD_MS,
   cupLowerSupport,
   DEFAULT_CUP_GEOMETRY,
@@ -12,8 +11,7 @@ import {
 } from '../../../contract';
 import { rollAreaMeta } from '../roll-simulation-constants';
 import { quatFromEuler, rotateVectorByQuat } from '../simulation-math';
-import { createCupFrame, createCupMotion, cupTransformAt } from './cup-motion';
-import { CUP_GATHER_MS } from './cup-motion-progress';
+import { createCupFrame, createCupMotion, cupTransformAt, setCupReleaseTime } from './cup-motion';
 
 // Both sides and preparation-time boundaries; count is not a motion input.
 const motionCases = [
@@ -29,7 +27,29 @@ const motionCases = [
 const seeds = motionCases.map(({ seed }) => seed);
 
 describe('cup motion', () => {
-  it.each(POUR_STYLES)(
+  it.each([...POUR_STYLES])(
+    'updates %s withdrawal after observed release without rewriting earlier poses',
+    (style) => {
+      const motion = createCupMotion('observed-cup-release', style);
+      const times = [
+        0,
+        motion.pourAtMs - 80,
+        motion.pourAtMs,
+        motion.pourAtMs + 200,
+        motion.pourAtMs + 400,
+      ];
+      const before = times.map((time) => cupTransformAt(motion, time));
+      const releaseAtMs = motion.pourAtMs + 600;
+      setCupReleaseTime(motion, releaseAtMs);
+      expect(times.map((time) => cupTransformAt(motion, time))).toEqual(before);
+      expect(createCupFrame(motion, releaseAtMs - 1).mode).toBe('pour');
+      expect(createCupFrame(motion, releaseAtMs).mode).toBe('exit');
+      expect(createCupFrame(motion, releaseAtMs + 799).visible).toBe(true);
+      expect(createCupFrame(motion, releaseAtMs + 800).visible).toBe(false);
+    },
+  );
+
+  it.each([...POUR_STYLES])(
     'varies %s preparation by seed within its rhythm without changing strength',
     (style) => {
       const durations = seeds.map((seed) => {
@@ -49,9 +69,9 @@ describe('cup motion', () => {
 
   it('shares the selected preparation rhythm across pour styles', () => {
     for (const seed of seeds) {
-      const classic = createCupMotion(seed, 'classic').pourAtMs;
-      expect(createCupMotion(seed, 'burst').pourAtMs).toBe(classic);
-      expect(createCupMotion(seed, 'oblique').pourAtMs).toBe(classic);
+      expect(createCupMotion(seed, 'burst').pourAtMs).toBe(
+        createCupMotion(seed, 'oblique').pourAtMs,
+      );
     }
   });
 
@@ -73,7 +93,7 @@ describe('cup motion', () => {
       );
       if (preparationMs !== undefined) expect(motion.pourAtMs).toBe(preparationMs);
       const transitions = [
-        motion.pourAtMs - CUP_GATHER_MS,
+        motion.pourAtMs - 80,
         motion.pourAtMs,
         ...(style === 'burst' ? [motion.pourAtMs + 260] : []),
         motion.pourAtMs + 280,
@@ -122,7 +142,7 @@ describe('cup motion', () => {
     },
   );
 
-  it.each(POUR_STYLES)('preserves the selected %s lift and minimum floor gap', (style) => {
+  it.each([...POUR_STYLES])('preserves the selected %s lift and minimum floor gap', (style) => {
     const motion = createCupMotion('browser-parity-v1', style);
     const start = cupTransformAt(motion, motion.pourAtMs);
     let minimumGap = Infinity;
@@ -130,33 +150,30 @@ describe('cup motion', () => {
       const pose = cupTransformAt(motion, motion.pourAtMs + ms);
       minimumGap = Math.min(minimumGap, pose.y - cupLowerSupport(pose.tilt) - TRAY_FLOOR_TOP_Y);
     }
-    expect(minimumGap / DIE_GEOMETRY.size).toBeCloseTo(
-      style === 'classic' ? 2.28 : style === 'burst' ? 3.232 : 2.886,
-      2,
-    );
+    expect(minimumGap / DIE_GEOMETRY.size).toBeCloseTo(style === 'burst' ? 3.232 : 2.865, 2);
     const lifted = cupTransformAt(motion, motion.pourAtMs + 280);
     expect((lifted.y - start.y) / DIE_GEOMETRY.size).toBeCloseTo(0.55, 2);
     expect(cupTransformAt(motion, motion.pourAtMs + 400).y).toBeCloseTo(lifted.y, 10);
     expect(
       (Math.abs(cupTransformAt(motion, motion.pourAtMs + 400).tilt) * 180) / Math.PI,
-    ).toBeCloseTo(style === 'classic' ? 155 : 135, 8);
+    ).toBeCloseTo(145, 8);
   });
 
   it('finishes burst in two gentle stages without speeding up the final tip', () => {
     const motion = createCupMotion('browser-parity-v1', 'burst');
     const angle = (ms: number) => Math.abs(cupTransformAt(motion, motion.pourAtMs + ms).tilt);
     expect((angle(260) * 180) / Math.PI).toBeCloseTo(120, 8);
-    expect((angle(400) * 180) / Math.PI).toBeCloseTo(135, 8);
+    expect((angle(400) * 180) / Math.PI).toBeCloseTo(145, 8);
     expect(Math.abs((angle(260.01) - angle(259.99)) / 0.02)).toBeLessThan(0.00001);
   });
 
   describe('selected pour gestures', () => {
-    test('automatically selects burst and oblique while explicit classic remains supported', () => {
-      expect(AUTOMATIC_POUR_STYLES).toEqual(['burst', 'oblique']);
+    test('supports the two adopted pour gestures', () => {
+      expect(POUR_STYLES).toEqual(['burst', 'oblique']);
     });
 
-    test('keeps classic shaking separate from the later pour', () => {
-      const motion = createCupMotion('gesture-explore-20260921-0', 'classic');
+    test('keeps oblique shaking separate from the later pour', () => {
+      const motion = createCupMotion('gesture-explore-20260921-0', 'oblique');
       const poured = cupTransformAt(
         motion,
         motion.pourAtMs +
@@ -175,7 +192,7 @@ describe('cup motion', () => {
 
     test('joins shaking to pouring with continuous position, tilt and velocity', () => {
       for (const seed of ['gesture-explore-20260921-0', 'gesture-explore-20260921-1']) {
-        const motion = createCupMotion(seed, 'classic');
+        const motion = createCupMotion(seed, 'oblique');
         const center = cupTransformAt(motion, motion.pourAtMs);
         const before = cupTransformAt(motion, motion.pourAtMs - 0.01);
         const after = cupTransformAt(motion, motion.pourAtMs + 0.01);
@@ -186,7 +203,7 @@ describe('cup motion', () => {
       }
     });
 
-    test.each(['classic', 'burst', 'oblique'] as const)(
+    test.each([...POUR_STYLES])(
       'pours %s without a vertical velocity reversal or a sharp acceleration spike',
       (style) => {
         for (const seed of ['gesture-explore-20260921-0', 'gesture-explore-20260921-1']) {

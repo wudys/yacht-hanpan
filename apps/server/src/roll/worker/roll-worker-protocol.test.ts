@@ -60,7 +60,7 @@ test('rejects sparse outcomes preserved by worker structuredClone', async () => 
     rollId: 'worker-sparse-result',
     seed: 'worker-sparse-result',
     rolledSlots: [0],
-    pourStyle: 'classic',
+    pourStyle: 'oblique',
   });
   const result = { status: 'accepted' as const, outcome };
   expect(parseRollWorkerResponse(structuredClone({ kind: 'result', id: 1, result }))).toEqual({

@@ -7,18 +7,18 @@ beforeAll(initializeDeterministicRapierForBun);
 
 test.each([
   {
-    seed: '21f806f9d20df7231635b433a1dc99aa',
+    seed: 'rejection-regression-v37-burst-5-3008',
     pourStyle: 'burst',
-    rolledSlots: [0, 1, 2, 3],
+    rolledSlots: [0, 1, 2, 3, 4],
     reason: 'stable-stack',
-    simulationMs: 2567,
+    simulationMs: 2717,
   },
   {
-    seed: 'd71d816244d19bcfe1cc4af2be4ded05',
-    pourStyle: 'oblique',
-    rolledSlots: [0, 1, 2],
+    seed: 'rejection-regression-v37-burst-4-281',
+    pourStyle: 'burst',
+    rolledSlots: [0, 1, 2, 3],
     reason: 'repeated-assist',
-    simulationMs: 3300,
+    simulationMs: 3350,
   },
 ] as const)('audit classifies $reason with its raw stopping pose and time', (fixture) => {
   const report = auditPhysics({

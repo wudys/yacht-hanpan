@@ -98,7 +98,7 @@ describe('dice timeline sampling', () => {
 });
 
 const pourCup: CupMotion = {
-  style: 'classic',
+  style: 'oblique',
   shakeAmplitude: 1,
   shakeFrequency: 24,
   pourAtMs: 100,

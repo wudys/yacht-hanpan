@@ -1,14 +1,13 @@
 import * as crypto from 'node:crypto';
 
-import { AUTOMATIC_POUR_STYLES, POUR_STYLES } from '@repo/dice-simulation/contract';
+import { POUR_STYLES } from '@repo/dice-simulation/contract';
 import { describe, expect, spyOn, test } from 'bun:test';
 
 import { createProductionRollRecipeSource } from '@/roll/production-roll-recipe-source';
 
 describe('production roll recipe source', () => {
-  test('selects burst and oblique automatically while preserving diagnostic classic', () => {
-    expect(AUTOMATIC_POUR_STYLES).toEqual(['burst', 'oblique']);
-    expect(POUR_STYLES).toEqual(['classic', 'burst', 'oblique']);
+  test('selects only the supported burst and oblique styles', () => {
+    expect(POUR_STYLES).toEqual(['burst', 'oblique']);
   });
 
   test.each([

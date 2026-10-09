@@ -48,7 +48,7 @@ function deferred<T>() {
 const input = parseSimulationInput({
   rollId: 'quality-visual-fixture',
   seed: 'fixture-lifecycle',
-  pourStyle: 'classic',
+  pourStyle: 'oblique',
   rolledSlots: [0, 1],
 });
 const result: SimulationResult = {
@@ -64,7 +64,7 @@ const result: SimulationResult = {
     dice: [],
     rollArea: { width: 4, depth: 4, aspectRatio: 1 },
     cup: {
-      style: 'classic',
+      style: 'oblique',
       shakeAmplitude: 0,
       shakeFrequency: 0,
       pourAtMs: 0,

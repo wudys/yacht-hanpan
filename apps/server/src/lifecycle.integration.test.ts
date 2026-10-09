@@ -902,7 +902,7 @@ function resolvedRollArtifact(rollId: string) {
       mode: 'seeded-physics',
       rollId,
       seed: 'ab'.repeat(16),
-      pourStyle: POUR_STYLE.CLASSIC,
+      pourStyle: POUR_STYLE.OBLIQUE,
       rolledSlots: [0, 1, 2, 3, 4],
       contract: createCompatibilityContract(RELEASE_ID),
     },

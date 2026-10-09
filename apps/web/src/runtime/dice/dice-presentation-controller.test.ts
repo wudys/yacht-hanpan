@@ -33,7 +33,7 @@ function artifact(
       contract: createCompatibilityContract('test'),
       rollId: rollId as ResolvedRollArtifact['replay']['rollId'],
       seed: `seed-${rollId}`,
-      pourStyle: 'classic',
+      pourStyle: 'oblique',
       rolledSlots: values.map((_, slot) => slot),
     },
     outcome: {

@@ -10,18 +10,30 @@ describe('production roll recipe source', () => {
     expect(POUR_STYLES).toEqual(['burst', 'oblique']);
   });
 
-  test.each([
-    [0, 'burst'],
-    [1, 'oblique'],
-  ] as const)('selects automatic style index %i as %s', (index, expected) => {
+  test.each([0, 1])('uses burst for one die regardless of random index %i', (index) => {
     const randomInt = spyOn(crypto, 'randomInt').mockImplementation(() => index);
     try {
-      expect(createProductionRollRecipeSource().createPourStyle()).toBe(expected);
-      expect(randomInt).toHaveBeenCalledTimes(1);
-      expect(randomInt).toHaveBeenCalledWith(2);
+      expect(createProductionRollRecipeSource().createPourStyle(1)).toBe('burst');
+      expect(randomInt).not.toHaveBeenCalled();
     } finally {
       randomInt.mockRestore();
     }
+  });
+
+  describe.each([2, 3, 4, 5])('%i dice', (diceCount) => {
+    test.each([
+      [0, 'burst'],
+      [1, 'oblique'],
+    ] as const)('selects automatic style index %i as %s', (index, expected) => {
+      const randomInt = spyOn(crypto, 'randomInt').mockImplementation(() => index);
+      try {
+        expect(createProductionRollRecipeSource().createPourStyle(diceCount)).toBe(expected);
+        expect(randomInt).toHaveBeenCalledTimes(1);
+        expect(randomInt).toHaveBeenCalledWith(2);
+      } finally {
+        randomInt.mockRestore();
+      }
+    });
   });
 
   test('creates independent seeds while the request clock is unchanged', () => {
@@ -40,12 +52,12 @@ describe('production roll recipe source', () => {
     const first = {
       rollId: source.createRollId(),
       seed: source.createRollSeed(),
-      style: source.createPourStyle(),
+      style: source.createPourStyle(5),
     };
     const second = {
       rollId: source.createRollId(),
       seed: source.createRollSeed(),
-      style: source.createPourStyle(),
+      style: source.createPourStyle(5),
     };
     expect(first.rollId).toMatch(/^[0-9a-f-]{36}$/u);
     expect(first.seed).toMatch(/^[0-9a-f]{32}$/u);

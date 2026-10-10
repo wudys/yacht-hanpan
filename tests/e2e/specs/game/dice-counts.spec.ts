@@ -108,8 +108,11 @@ test('both players replay one through five dice while preserving held slots', as
         .locator(`[data-score-category="${turn < 2 ? 'choice' : 'four-of-a-kind'}"]`)
         .click();
     }
-    // The production server chooses a gesture for each new roll.
-    for (const roll of rolls) expect(['burst', 'oblique']).toContain(roll.style);
+    // Single-die production rolls use burst; larger rolls retain both styles.
+    for (const roll of rolls) {
+      if (roll.slots.length === 1) expect(roll.style).toBe('burst');
+      else expect(['burst', 'oblique']).toContain(roll.style);
+    }
     console.log(
       JSON.stringify({
         diceCoverage: rolls.map(({ style, slots }) => ({ style, count: slots.length })),

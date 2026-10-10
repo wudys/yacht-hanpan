@@ -153,7 +153,7 @@ test.each(POUR_STYLES.flatMap((style) => [1, 2, 3, 4, 5].map((count) => [style, 
         ).toBe(true);
         const after = this.linvel();
         const inward = cup.body.translation().x > 0 ? -1 : 1;
-        expect(after.x - before.x).toBeCloseTo(inward, 5);
+        expect(after.x - before.x).toBeCloseTo(inward * (count === 5 ? 0.5 : 1.5), 5);
         expect(after.y).toBe(before.y);
         expect(after.z).toBe(before.z);
         expect(this.angvel()).toEqual(angularBefore);
@@ -168,8 +168,8 @@ test.each(POUR_STYLES.flatMap((style) => [1, 2, 3, 4, 5].map((count) => [style, 
         rolledSlots: [0, 1, 2, 3, 4].slice(0, count) as DieSlot[],
       });
       expect(timeline.dice).toHaveLength(count);
-      expect(applications.size).toBe(count === 5 ? 0 : count);
-      expect([...applications.values()]).toEqual(count === 5 ? [] : Array(count).fill(1));
+      expect(applications.size).toBe(count);
+      expect([...applications.values()]).toEqual(Array(count).fill(1));
     } finally {
       impulseSpy.mockRestore();
       createSpy.mockRestore();

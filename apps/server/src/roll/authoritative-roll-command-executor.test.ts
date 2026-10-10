@@ -1,3 +1,5 @@
+import * as crypto from 'node:crypto';
+
 import {
   DICE_SIMULATION_CONTRACT,
   isSimulationOutcome,
@@ -9,9 +11,10 @@ import {
 import { initializeDeterministicRapierForBun } from '@repo/dice-simulation/rapier/bun';
 import { evaluateRollCandidate } from '@repo/dice-simulation/simulate';
 import { createCompatibilityContract } from '@repo/game-protocol/version';
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, spyOn, test } from 'bun:test';
 
 import { createAuthoritativeRollCommandExecutor } from '@/roll/authoritative-roll-command-executor';
+import { createProductionRollRecipeSource } from '@/roll/production-roll-recipe-source';
 import {
   ROLL_SIMULATION_EXECUTOR_ERROR_CODE,
   RollSimulationExecutorError,
@@ -105,6 +108,39 @@ describe('authoritative roll command executor', () => {
     expect(JSON.stringify(result)).not.toMatch(
       /"(?:timeline|frames|replayDigest|target\w*)"\s*:/iu,
     );
+  });
+
+  test.each([
+    [[4], POUR_STYLE.BURST],
+    [[1, 4], POUR_STYLE.OBLIQUE],
+    [[0, 2, 4], POUR_STYLE.OBLIQUE],
+    [[0, 1, 3, 4], POUR_STYLE.OBLIQUE],
+    [[0, 1, 2, 3, 4], POUR_STYLE.OBLIQUE],
+  ] as const)('uses the production style policy for slots %j', async (slots, expectedStyle) => {
+    const randomInt = spyOn(crypto, 'randomInt').mockImplementation(() => 1);
+    try {
+      const inputs: SimulationInput[] = [];
+      const executor = createAuthoritativeRollCommandExecutor({
+        executionBudgetMs: 10_000,
+        logger: createJsonLogger(() => {}),
+        contract: createCompatibilityContract('test-release'),
+        recipeSource: createProductionRollRecipeSource(),
+        simulation: {
+          execute: async (input) => {
+            inputs.push(input);
+            return accepted(input);
+          },
+        },
+      });
+      expect(await executor.execute({ rolledSlots: slots })).toMatchObject({
+        ok: true,
+        artifact: { replay: { rolledSlots: slots, pourStyle: expectedStyle } },
+      });
+      expect(inputs).toHaveLength(1);
+      expect(inputs[0]?.pourStyle).toBe(expectedStyle);
+    } finally {
+      randomInt.mockRestore();
+    }
   });
 
   test('starts its monotonic deadline before recipe preparation', async () => {
@@ -226,7 +262,7 @@ describe('authoritative roll command executor', () => {
       const reports: Array<Parameters<ErrorReporter>> = [];
       let now = 100;
       let identities = 0;
-      let styles = 0;
+      const styleCounts: number[] = [];
       let seeds = 0;
       const executor = createAuthoritativeRollCommandExecutor({
         executionBudgetMs: 2000,
@@ -239,8 +275,8 @@ describe('authoritative roll command executor', () => {
             identities += 1;
             return '8184fc0a-4e59-455d-a7c1-579a9ee96403';
           },
-          createPourStyle: () => {
-            styles += 1;
+          createPourStyle: (diceCount) => {
+            styleCounts.push(diceCount);
             return POUR_STYLE.BURST;
           },
           createRollSeed: () => `candidate-seed-${++seeds}`,
@@ -273,7 +309,7 @@ describe('authoritative roll command executor', () => {
         ),
       ).toBeTrue();
       expect(identities).toBe(1);
-      expect(styles).toBe(1);
+      expect(styleCounts).toEqual([2]);
       expect(seeds).toBe(2);
       expect(deadlines).toEqual([2100, 2100]);
       expect(budgets[1]).toBe(budgets[0]);

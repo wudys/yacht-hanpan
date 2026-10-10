@@ -118,7 +118,7 @@ describe('product replay and displayed bottom', () => {
         authoritativeValuesBySlot: [
           { slot: 0, value: 3 },
           { slot: 1, value: 1 },
-          { slot: 2, value: 5 },
+          { slot: 2, value: 3 },
           { slot: 3, value: 3 },
         ] as const,
       },
@@ -126,15 +126,15 @@ describe('product replay and displayed bottom', () => {
     const playback = await resolveRollPlayback(artifact);
     expect(playback.status).toBe('verified');
     if (playback.status !== 'verified') throw new Error('Accepted recipe did not verify');
-    expect(playback.timeline.durationMs).toBe(3084);
+    expect(playback.timeline.durationMs).toBe(3717);
     expect(playback.timeline.dice.map((die) => ({ slot: die.slot, value: die.value }))).toEqual(
       artifact.outcome.authoritativeValuesBySlot,
     );
     for (const die of playback.timeline.dice) {
       const physical = die.frames.at(-2)!;
       const held = die.frames.at(-1)!;
-      expect(physical.t).toBe(2834);
-      expect(held).toEqual({ ...physical, t: 3084 });
+      expect(physical.t).toBe(3467);
+      expect(held).toEqual({ ...physical, t: 3717 });
     }
   });
 
@@ -142,7 +142,7 @@ describe('product replay and displayed bottom', () => {
     const artifact = {
       replay: {
         rollId: 'rejected-assistance',
-        seed: 'small-roll-assist-b-burst-4-199',
+        seed: 'bd8b8c3e8b3871db1c966a62fd23d5d62ccfd105d5d3cf0e17fb6572828ca392',
         rolledSlots: [0, 1, 2, 3],
         pourStyle: 'burst',
       } satisfies SimulationInput,
@@ -162,7 +162,7 @@ describe('product replay and displayed bottom', () => {
     if (playback.status !== 'static-fallback') throw new Error('Rejected recipe did not fall back');
     expect(playback.reason).toBe('SIMULATION_FAILED');
     expect(playback.cause).toBeInstanceOf(SimulationRejectedError);
-    expect(playback.cause).toMatchObject({ reason: 'repeated-assist', simulationMs: 3233 });
+    expect(playback.cause).toMatchObject({ reason: 'repeated-assist', simulationMs: 3250 });
     expect(playback.dice).toEqual(artifact.outcome.authoritativeValuesBySlot);
     expect(playback).not.toHaveProperty('timeline');
   });

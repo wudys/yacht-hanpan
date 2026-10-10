@@ -12,128 +12,128 @@
       "seed": "layout-coverage-3",
       "count": 5,
       "pourStyle": "burst",
-      "replayDigest": "sha256-q4-v2:9078a7a050a509fd6d98642b727b44bcc1d4314e4ae36f1eb7e8133d9d0656c1",
-      "authoritativeValues": [1, 2, 2, 6, 2]
+      "replayDigest": "sha256-q4-v2:20cfb1131077938df3033ab972bdb361815b99e0dd4b9787aaef2342dd88f0ae",
+      "authoritativeValues": [4, 6, 6, 2, 2]
     },
     {
       "name": "five-dice-p02-oblique",
       "seed": "layout-coverage-3",
       "count": 5,
       "pourStyle": "oblique",
-      "replayDigest": "sha256-q4-v2:32e8319c910a914bf82687418fdfa50cca2a0e5fe5d9324add72cb0968415bf6",
-      "authoritativeValues": [3, 5, 5, 4, 5]
+      "replayDigest": "sha256-q4-v2:649a11ef76c08ff6a635266ff1827dcbaeb0ce881dc67ed4354b5b1e1f1dee43",
+      "authoritativeValues": [6, 4, 5, 2, 3]
     },
     {
       "name": "five-dice-p26-burst",
       "seed": "layout-coverage-0",
       "count": 5,
       "pourStyle": "burst",
-      "replayDigest": "sha256-q4-v2:1cfaafaa95ecce74d3948de4d8cc85acee773b856178e9c14fea86f282070c6f",
-      "authoritativeValues": [6, 3, 6, 1, 1]
+      "replayDigest": "sha256-q4-v2:b2755a55a2650672f9e26c342e39e9c2de1a026c8015373493992b3414b348d4",
+      "authoritativeValues": [6, 3, 6, 5, 3]
     },
     {
       "name": "five-dice-p26-oblique",
       "seed": "layout-coverage-0",
       "count": 5,
       "pourStyle": "oblique",
-      "replayDigest": "sha256-q4-v2:5e5361f9cb7e3478c8abc7c319c9a65ee959c212051a64d3e4566ff7907b4c04",
-      "authoritativeValues": [5, 4, 3, 3, 4]
+      "replayDigest": "sha256-q4-v2:8ca7277f8f5531d50f75f5fd901e0aa08cb337e4f8652bbf80a59ea3683c1fca",
+      "authoritativeValues": [1, 3, 2, 2, 4]
     },
     {
       "name": "five-dice-p13-burst",
       "seed": "layout-coverage-8",
       "count": 5,
       "pourStyle": "burst",
-      "replayDigest": "sha256-q4-v2:588ee08ce5cd27117d727dd940fe57fab193ad9954725b1852a9b5bb9e05962e",
-      "authoritativeValues": [2, 4, 2, 1, 2]
+      "replayDigest": "sha256-q4-v2:500b17710a4ba9ea1a2edb920521ce6c7bef7f0cc0b023a09488933fc0c4048c",
+      "authoritativeValues": [5, 1, 2, 1, 2]
     },
     {
       "name": "five-dice-p13-oblique",
       "seed": "layout-coverage-8",
       "count": 5,
       "pourStyle": "oblique",
-      "replayDigest": "sha256-q4-v2:7376762ffef808439d3e94330766d22f78de9a82216194816a4aacefe1d5b78c",
-      "authoritativeValues": [1, 2, 5, 1, 5]
+      "replayDigest": "sha256-q4-v2:03c5ed40622383f7b0fd734ec18fdcbfb9466edaa1b71f19d8b5a8e4c9724ee4",
+      "authoritativeValues": [1, 3, 3, 6, 6]
     },
     {
       "name": "five-dice-p32-burst",
       "seed": "layout-coverage-1",
       "count": 5,
       "pourStyle": "burst",
-      "replayDigest": "sha256-q4-v2:ceaf022aaa20778cba50ca8faa01afc4bf86d6437c447c68c34c6b9f4c2a291b",
-      "authoritativeValues": [4, 2, 4, 4, 3]
+      "replayDigest": "sha256-q4-v2:3e13e012a31dd1f82bde062d92878a2bedc953a57510ee829b3f5b0a60cf0f23",
+      "authoritativeValues": [4, 4, 4, 4, 3]
     },
     {
       "name": "five-dice-p32-oblique",
       "seed": "layout-coverage-1",
       "count": 5,
       "pourStyle": "oblique",
-      "replayDigest": "sha256-q4-v2:54fa92c2c4a73fe25d1f77320242e5ca5caa3638d2efcc71abc9f6fbe397befa",
-      "authoritativeValues": [4, 1, 4, 6, 5]
+      "replayDigest": "sha256-q4-v2:8dc74696e94e40aa557752967806021e8a2117a818063552a6188177496709c7",
+      "authoritativeValues": [5, 1, 3, 2, 3]
     },
     {
       "name": "1-dice-burst",
       "seed": "cup-adoption-parity-small-1-burst-0",
       "count": 1,
       "pourStyle": "burst",
-      "replayDigest": "sha256-q4-v2:5edd05d4ab7cf1e948a6c9108aba9d6fcaebc14029f9ea60d204e54dc7093826",
-      "authoritativeValues": [6]
+      "replayDigest": "sha256-q4-v2:859629dec8b43143d2380dad99b5f6679a45674f19527037a6e7b7aaaf608b8c",
+      "authoritativeValues": [4]
     },
     {
       "name": "1-dice-oblique",
       "seed": "cup-adoption-parity-small-1-oblique-0",
       "count": 1,
       "pourStyle": "oblique",
-      "replayDigest": "sha256-q4-v2:6aaf3bcbccea7732f5e6827dbfe73a0a503e0f1c580a1c939b4c734a607d3162",
-      "authoritativeValues": [3]
+      "replayDigest": "sha256-q4-v2:91fa46ff931afa3b7524fcbbc96a0facaf6cab9dafe62a8c3c532ffd90508a6e",
+      "authoritativeValues": [2]
     },
     {
       "name": "2-dice-burst",
       "seed": "cup-adoption-parity-small-2-burst-0",
       "count": 2,
       "pourStyle": "burst",
-      "replayDigest": "sha256-q4-v2:41bf3183c4d1a026ef47aed71383bd015e0d7daf60af8ef043c2f4e2177feda8",
-      "authoritativeValues": [5, 1]
+      "replayDigest": "sha256-q4-v2:077ded70ea93e9cfe1aa91bef65d68fb4aad75775afa6523b57f490fe38f51fd",
+      "authoritativeValues": [3, 5]
     },
     {
       "name": "2-dice-oblique",
       "seed": "cup-adoption-parity-small-2-oblique-0",
       "count": 2,
       "pourStyle": "oblique",
-      "replayDigest": "sha256-q4-v2:6f58add83da9b9ab15e1e06248072bb4eb3732432033506a5a8c5aa8711f80a1",
-      "authoritativeValues": [5, 1]
+      "replayDigest": "sha256-q4-v2:69caf1b16b14c96d50fd5d3026c071598364631db6dee0c39b05a6f7819ff2fc",
+      "authoritativeValues": [1, 1]
     },
     {
       "name": "3-dice-burst",
       "seed": "cup-adoption-parity-small-3-burst-0",
       "count": 3,
       "pourStyle": "burst",
-      "replayDigest": "sha256-q4-v2:68d09fa716fddfe028ee0e5350e37780515405317be4a291ee5a6432fb57ef2c",
-      "authoritativeValues": [1, 5, 2]
+      "replayDigest": "sha256-q4-v2:d84bdf86d43da0d0ba3f2a396dae3e380056ed0ec410d4ac08a47e059bdfefee",
+      "authoritativeValues": [1, 6, 2]
     },
     {
       "name": "3-dice-oblique",
       "seed": "cup-adoption-parity-small-3-oblique-0",
       "count": 3,
       "pourStyle": "oblique",
-      "replayDigest": "sha256-q4-v2:5ee5a1f0a82bf16ea0e6fe5e72d291cf12e43cf9d4e64eb74b55858a7e431f5a",
-      "authoritativeValues": [5, 2, 5]
+      "replayDigest": "sha256-q4-v2:2d6c933785fb8c911d5f1c215c9b6fdd471554b274857c81ba34d195d35061b2",
+      "authoritativeValues": [5, 6, 6]
     },
     {
       "name": "4-dice-burst",
       "seed": "cup-adoption-parity-small-4-burst-0",
       "count": 4,
       "pourStyle": "burst",
-      "replayDigest": "sha256-q4-v2:3caeeff914b02419c2df15031dd4560a600463fbafa3c8165803d1735132b1e5",
-      "authoritativeValues": [2, 3, 4, 6]
+      "replayDigest": "sha256-q4-v2:0272c536c2b8e799592835892871ebdcf4d0e7d24312ffef50096276e7488721",
+      "authoritativeValues": [2, 2, 4, 3]
     },
     {
       "name": "4-dice-oblique",
       "seed": "cup-adoption-parity-small-4-oblique-0",
       "count": 4,
       "pourStyle": "oblique",
-      "replayDigest": "sha256-q4-v2:f42cc0cfedd2953b282fbe7109045cfb38ca908271932dcffce90f4b6481871f",
-      "authoritativeValues": [1, 3, 4, 3]
+      "replayDigest": "sha256-q4-v2:5aadcc9e9f6428a9f8de3c716c21d956c5ee97282aadb69722146548a1d6bd2e",
+      "authoritativeValues": [1, 3, 2, 3]
     }
   ]
 }

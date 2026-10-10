@@ -20,7 +20,8 @@ export interface PhysicsCup {
 // The invisible mouth constraint is independent of the cup's reinforced base.
 const SHAKE_LID_THICKNESS = 0.08;
 const SMALL_ROLL_POUR_ASSIST_MULTIPLIER = 1.5;
-const SMALL_ROLL_EXIT_SPEED_DELTA = 1;
+const SMALL_ROLL_EXIT_SPEED_DELTA = 1.5;
+const FIVE_DICE_EXIT_SPEED_DELTA = 0.5;
 let defaultCupWallVertices: Float32Array[] | undefined;
 
 export function createPhysicsCup(
@@ -178,8 +179,8 @@ export function applyDieExitImpulse(
   motion: CupMotionState,
   diceCount: number,
 ): void {
-  if (diceCount >= 5) return;
-  const impulse = die.body.mass() * SMALL_ROLL_EXIT_SPEED_DELTA;
+  const exitSpeedDelta = diceCount < 5 ? SMALL_ROLL_EXIT_SPEED_DELTA : FIVE_DICE_EXIT_SPEED_DELTA;
+  const impulse = die.body.mass() * exitSpeedDelta;
   die.body.applyImpulse({ x: -Math.sign(motion.tilt) * impulse, y: 0, z: 0 }, true);
 }
 

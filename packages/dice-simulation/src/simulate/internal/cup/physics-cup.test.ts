@@ -176,10 +176,10 @@ test.each([
 });
 
 test.each(
-  [1, 2, 3, 4].flatMap((count) =>
+  [1, 2, 3, 4, 5].flatMap((count) =>
     [0.5, 2].flatMap((mass) => [
-      { count, mass, tilt: (Math.PI * 145) / 180, deltaX: -1 },
-      { count, mass, tilt: (-Math.PI * 145) / 180, deltaX: 1 },
+      { count, mass, tilt: (Math.PI * 145) / 180, deltaX: count === 5 ? -0.5 : -1.5 },
+      { count, mass, tilt: (-Math.PI * 145) / 180, deltaX: count === 5 ? 0.5 : 1.5 },
     ]),
   ),
 )(
@@ -212,27 +212,29 @@ test.each(
   },
 );
 
-test.each([false, true])('leaves a five-die body untouched when sleeping is %s', (sleeping) => {
-  const world = new RAPIER.World({ x: 0, y: 0, z: 0 });
-  try {
-    const body = world.createRigidBody(RAPIER.RigidBodyDesc.dynamic());
-    const collider = world.createCollider(RAPIER.ColliderDesc.cuboid(0.26, 0.26, 0.26), body);
-    body.setLinvel({ x: 0.25, y: -0.5, z: 0.75 }, false);
-    body.setAngvel({ x: 0.2, y: 0.4, z: -0.6 }, false);
-    if (sleeping) body.sleep();
-    const before = { linear: body.linvel(), angular: body.angvel(), sleeping: body.isSleeping() };
-    applyDieExitImpulse(
-      { id: 'unchanged-five', body, collider },
-      createCupMotion('exit', 'burst'),
-      5,
-    );
-    expect({ linear: body.linvel(), angular: body.angvel(), sleeping: body.isSleeping() }).toEqual(
-      before,
-    );
-  } finally {
-    world.free();
-  }
-});
+test.each([false, true])(
+  'adds a five-die exit impulse and wakes the body when sleeping is %s',
+  (sleeping) => {
+    const world = new RAPIER.World({ x: 0, y: 0, z: 0 });
+    try {
+      const body = world.createRigidBody(RAPIER.RigidBodyDesc.dynamic());
+      const collider = world.createCollider(RAPIER.ColliderDesc.cuboid(0.26, 0.26, 0.26), body);
+      body.setLinvel({ x: 0.25, y: -0.5, z: 0.75 }, false);
+      body.setAngvel({ x: 0.2, y: 0.4, z: -0.6 }, false);
+      if (sleeping) body.sleep();
+      const before = { linear: body.linvel(), angular: body.angvel() };
+      applyDieExitImpulse({ id: 'exit-five', body, collider }, createCupMotion('exit', 'burst'), 5);
+      const inward = -Math.sign(createCupMotion('exit', 'burst').tilt);
+      expect(body.linvel().x - before.linear.x).toBeCloseTo(inward * 0.5, 6);
+      expect(body.linvel().y).toBe(before.linear.y);
+      expect(body.linvel().z).toBe(before.linear.z);
+      expect(body.angvel()).toEqual(before.angular);
+      expect(body.isSleeping()).toBe(false);
+    } finally {
+      world.free();
+    }
+  },
+);
 
 test('interpolates cup pose across two actual substeps and restores the outer timestep', () => {
   const world = createRollWorld(createRollPhysicsConfig());

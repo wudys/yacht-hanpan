@@ -24,7 +24,7 @@ import { type Logger, protectLogger } from '@/runtime/logger';
 export interface RollRecipeSource {
   readonly createRollId: () => string;
   readonly createRollSeed: () => string;
-  readonly createPourStyle: () => PourStyle;
+  readonly createPourStyle: (diceCount: number) => PourStyle;
 }
 
 const MAX_ROLL_CANDIDATE_ATTEMPTS = 3;
@@ -55,7 +55,7 @@ export function createAuthoritativeRollCommandExecutor(
           rollId: dependencies.recipeSource.createRollId(),
           seed: dependencies.recipeSource.createRollSeed(),
           rolledSlots,
-          pourStyle: dependencies.recipeSource.createPourStyle(),
+          pourStyle: dependencies.recipeSource.createPourStyle(rolledSlots.length),
         });
         for (let attempt = 0; attempt < MAX_ROLL_CANDIDATE_ATTEMPTS; attempt += 1) {
           if (monotonicNow() >= budget.deadlineMs) return { ok: false, reason: 'unavailable' };

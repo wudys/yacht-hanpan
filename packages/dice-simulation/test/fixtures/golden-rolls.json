@@ -12,13 +12,13 @@
         "authoritativeValuesBySlot": [
           {
             "slot": 0,
-            "value": 2
+            "value": 6
           }
         ],
-        "replayDigest": "sha256-q4-v2:d3fea40870cce0b73ff90c887ac185e6a3745034bb703607a1b54fb7d6c5d83a",
-        "durationMs": 3117,
-        "dieFrameCounts": [109],
-        "cupFrameCount": 103
+        "replayDigest": "sha256-q4-v2:e63e8ce5e9a2237eea83bc921f9a70598aba96a1bad7ae51446243433c110c61",
+        "durationMs": 3150,
+        "dieFrameCounts": [110],
+        "cupFrameCount": 104
       }
     },
     {
@@ -32,7 +32,7 @@
         "authoritativeValuesBySlot": [
           {
             "slot": 0,
-            "value": 5
+            "value": 4
           },
           {
             "slot": 2,
@@ -43,10 +43,10 @@
             "value": 6
           }
         ],
-        "replayDigest": "sha256-q4-v2:02434bc02c381561b25e484ea5a9c435de2d72ef5de7b81561ab3ae46552aefe",
-        "durationMs": 3250,
-        "dieFrameCounts": [113, 113, 113],
-        "cupFrameCount": 107
+        "replayDigest": "sha256-q4-v2:945ba495ebf1be382fc082afe239dd5cdd75dcce8eea07d7eb1f30c1a2803f73",
+        "durationMs": 3884,
+        "dieFrameCounts": [132, 132, 132],
+        "cupFrameCount": 126
       }
     },
     {
@@ -60,7 +60,7 @@
         "authoritativeValuesBySlot": [
           {
             "slot": 0,
-            "value": 5
+            "value": 1
           },
           {
             "slot": 1,
@@ -76,10 +76,10 @@
           },
           {
             "slot": 4,
-            "value": 4
+            "value": 2
           }
         ],
-        "replayDigest": "sha256-q4-v2:5aa6addc6cb9f3cdad48f69163e2c72f09f429e887acb0aa13aced90e2a34d74",
+        "replayDigest": "sha256-q4-v2:8ac01dff5e22b594cc3238896c8cdb956568799a5a37c0a6c852ded77f51e6b0",
         "durationMs": 3417,
         "dieFrameCounts": [118, 118, 118, 118, 118],
         "cupFrameCount": 112
@@ -103,10 +103,10 @@
             "value": 3
           }
         ],
-        "replayDigest": "sha256-q4-v2:bb76c7414af3dfa82684a7f3f0493e39612b891f5d8462d37cd90509381e535a",
-        "durationMs": 3217,
-        "dieFrameCounts": [113, 113],
-        "cupFrameCount": 107
+        "replayDigest": "sha256-q4-v2:eb0164c9db6cc7d91e7b9eb01eba8874bc4e2cb355fee22bdc6cc109c2c825a6",
+        "durationMs": 3250,
+        "dieFrameCounts": [114, 114],
+        "cupFrameCount": 108
       }
     }
   ]

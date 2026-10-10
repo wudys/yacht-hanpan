@@ -141,7 +141,7 @@ describe('deterministic physics roll', () => {
       crossed: false,
       values: [4, 3],
     },
-    { seed: 'slot-crossing-1', pourStyle: 'oblique' as const, crossed: true, values: [6, 3] },
+    { seed: 'slot-crossing-1', pourStyle: 'oblique' as const, crossed: true, values: [6, 5] },
   ])(
     'keeps supplied slot identity instead of sorting by final x ($seed)',
     ({ seed, pourStyle, crossed, values }) => {

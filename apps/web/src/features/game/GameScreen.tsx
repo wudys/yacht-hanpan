@@ -28,7 +28,7 @@ import {
 import { GameRecoveryFrame } from '@/features/game/GameRecoveryFrame';
 import { isTurnReady, useDeadlineReadiness } from '@/features/game/hud/game-deadline-hooks';
 import { GameDeadlineDisplay } from '@/features/game/hud/GameDeadlineDisplay';
-import { GamePresenceProvider, GameStatusNotice } from '@/features/game/hud/GameStatusNotice';
+import { GameStatusNotice, GameStatusNoticeProvider } from '@/features/game/hud/GameStatusNotice';
 import {
   deriveGameInputReadiness,
   deriveGameInputScopes,
@@ -44,10 +44,10 @@ import {
   deriveGameViewModel,
   GameBoard,
   GameResultView,
-  ScoreTable,
 } from '@/features/game/ui';
 import { AchievementSequence } from '@/features/game/ui/AchievementSequence';
 import { GameRollSpinner } from '@/features/game/ui/board/GameRollSpinner';
+import { GameScoreboardView } from '@/features/game/ui/score/GameScoreboardView';
 import { useGameResultLifecycle } from '@/features/game/use-game-result-lifecycle';
 import { SettingsPanel } from '@/features/settings/SettingsPanel';
 import { type Locale, translate } from '@/i18n';
@@ -369,7 +369,7 @@ export default function GameScreen({
   };
 
   const withRecovery = (content: ReactNode): ReactNode => (
-    <GamePresenceProvider
+    <GameStatusNoticeProvider
       identity={holderSnapshot.session}
       status={opponentSeatPresence?.status ?? null}
       reconnectDeadlineAt={
@@ -393,7 +393,7 @@ export default function GameScreen({
       >
         {content}
       </GameRecoveryFrame>
-    </GamePresenceProvider>
+    </GameStatusNoticeProvider>
   );
 
   if (
@@ -449,25 +449,17 @@ export default function GameScreen({
         data-game-view='board'
         data-game-layer='scoreboard'
       >
-        <ScrollablePanel
+        <GameScoreboardView
+          rows={model.scoreRows}
+          categories={categories}
+          viewer={viewer}
+          opponent={opponent}
+          labels={scoreLabels}
           title={translate(locale, 'game.view.scoreboard')}
-          meta={boardPresentation.labels.turn}
-          footer={
-            <Button
-              label={translate(locale, 'common.close')}
-              variant='secondary'
-              onClick={closeLayer}
-            />
-          }
-        >
-          <ScoreTable
-            rows={model.scoreRows}
-            categories={categories}
-            viewer={viewer}
-            opponent={opponent}
-            labels={scoreLabels}
-          />
-        </ScrollablePanel>
+          turnLabel={boardPresentation.labels.turn}
+          closeLabel={translate(locale, 'common.close')}
+          onClose={closeLayer}
+        />
       </div>,
     );
   }

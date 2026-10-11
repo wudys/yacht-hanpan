@@ -53,7 +53,7 @@ export function isInlineJoinError(error: ClientError): boolean {
     PUBLIC_ERROR_CODE.RATE_LIMITED,
   ].some((code) => isServerError(error, code));
 }
-export function createFailureDisposition(error: ClientError): 'dismiss' | 'refresh' | 'notice' {
+export function classifyCreateRoomFailure(error: ClientError): 'dismiss' | 'refresh' | 'notice' {
   if (error.kind === 'protocol') return 'refresh';
   if (error.kind === 'transport')
     return error.code === CLIENT_ERROR_CODE.NETWORK_UNAVAILABLE ? 'dismiss' : 'refresh';

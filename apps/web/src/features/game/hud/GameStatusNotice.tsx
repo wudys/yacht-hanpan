@@ -1,13 +1,13 @@
 import type { PresenceSnapshot } from '@repo/game-protocol/state';
 import { createContext, type ReactNode, useContext, useEffect, useRef, useState } from 'react';
 
-import { GamePresence } from '@/features/game/ui/board';
+import { GameStatusMessage } from '@/features/game/ui/board';
 import { type Locale, translate } from '@/i18n';
 import type { RoomPersistence } from '@/runtime/session/session-credential-store';
 
-const GamePresenceMessage = createContext<string | undefined>(undefined);
+const GameStatusNoticeContext = createContext<string | undefined>(undefined);
 
-export function GamePresenceProvider({
+export function GameStatusNoticeProvider({
   identity,
   status,
   reconnectDeadlineAt,
@@ -37,12 +37,14 @@ export function GamePresenceProvider({
             locale,
             notice === 'disconnected' ? 'game.opponentDisconnected' : 'game.opponentReconnected',
           );
-  return <GamePresenceMessage.Provider value={message}>{children}</GamePresenceMessage.Provider>;
+  return (
+    <GameStatusNoticeContext.Provider value={message}>{children}</GameStatusNoticeContext.Provider>
+  );
 }
 
 export function GameStatusNotice() {
-  const message = useContext(GamePresenceMessage);
-  return <GamePresence message={message} />;
+  const message = useContext(GameStatusNoticeContext);
+  return <GameStatusMessage message={message} />;
 }
 
 function useOpponentPresenceNotice(

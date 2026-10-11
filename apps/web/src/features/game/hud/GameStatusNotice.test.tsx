@@ -6,7 +6,7 @@ import { act, cleanup, render, screen } from '@testing-library/react';
 import type { ComponentProps } from 'react';
 import { afterEach, expect, test, vi } from 'vitest';
 
-import { GamePresenceProvider, GameStatusNotice } from '@/features/game/hud/GameStatusNotice';
+import { GameStatusNotice, GameStatusNoticeProvider } from '@/features/game/hud/GameStatusNotice';
 import { LOCALE, translate } from '@/i18n';
 import { room } from '@/testing/game-fixtures';
 
@@ -19,11 +19,11 @@ if (disconnectedPresence.status !== 'disconnected')
   throw new Error('Expected a disconnected presence fixture');
 const { reconnectDeadlineAt } = disconnectedPresence;
 
-function PresenceHarness(props: Omit<ComponentProps<typeof GamePresenceProvider>, 'children'>) {
+function PresenceHarness(props: Omit<ComponentProps<typeof GameStatusNoticeProvider>, 'children'>) {
   return (
-    <GamePresenceProvider {...props}>
+    <GameStatusNoticeProvider {...props}>
       <GameStatusNotice />
-    </GamePresenceProvider>
+    </GameStatusNoticeProvider>
   );
 }
 

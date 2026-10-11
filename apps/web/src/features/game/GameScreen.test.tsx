@@ -1227,6 +1227,42 @@ test('keeps an open game layer mounted and the timer running while recovery lock
   }
 });
 
+test('retains the scoreboard and guards its close action until recovery finishes', () => {
+  const harness = createHarness();
+  render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
+  const surface = screen.getByRole('group', { name: 'Game' });
+  // eslint-disable-next-line testing-library/no-node-access -- The scene root's DOM identity owns its entrance animation lifetime.
+  const sceneRoot = surface.querySelector('[data-screen="game"]');
+  expect(sceneRoot).not.toBeNull();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Scoreboard' }));
+  expect(sceneRoot!.isConnected).toBe(true);
+  expect(sceneRoot!.getAttribute('data-game-layer')).toBe('scoreboard');
+  const scoreboard = screen.getByRole('heading', { name: 'Scoreboard' });
+  const close = screen.getByRole('button', { name: 'Close' });
+  harness.audio.playCue.mockClear();
+
+  for (const status of ['reconnecting', 'synchronizing'] as const) {
+    act(() => harness.recovery.publish({ status }));
+    expect(surface.getAttribute('inert')).toBe('');
+    expect(surface.getAttribute('aria-hidden')).toBe('true');
+    expect(screen.getByRole('heading', { name: 'Scoreboard', hidden: true })).toBe(scoreboard);
+    fireEvent.click(close);
+    expect(screen.getByRole('heading', { name: 'Scoreboard', hidden: true })).toBe(scoreboard);
+    expect(harness.audio.playCue).not.toHaveBeenCalled();
+  }
+
+  act(() => harness.recovery.publish({ status: 'idle' }));
+  expect(surface.getAttribute('inert')).toBeNull();
+  expect(surface.getAttribute('aria-hidden')).toBeNull();
+  expect(screen.getByRole('heading', { name: 'Scoreboard' })).toBe(scoreboard);
+  fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+  expect(sceneRoot!.isConnected).toBe(true);
+  expect(sceneRoot!.getAttribute('data-game-layer')).toBe('board');
+  expect(screen.queryByRole('heading', { name: 'Scoreboard' })).toBeNull();
+  expect(screen.getByRole('button', { name: 'Scoreboard' })).not.toBeNull();
+});
+
 test.each([LOCALE.KO, LOCALE.EN])(
   'does not announce the opponent’s first connection as a reconnection in %s',
   (locale) => {

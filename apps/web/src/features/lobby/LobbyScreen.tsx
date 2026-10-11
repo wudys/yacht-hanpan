@@ -12,7 +12,7 @@ import { ProfileLayer } from '@/features/lobby/layer/ProfileLayer';
 import { type CopyStatus, WaitingRoomLayer } from '@/features/lobby/layer/WaitingRoomLayer';
 import { lobbyError, lobbyErrorKey } from '@/features/lobby/lobby-errors';
 import { LobbyView } from '@/features/lobby/ui/LobbyView';
-import { useLobbyAdmission } from '@/features/lobby/use-lobby-admission';
+import { useLobbyFlow } from '@/features/lobby/use-lobby-flow';
 import { SettingsPanel } from '@/features/settings/SettingsPanel';
 import { type Locale, translate } from '@/i18n';
 import type { BrowserAudioRuntime } from '@/runtime/audio/browser-audio-runtime';
@@ -84,7 +84,7 @@ export default function LobbyScreen({
     restoreView,
     recoveryPhase,
     confirmAuthorityFailure,
-  } = useLobbyAdmission({
+  } = useLobbyFlow({
     activity,
     access,
     clock,

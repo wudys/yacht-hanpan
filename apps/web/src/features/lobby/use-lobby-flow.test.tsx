@@ -7,7 +7,7 @@ import { act, cleanup, renderHook } from '@testing-library/react';
 import { StrictMode } from 'react';
 import { afterEach, expect, test, vi } from 'vitest';
 
-import { useLobbyAdmission } from '@/features/lobby/use-lobby-admission';
+import { useLobbyFlow } from '@/features/lobby/use-lobby-flow';
 import { createProfileSelectionStore } from '@/runtime/profile/profile-selection-store';
 import { createRoomAccess } from '@/runtime/room-access/room-access';
 import type { StoredRoomReentry } from '@/runtime/room-access/stored-room-reentry';
@@ -60,7 +60,7 @@ function setup(
   });
   const { result, unmount } = renderHook(
     () =>
-      useLobbyAdmission({
+      useLobbyFlow({
         activity,
         access,
         clock,

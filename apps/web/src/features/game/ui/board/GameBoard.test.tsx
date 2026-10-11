@@ -7,7 +7,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, expect, test } from 'vitest';
 
 import { GameBoard, type GameBoardProps } from '@/features/game/ui/board/GameBoard';
-import { GamePresence } from '@/features/game/ui/board/GamePresence';
+import { GameStatusMessage } from '@/features/game/ui/board/GameStatusMessage';
 import { GameTimer } from '@/features/game/ui/board/GameTimer';
 import type { CategoryLabels } from '@/features/game/ui/score';
 
@@ -315,7 +315,7 @@ test('renders injected HUD content and permits explicit empty slots', () => {
     summaryPlayer: { imageAlt: 'You', label: 'You' },
     bonusEarned: false,
     activeGroup: 'upper',
-    presenceContent: <GamePresence message='Connection notice' />,
+    presenceContent: <GameStatusMessage message='Connection notice' />,
   };
   const view = renderToStaticMarkup(<GameBoard {...props} />);
   expect(view).toContain('Connection notice');

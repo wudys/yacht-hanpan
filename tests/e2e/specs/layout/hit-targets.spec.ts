@@ -157,11 +157,28 @@ for (const locale of ['ko', 'en'] as const) {
         await assertProductGeometry(page);
         await page.screenshot({ path: testInfo.outputPath(`${scene}-${locale}-320.png`) });
         if (scene === 'scoreboard') {
-          await page
+          const scoreboard = page.locator('[data-game-layer="scoreboard"]');
+          const last = scoreboard.locator('tbody tr').last();
+          const close = scoreboard
             .locator('[data-layer-footer]')
-            .getByRole('button', { name: english ? 'Close' : '닫기', exact: true })
+            .getByRole('button', { name: english ? 'Close' : '닫기', exact: true });
+          await last.scrollIntoViewIfNeeded();
+          const [lastBox, closeBox] = await Promise.all([last.boundingBox(), close.boundingBox()]);
+          expect(lastBox).not.toBeNull();
+          expect(closeBox).not.toBeNull();
+          expect(lastBox!.y + lastBox!.height).toBeLessThanOrEqual(closeBox!.y + 0.5);
+          await assertProductGeometry(page);
+          await page.screenshot({
+            path: testInfo.outputPath(`scoreboard-last-row-${locale}-320.png`),
+          });
+          await close.click();
+          await expect(scoreboard).toHaveCount(0);
+          await page
+            .getByRole('button', { name: english ? 'Scoreboard' : '점수판', exact: true })
             .click();
-          await expect(page.locator('[data-game-layer="scoreboard"]')).toHaveCount(0);
+          await expect(scoreboard).toBeVisible();
+          await close.click();
+          await expect(scoreboard).toHaveCount(0);
         }
       } finally {
         await guest.close();

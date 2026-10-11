@@ -4,8 +4,8 @@ import { PUBLIC_ERROR_CODE } from '@repo/game-protocol';
 import { assign, fromCallback, fromPromise, setup, type SnapshotFrom } from 'xstate';
 
 import {
+  classifyCreateRoomFailure,
   connectionFailureError,
-  createFailureDisposition,
   isInlineJoinError,
   isServerError,
   type LobbyError,
@@ -357,7 +357,7 @@ export function createLobbyMachine(
               guard: ({ event }: AdmissionDone) =>
                 event.output.status === 'failure' &&
                 event.output.stage === 'response' &&
-                createFailureDisposition(event.output.error) === 'dismiss',
+                classifyCreateRoomFailure(event.output.error) === 'dismiss',
               target: 'createFailed',
               actions: {
                 type: 'createFailure',
@@ -368,7 +368,7 @@ export function createLobbyMachine(
               guard: ({ event }: AdmissionDone) =>
                 event.output.status === 'failure' &&
                 event.output.stage === 'response' &&
-                createFailureDisposition(event.output.error) === 'notice',
+                classifyCreateRoomFailure(event.output.error) === 'notice',
               target: 'createNotice',
               actions: {
                 type: 'createFailure',

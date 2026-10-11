@@ -12,7 +12,7 @@ import {
 } from '@/features/lobby/lobby-machine';
 import { useTelemetry } from '@/runtime/telemetry/TelemetryContext';
 
-export function useLobbyAdmission({
+export function useLobbyFlow({
   clock,
   onIntent,
   ...services

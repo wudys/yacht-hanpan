@@ -143,7 +143,7 @@ it.each(['resolve', 'reject'] as const)(
         }),
     );
     await import('@/main');
-    await vi.waitFor(() => expect(fixture.startWebApp).toHaveBeenCalledOnce(), { timeout: 1500 });
+    await vi.waitFor(() => expect(fixture.startWebApp).toHaveBeenCalledOnce(), { timeout: 1_500 });
     expect(fixture.createErrors).not.toHaveBeenCalled();
     if (completion === 'resolve') completeDiagnostics({ createSentryErrors: fixture.createErrors });
     else failDiagnostics(new Error('late diagnostic failure'));

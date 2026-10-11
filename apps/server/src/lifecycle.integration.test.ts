@@ -618,8 +618,8 @@ describe('game server lifecycle integration', () => {
       serverUrl: server.url,
       releaseId: RELEASE_ID,
       retryPolicy: {
-        commandResponseTimeoutMs: 1000,
-        retryIntervalMs: 1000,
+        commandResponseTimeoutMs: 1_000,
+        retryIntervalMs: 1_000,
         maximumAttempts: 1,
         synchronizationTimeoutMs: 1_000,
       },
@@ -752,8 +752,8 @@ describe('game server lifecycle integration', () => {
         serverUrl: server.url,
         releaseId: RELEASE_ID,
         retryPolicy: {
-          commandResponseTimeoutMs: 1000,
-          retryIntervalMs: 1000,
+          commandResponseTimeoutMs: 1_000,
+          retryIntervalMs: 1_000,
           maximumAttempts: 1,
           synchronizationTimeoutMs: 1_000,
         },

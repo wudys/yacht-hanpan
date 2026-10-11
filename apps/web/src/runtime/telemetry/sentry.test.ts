@@ -163,7 +163,7 @@ it('releases the active client and closes once with a bounded SDK timeout despit
     errors.reportUnexpected(failure(1));
   }).not.toThrow();
   await Promise.resolve();
-  expect(close).toHaveBeenCalledExactlyOnceWith(1000);
+  expect(close).toHaveBeenCalledExactlyOnceWith(1_000);
   expect(getClient()).toBeUndefined();
   expect(fetch).not.toHaveBeenCalled();
 });

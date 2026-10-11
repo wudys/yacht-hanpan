@@ -51,7 +51,7 @@ function fromRows(
           },
         ],
         elapsedMs: 2,
-        remainingBudgetMs: 14998,
+        remainingBudgetMs: 14_998,
         final: {
           status: 'accepted' as const,
           ...outcome,

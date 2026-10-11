@@ -588,7 +588,7 @@ test('reuses prepared resources across verified replays without disposing siblin
       });
       const completedBefore = complete.mock.calls.length;
       now += 50;
-      advanceFrame?.(now / 1000);
+      advanceFrame?.(now / 1_000);
       expect(complete).toHaveBeenCalledTimes(completedBefore);
       // A new roll starts a fresh clock; rerendering this roll must keep its elapsed time.
       await actR3f(async () =>
@@ -603,8 +603,8 @@ test('reuses prepared resources across verified replays without disposing siblin
         ),
       );
       now += 51;
-      advanceFrame?.(now / 1000);
-      advanceFrame?.(now / 1000);
+      advanceFrame?.(now / 1_000);
+      advanceFrame?.(now / 1_000);
       expect(complete).toHaveBeenLastCalledWith(rollId);
       expect(dice).toHaveLength(slots.length);
       expect(new Set(dice).size).toBe(slots.length);
@@ -623,7 +623,7 @@ test('reuses prepared resources across verified replays without disposing siblin
     );
     await actR3f(async () => root.render(null));
     now += 101;
-    advanceFrame?.(now / 1000);
+    advanceFrame?.(now / 1_000);
     expect(complete).toHaveBeenCalledTimes(2);
     expect(sharedDisposeCounts).toEqual(sharedDisposeCounts.map(() => 0));
     resources.dispose();

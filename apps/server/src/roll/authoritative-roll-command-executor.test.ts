@@ -265,7 +265,7 @@ describe('authoritative roll command executor', () => {
       const styleCounts: number[] = [];
       let seeds = 0;
       const executor = createAuthoritativeRollCommandExecutor({
-        executionBudgetMs: 2000,
+        executionBudgetMs: 2_000,
         monotonicNow: () => now,
         logger: createJsonLogger(() => {}),
         reportUnexpected: (error, operation) => reports.push([error, operation]),
@@ -311,7 +311,7 @@ describe('authoritative roll command executor', () => {
       expect(identities).toBe(1);
       expect(styleCounts).toEqual([2]);
       expect(seeds).toBe(2);
-      expect(deadlines).toEqual([2100, 2100]);
+      expect(deadlines).toEqual([2_100, 2_100]);
       expect(budgets[1]).toBe(budgets[0]);
       expect(JSON.stringify(result)).not.toContain('candidate-seed-1');
       expect(JSON.stringify(result)).not.toMatch(

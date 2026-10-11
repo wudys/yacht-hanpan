@@ -136,7 +136,7 @@ for (const locale of ['ko', 'en'] as const) {
               `43${request.ackId}${JSON.stringify([
                 {
                   ok: false,
-                  error: { code: 'RATE_LIMITED', params: { retryAfterMs: 1500 } },
+                  error: { code: 'RATE_LIMITED', params: { retryAfterMs: 1_500 } },
                   meta: {
                     requestId: globalThis.crypto.randomUUID(),
                     gameProtocolVersion: protocolVersion,
@@ -198,7 +198,7 @@ for (const locale of ['ko', 'en'] as const) {
       expect(await settings!.evaluate((element) => element.isConnected)).toBe(true);
       await expect(page.locator('[data-game-interaction-surface]')).not.toHaveAttribute('inert');
       // Observe beyond the injected 1500ms cooldown, including a scheduling margin.
-      await expect.poll(() => Date.now() - rejectedAt).toBeGreaterThan(1750);
+      await expect.poll(() => Date.now() - rejectedAt).toBeGreaterThan(1_750);
       expect(commandCount).toBe(1);
       await expect(guestContext.pages()[0]!.locator('[data-product-view="game"]')).toBeVisible();
       await page

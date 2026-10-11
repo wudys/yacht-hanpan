@@ -801,7 +801,7 @@ describe('startGameServer composition', () => {
 
   test('replays one authority result for duplicate create and join operations', async () => {
     const repository = new InMemoryRoomRepository();
-    let now = 1000;
+    let now = 1_000;
     const server = await startGameServer({
       config: config(),
       repository,
@@ -827,14 +827,14 @@ describe('startGameServer composition', () => {
     if (!replayedCreate.ok) throw new Error('expected replayed create success');
     expect(replayedCreate.data).toEqual(created.data);
     expect(replayedCreate.meta.requestId).not.toBe(created.meta.requestId);
-    expect(Number(created.meta.serverTime)).toBe(1000);
-    now = 1500;
+    expect(Number(created.meta.serverTime)).toBe(1_000);
+    now = 1_500;
     const laterReplay = parseCreateRoomResponse(
       (await post(`${server.url}/rooms`, createBody)).body,
     );
     if (!laterReplay.ok) throw new Error('expected later replay success');
     expect(laterReplay.data).toEqual(created.data);
-    expect(Number(laterReplay.meta.serverTime)).toBe(1500);
+    expect(Number(laterReplay.meta.serverTime)).toBe(1_500);
 
     const joinBody = {
       clientId: JOINER_CLIENT_ID,

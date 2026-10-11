@@ -235,7 +235,11 @@ export class FakeSocket implements RawGameSocket {
     acknowledge({
       ok: true,
       data: { room: room(), game: game(this.syncVersion), presence: presence(this.syncVersion) },
-      meta: { requestId: REQUEST_ID, serverTime: 1000, gameProtocolVersion: GAME_PROTOCOL_VERSION },
+      meta: {
+        requestId: REQUEST_ID,
+        serverTime: 1_000,
+        gameProtocolVersion: GAME_PROTOCOL_VERSION,
+      },
     });
   };
   public onConnected = (listener: () => void): (() => void) => this.add('connected', listener);

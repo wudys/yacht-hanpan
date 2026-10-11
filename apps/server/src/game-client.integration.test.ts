@@ -34,8 +34,8 @@ describe('game-client-sdk with the real game server', () => {
       serverUrl: server.url,
       releaseId: 'game-client-integration',
       retryPolicy: {
-        commandResponseTimeoutMs: 4005,
-        retryIntervalMs: 2005,
+        commandResponseTimeoutMs: 4_005,
+        retryIntervalMs: 2_005,
         maximumAttempts: 2,
         synchronizationTimeoutMs: 2_000,
       },

@@ -362,7 +362,7 @@ test('synchronizing newer settled dice cancels confirmation and restores the cur
   expect(twos.hasAttribute('disabled')).toBe(true);
   expect(tab('upper').textContent).toBe('UpperMax 30');
   expect(tab('lower').textContent).toBe('LowerMax 50');
-  advance(1000);
+  advance(1_000);
   expect(screen.getByRole('button', { name: 'Twos · 0' }).getAttribute('data-value-state')).toBe(
     'preview',
   );
@@ -398,7 +398,7 @@ test.each([false, true])(
     const harness = await createHarness(1);
     render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
     harness.publish(scoreTransition());
-    advance(1000);
+    advance(1_000);
     expect(screen.getByText('YOUR TURN')).not.toBeNull();
     expect(
       screen.getByText(translate(LOCALE.EN, 'game.turnStartCue'), { selector: '[role="status"]' }),
@@ -487,7 +487,7 @@ test('reselecting the automatically displayed tab keeps that choice without anot
   const recorded = scoreTransition(CATEGORY_ID.CHOICE, 20);
   harness.publish(recorded);
   fireEvent.click(tab('lower'));
-  advance(1000);
+  advance(1_000);
   harness.publish(recorded);
   view.rerender(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.KO} />);
   expect(tab('lower').getAttribute('aria-selected')).toBe('true');
@@ -627,7 +627,7 @@ test.each([
 
 test('a live final score under global cover shows Result at 1000ms while its original command remains pending until the 1500ms ACK', async () => {
   const { playing, finished } = finalViews();
-  const harness = await createHarness(0, playing, 5000);
+  const harness = await createHarness(0, playing, 5_000);
   const selectScore = vi.spyOn(harness.session, 'selectScoreCategory');
   const view = render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
   fireEvent.click(tab('lower'));
@@ -660,7 +660,7 @@ test('a live final score under global cover shows Result at 1000ms while its ori
   expect(harness.session.getSnapshot().connection).toBe('disposed');
   expect(commandFinished).toHaveBeenCalledOnce();
   expect(screen.getByRole('heading', { name: 'Game result' })).toBe(result);
-  advance(1000);
+  advance(1_000);
   expect(screen.getByRole('heading', { name: 'Game result' })).toBe(result);
   expect(harness.audio.playCue).toHaveBeenCalledExactlyOnceWith(AUDIO_CUE.SCORE);
   expect(harness.sessionCredentialStore.removeRoom).toHaveBeenCalledOnce();
@@ -689,7 +689,7 @@ test.each(['explicitForfeit', 'connectionEnded'] as const)(
     expect(harness.session.getSnapshot().connection).toBe('disposed');
     expect(harness.sessionCredentialStore.removeRoom).toHaveBeenCalledOnce();
     expect(screen.queryByText('YOUR TURN')).toBeNull();
-    advance(2000);
+    advance(2_000);
     expect(screen.getByRole('heading', { name: 'Game result' })).toBe(result);
     expect(screen.queryByText('YOUR TURN')).toBeNull();
     expect(harness.audio.playCue).toHaveBeenCalledExactlyOnceWith(AUDIO_CUE.SCORE);
@@ -765,7 +765,7 @@ test.each(['hidden', 'recovery', 'restore'] as const)(
     }
     expect(tab('upper').getAttribute('aria-selected')).toBe('true');
     harness.publish(recorded);
-    advance(1000);
+    advance(1_000);
     expect(tab('upper').getAttribute('aria-selected')).toBe('true');
     expect(harness.audio.playCue).toHaveBeenCalledExactlyOnceWith(AUDIO_CUE.SCORE);
   },
@@ -850,7 +850,7 @@ test('global cover consumes an already visible YOUR TURN cue without late replay
   const harness = await createHarness(1);
   const view = render(<GameScreen {...harness} surfaceExposed={true} locale={LOCALE.EN} />);
   harness.publish(scoreTransition());
-  advance(1000);
+  advance(1_000);
   expect(screen.getByText('YOUR TURN')).not.toBeNull();
   view.rerender(<GameScreen {...harness} surfaceExposed={false} locale={LOCALE.EN} />);
   expect(screen.queryByText('YOUR TURN')).toBeNull();
@@ -879,7 +879,7 @@ test.each(['hidden', 'recovery'] as const)(
     expect(summary().getAttribute('data-player-summary')).toBe('viewer');
     expect(tab('upper').getAttribute('aria-selected')).toBe('true');
     expect(harness.audio.playCue).not.toHaveBeenCalled();
-    advance(1000);
+    advance(1_000);
     expect(screen.queryByText('YOUR TURN')).toBeNull();
     expect(harness.audio.playCue).not.toHaveBeenCalled();
   },
@@ -906,7 +906,7 @@ test.each(['settings', 'scoreboard'] as const)(
       const choice = screen.getByRole('row', { name: /Choice/u });
       expect(within(choice).getByText('20')).not.toBeNull();
     }
-    advance(1000);
+    advance(1_000);
     fireEvent.click(screen.getByRole('button', { name: 'Close' }));
     expect(tab('lower').getAttribute('aria-selected')).toBe('true');
     expect(screen.queryByText('YOUR TURN')).toBeNull();
@@ -931,7 +931,7 @@ test.each(['settings', 'scoreboard'] as const)(
     fireEvent.click(screen.getByRole('button', { name: 'Close' }));
     expect(tab('upper').getAttribute('aria-selected')).toBe('true');
     harness.publish(recorded);
-    advance(1000);
+    advance(1_000);
     expect(tab('upper').getAttribute('aria-selected')).toBe('true');
     expect(
       harness.audio.playCue.mock.calls.filter(([cue]) => cue === AUDIO_CUE.SCORE),
@@ -989,11 +989,11 @@ test('a live final score sounds once, then ACK timeout recovery cancels confirma
   expect(screen.getByRole('heading', { name: 'Game result' })).not.toBeNull();
   expect(harness.session.getSnapshot().connection).toBe('disposed');
   expect(harness.sessionCredentialStore.removeRoom).toHaveBeenCalledOnce();
-  advance(1000);
+  advance(1_000);
   expect(harness.audio.playCue).toHaveBeenCalledTimes(1);
 });
 
-test.each([1000, 1100])(
+test.each([1_000, 1_100])(
   'a record arriving at %ims projects current state without a new confirmation or temporary tab',
   async (arrivalAt) => {
     const harness = await createHarness(1);
@@ -1008,7 +1008,7 @@ test.each([1000, 1100])(
       'false',
     );
     expect(screen.queryByText('YOUR TURN')).toBeNull();
-    advance(1000);
+    advance(1_000);
     harness.publish(recorded);
     expect(tab('lower').getAttribute('aria-selected')).toBe('true');
     expect(screen.queryByText('YOUR TURN')).toBeNull();
@@ -1348,7 +1348,7 @@ test.each(['ready', 'expired'] as const)(
     const ownRecord = scoreTransition(CATEGORY_ID.TWOS, 0, originalView);
     harness.publish(ownRecord);
     expect(harness.session.getSnapshot().presentation?.kind).toBe('score');
-    advance(1010);
+    advance(1_010);
 
     const opponentRoll = roomView({
       stateVersion: 9,
@@ -1418,7 +1418,7 @@ test.each(['ready', 'expired'] as const)(
       kind: 'score',
       record: { stateVersion: 10, seatIndex: 1, categoryId: CATEGORY_ID.TWOS, score: 0 },
     });
-    advance(1000);
+    advance(1_000);
     expect(screen.getByRole('button', { name: 'Roll' }).getAttribute('aria-disabled')).toBe('true');
     expect(screen.queryByText('YOUR TURN')).toBeNull();
     if (readiness === 'expired') advance(102_020 - harness.clock.now());
@@ -1441,7 +1441,7 @@ test.each(['ready', 'expired'] as const)(
       expect(rollButton.getAttribute('aria-disabled')).toBe('true');
       expect(screen.queryByText('YOUR TURN')).toBeNull();
       fireEvent.click(rollButton);
-      advance(1000);
+      advance(1_000);
       expect(rollButton.getAttribute('aria-disabled')).toBe('true');
       expect(screen.queryByText('YOUR TURN')).toBeNull();
       fireEvent.click(rollButton);
@@ -1465,7 +1465,7 @@ test.each([0, 300, 900])(
     advance(delay);
     harness.publish(scoreTransition());
     // Commit each timer independently, as the browser does, instead of batching two seconds.
-    for (let tick = 0; tick < 1100; tick += 1) advance(1);
+    for (let tick = 0; tick < 1_100; tick += 1) advance(1);
     const roll = screen.getByRole('button', { name: 'Roll' });
     expect(roll.getAttribute('aria-disabled')).toBe('false');
     fireEvent.click(roll);

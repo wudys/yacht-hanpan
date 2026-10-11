@@ -164,7 +164,7 @@ describe('command runner', () => {
     const runner = createCommandRunner({
       retryPolicy: {
         commandResponseTimeoutMs: 45_000,
-        retryIntervalMs: 3150,
+        retryIntervalMs: 3_150,
         maximumAttempts: 3,
         synchronizationTimeoutMs: 3_000,
       },
@@ -214,7 +214,7 @@ describe('command runner', () => {
     const runner = createCommandRunner({
       retryPolicy: {
         commandResponseTimeoutMs: 45_000,
-        retryIntervalMs: 3150,
+        retryIntervalMs: 3_150,
         maximumAttempts: 3,
         synchronizationTimeoutMs: 3_000,
       },
@@ -274,7 +274,7 @@ describe('command runner', () => {
       const runner = createCommandRunner({
         retryPolicy: {
           commandResponseTimeoutMs: 45_000,
-          retryIntervalMs: 3150,
+          retryIntervalMs: 3_150,
           maximumAttempts: 3,
           synchronizationTimeoutMs: 3_000,
         },
@@ -318,7 +318,7 @@ describe('command runner', () => {
     const runner = createCommandRunner({
       retryPolicy: {
         commandResponseTimeoutMs: 45_000,
-        retryIntervalMs: 3150,
+        retryIntervalMs: 3_150,
         maximumAttempts: 3,
         synchronizationTimeoutMs: 3_000,
       },
@@ -769,8 +769,8 @@ describe('command runner', () => {
     let emits = 0;
     const runner = createCommandRunner({
       retryPolicy: {
-        commandResponseTimeoutMs: 10003,
-        retryIntervalMs: 5001,
+        commandResponseTimeoutMs: 10_003,
+        retryIntervalMs: 5_001,
         maximumAttempts: 3,
         synchronizationTimeoutMs: 1,
       },

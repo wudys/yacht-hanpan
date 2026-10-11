@@ -54,8 +54,8 @@ try {
     releaseId: RELEASE_ID,
     httpTimeoutMs: 20_000,
     retryPolicy: {
-      commandResponseTimeoutMs: 20005,
-      retryIntervalMs: 10005,
+      commandResponseTimeoutMs: 20_005,
+      retryIntervalMs: 10_005,
       maximumAttempts: 2,
       synchronizationTimeoutMs: 10_000,
     },

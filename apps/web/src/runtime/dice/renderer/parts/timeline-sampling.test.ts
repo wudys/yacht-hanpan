@@ -201,15 +201,15 @@ describe('cup timeline sampling', () => {
 
 describe('cup exit presentation', () => {
   it('holds the cup through release and fades it continuously before exit', () => {
-    const releaseAtMs = 1000;
-    const exitAtMs = 1800;
+    const releaseAtMs = 1_000;
+    const exitAtMs = 1_800;
 
-    expect(cupExitOpacityAt(1000, releaseAtMs, exitAtMs)).toBe(1);
-    expect(cupExitOpacityAt(1440, releaseAtMs, exitAtMs)).toBe(1);
-    expect(cupExitOpacityAt(1580, releaseAtMs, exitAtMs)).toBeGreaterThan(0);
-    expect(cupExitOpacityAt(1580, releaseAtMs, exitAtMs)).toBeLessThan(1);
-    expect(cupExitOpacityAt(1790, releaseAtMs, exitAtMs)).toBeGreaterThan(0);
-    expect(cupExitOpacityAt(1800, releaseAtMs, exitAtMs)).toBe(0);
+    expect(cupExitOpacityAt(1_000, releaseAtMs, exitAtMs)).toBe(1);
+    expect(cupExitOpacityAt(1_440, releaseAtMs, exitAtMs)).toBe(1);
+    expect(cupExitOpacityAt(1_580, releaseAtMs, exitAtMs)).toBeGreaterThan(0);
+    expect(cupExitOpacityAt(1_580, releaseAtMs, exitAtMs)).toBeLessThan(1);
+    expect(cupExitOpacityAt(1_790, releaseAtMs, exitAtMs)).toBeGreaterThan(0);
+    expect(cupExitOpacityAt(1_800, releaseAtMs, exitAtMs)).toBe(0);
   });
 });
 

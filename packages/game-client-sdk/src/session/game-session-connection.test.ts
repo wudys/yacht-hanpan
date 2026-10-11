@@ -847,10 +847,10 @@ describe('game session connection', () => {
         authority,
         contract: createCompatibilityContract('release-1'),
         retryPolicy: {
-          commandResponseTimeoutMs: 1000,
-          retryIntervalMs: 1000,
+          commandResponseTimeoutMs: 1_000,
+          retryIntervalMs: 1_000,
           maximumAttempts: 1,
-          synchronizationTimeoutMs: 1000,
+          synchronizationTimeoutMs: 1_000,
         },
       });
       let cancelled = false;

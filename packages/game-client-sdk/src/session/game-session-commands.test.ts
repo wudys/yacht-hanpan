@@ -491,8 +491,8 @@ describe('game session commands', () => {
       contract: createCompatibilityContract('release-1'),
       socketFactory: { create: () => socket },
       retryPolicy: {
-        commandResponseTimeoutMs: 17000,
-        retryIntervalMs: 6000,
+        commandResponseTimeoutMs: 17_000,
+        retryIntervalMs: 6_000,
         maximumAttempts: 3,
         synchronizationTimeoutMs: 5_000,
       },

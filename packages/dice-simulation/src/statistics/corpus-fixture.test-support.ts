@@ -28,7 +28,7 @@ export function corpusFixture() {
       prefix: 'test',
       startedAt: '2026-10-08T00:00:00.000Z',
       finishedAt: '2026-10-08T00:01:00.000Z',
-      budgets: { commandMs: 15000, queueMs: 10000, jobMs: 10000 },
+      budgets: { commandMs: 15_000, queueMs: 10_000, jobMs: 10_000 },
       pool: { workerCount: 1, maxQueueSize: 1 },
       inputManifestSha256: '',
       runner: 'test',
@@ -50,7 +50,7 @@ export function corpusFixture() {
           },
         ],
         elapsedMs: 2,
-        remainingBudgetMs: 14998,
+        remainingBudgetMs: 14_998,
         final: {
           status: 'accepted' as const,
           ...outcome,

@@ -105,7 +105,7 @@ function SettledDieMesh({
   });
   useFrame((_, delta) => {
     if (!transition) return;
-    elapsedMs.current += delta * 1000;
+    elapsedMs.current += delta * 1_000;
     applyPose(Math.min(1, elapsedMs.current / transition.durationMs));
   });
 

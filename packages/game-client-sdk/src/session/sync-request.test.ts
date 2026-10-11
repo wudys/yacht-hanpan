@@ -90,7 +90,7 @@ describe('sync request', () => {
     const controller = new AbortController();
     let acknowledge: ((value: unknown) => void) | undefined;
     const pending = requestSync({
-      timeoutMs: 5000,
+      timeoutMs: 5_000,
       signal: controller.signal,
       emit: (next) => {
         acknowledge = next;

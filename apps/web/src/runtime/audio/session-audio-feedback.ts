@@ -61,7 +61,7 @@ export function startSessionAudioFeedback(options: {
     const turn = game?.match.status === 'playing' ? game.match.currentTurn : null;
     const now = clock.now();
     const seconds =
-      turn && now !== null ? Math.max(0, Math.ceil((turn.deadlineAt - now) / 1000)) : null;
+      turn && now !== null ? Math.max(0, Math.ceil((turn.deadlineAt - now) / 1_000)) : null;
     const identity =
       turn && current.authority ? `${current.authority.roomId}:${turn.turnId}` : null;
     const allowed = Boolean(

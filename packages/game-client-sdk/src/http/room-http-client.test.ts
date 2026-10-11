@@ -14,7 +14,7 @@ const REQUEST_ID = '9d6ffbb8-10a4-4d43-8c46-cd035b9e87f0';
 const OPERATION_ID = 'a6f9fc18-01e4-469c-8382-301e7d85654d';
 const META = {
   requestId: REQUEST_ID,
-  serverTime: 1000,
+  serverTime: 1_000,
   gameProtocolVersion: GAME_PROTOCOL_VERSION,
 } as const;
 
@@ -110,7 +110,7 @@ describe('room HTTP client', () => {
     });
 
     expect(result.ok).toBeTrue();
-    expect(clock.now()).toBe(1050);
+    expect(clock.now()).toBe(1_050);
     expect(calls).toHaveLength(1);
     expect(calls[0]?.url).toBe('https://game.example.test/rooms');
     expect(calls[0]?.init?.method).toBe('POST');

@@ -154,7 +154,7 @@ describe('game session sync', () => {
     now = 110;
     const newerSample = clock.beginSample();
     now = 120;
-    clock.acceptSample(newerSample, 2000);
+    clock.acceptSample(newerSample, 2_000);
     const completed: unknown[] = [];
     session.subscribe(() => {
       const current = session.getSnapshot();
@@ -170,10 +170,14 @@ describe('game session sync', () => {
     acknowledge?.({
       ok: true,
       data: { room: room(), game: game(1), presence: presence(2) },
-      meta: { requestId: REQUEST_ID, serverTime: 1500, gameProtocolVersion: GAME_PROTOCOL_VERSION },
+      meta: {
+        requestId: REQUEST_ID,
+        serverTime: 1_500,
+        gameProtocolVersion: GAME_PROTOCOL_VERSION,
+      },
     });
     expect(await pending).toEqual({ ok: true });
-    expect(completed).toEqual([{ version: 5, revision: 2, time: 2025 }]);
+    expect(completed).toEqual([{ version: 5, revision: 2, time: 2_025 }]);
     expect(Number(session.getSnapshot().presence?.presenceVersion)).toBe(2);
     session.dispose();
   });
@@ -200,7 +204,7 @@ describe('game session sync', () => {
         },
         meta: {
           requestId: REQUEST_ID,
-          serverTime: 9000,
+          serverTime: 9_000,
           gameProtocolVersion: GAME_PROTOCOL_VERSION,
         },
       });
@@ -213,7 +217,7 @@ describe('game session sync', () => {
       game: { stateVersion: 1 },
       presence: { presenceVersion: 1 },
     });
-    expect(clock.now()).toBe(1000);
+    expect(clock.now()).toBe(1_000);
     session.dispose();
   });
 
@@ -239,7 +243,7 @@ describe('game session sync', () => {
         },
         meta: {
           requestId: REQUEST_ID,
-          serverTime: 1000,
+          serverTime: 1_000,
           gameProtocolVersion: GAME_PROTOCOL_VERSION,
         },
       });
@@ -265,7 +269,7 @@ describe('game session sync', () => {
     });
     expect(await session.connect()).toEqual({ ok: true });
     expect(completed).toEqual([
-      { room: 'waiting', game: null, presence: 1, time: 1010, status: 'idle' },
+      { room: 'waiting', game: null, presence: 1, time: 1_010, status: 'idle' },
     ]);
     session.dispose();
   });
@@ -525,8 +529,8 @@ describe('game session sync', () => {
       contract: createCompatibilityContract('release-1'),
       socketFactory: { create: () => socket },
       retryPolicy: {
-        commandResponseTimeoutMs: 5000,
-        retryIntervalMs: 5000,
+        commandResponseTimeoutMs: 5_000,
+        retryIntervalMs: 5_000,
         maximumAttempts: 1,
         synchronizationTimeoutMs: 5_000,
       },
@@ -651,7 +655,7 @@ describe('game session sync', () => {
             data: viewFromGame(game(gameVersion, gameVersion >= 2), presenceVersion),
             meta: {
               requestId: REQUEST_ID,
-              serverTime: 2000,
+              serverTime: 2_000,
               gameProtocolVersion: GAME_PROTOCOL_VERSION,
             },
           });
@@ -661,7 +665,7 @@ describe('game session sync', () => {
         expect(restored.syncRevision).toBe(2);
         expect(Number(restored.game?.stateVersion)).toBe(Math.max(2, gameVersion));
         expect(Number(restored.presence?.presenceVersion)).toBe(2);
-        expect(clock.now()).toBe(2000);
+        expect(clock.now()).toBe(2_000);
         if (kind === 'roll') expect(restored.presentation).toBe(fresh.presentation);
       } finally {
         session.dispose();
@@ -690,7 +694,7 @@ describe('game session sync', () => {
           data: viewFromGame(game(1), 3),
           meta: {
             requestId: REQUEST_ID,
-            serverTime: 9000,
+            serverTime: 9_000,
             gameProtocolVersion: GAME_PROTOCOL_VERSION,
           },
         });
@@ -705,7 +709,7 @@ describe('game session sync', () => {
       });
       expect(session.getSnapshot().presentation).toBe(fresh.presentation);
       expect(session.getSnapshot().game).toBe(fresh.game);
-      expect(clock.now()).toBe(1000);
+      expect(clock.now()).toBe(1_000);
     } finally {
       session.dispose();
     }

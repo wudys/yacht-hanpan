@@ -1,6 +1,6 @@
 export const GAME_CLIENT_RETRY_POLICY = {
   commandResponseTimeoutMs: 45_000,
-  retryIntervalMs: 3150,
+  retryIntervalMs: 3_150,
   maximumAttempts: 3,
   synchronizationTimeoutMs: 3_000,
 } as const;

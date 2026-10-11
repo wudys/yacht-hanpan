@@ -153,7 +153,7 @@ export function createSentryErrors(dsn: string, origin: string, release: string)
       disposed = true;
       if (getClient() === client) getCurrentScope().setClient(undefined);
       try {
-        void Promise.resolve(client.close(1000)).catch(() => undefined);
+        void Promise.resolve(client.close(1_000)).catch(() => undefined);
       } catch {
         /* Closing diagnostics never delays or interrupts product disposal. */
       }

@@ -298,7 +298,7 @@ test('covered real records update both seats without native SFX or deferred feed
           'viewer',
         );
         // Observe the whole 1000ms local confirmation window, including short-lived effects.
-        await observer.waitForTimeout(1100);
+        await observer.waitForTimeout(1_100);
         expect((await readNativeCues(observer)).filter(({ kind }) => kind === 'start')).toEqual([]);
         const covered = await readScoreFeedback(feedback);
         expect(covered.every(({ category, turnCue }) => category === null && !turnCue)).toBe(true);

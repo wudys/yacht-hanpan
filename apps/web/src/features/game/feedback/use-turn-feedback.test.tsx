@@ -109,7 +109,7 @@ test.each(['unmount', 'suspend'])(
       expect(result.current.record).toBeNull();
     }
     expect(vi.getTimerCount()).toBe(0);
-    await act(() => vi.advanceTimersByTime(2000));
+    await act(() => vi.advanceTimersByTime(2_000));
     expect(onRecordStart).toHaveBeenCalledTimes(1);
     unmount();
   },

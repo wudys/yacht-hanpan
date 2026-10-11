@@ -167,7 +167,7 @@ describe('Socket.IO authentication boundary', () => {
       websocket: {
         open(socket) {
           socket.send(
-            `0${JSON.stringify({ sid: 'view-engine', upgrades: [], pingInterval: 60000, pingTimeout: 60000, maxPayload: 1024 })}`,
+            `0${JSON.stringify({ sid: 'view-engine', upgrades: [], pingInterval: 60_000, pingTimeout: 60_000, maxPayload: 1024 })}`,
           );
         },
         message(socket, message) {

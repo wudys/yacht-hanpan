@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import { sampleRolls } from './sample-rolls';
 
 describe('dice distribution smoke', () => {
+  // The joint distribution needs all 120 physical rolls; allow headroom over the 4.3s CI sample.
   test('covers every face without broad slot or spatial collapse', async () => {
     const groups = await sampleRolls(12, 'smoke');
     const samples = groups.flatMap((group) => group.samples);
@@ -25,7 +26,7 @@ describe('dice distribution smoke', () => {
     expect(Math.max(...slotMeans) - Math.min(...slotMeans)).toBeLessThan(1.2);
     expect(left / samples.length).toBeGreaterThan(0.25);
     expect(right / samples.length).toBeGreaterThan(0.25);
-  });
+  }, 30_000);
 });
 
 function mean(values: readonly number[]): number {

@@ -69,50 +69,62 @@ describe('category scoring', () => {
     expect(scoreCategory(CATEGORY_ID.YACHT, [face, face, face, face, other])).toBe(0);
   });
 
-  test('preserves scores and combinations across every ordering of all 252 multisets', () => {
-    const maxima = {
-      [CATEGORY_ID.ONES]: 5,
-      [CATEGORY_ID.TWOS]: 10,
-      [CATEGORY_ID.THREES]: 15,
-      [CATEGORY_ID.FOURS]: 20,
-      [CATEGORY_ID.FIVES]: 25,
-      [CATEGORY_ID.SIXES]: 30,
-      [CATEGORY_ID.CHOICE]: 30,
-      [CATEGORY_ID.FOUR_OF_A_KIND]: 30,
-      [CATEGORY_ID.FULL_HOUSE]: 28,
-      [CATEGORY_ID.SMALL_STRAIGHT]: 15,
-      [CATEGORY_ID.LARGE_STRAIGHT]: 30,
-      [CATEGORY_ID.YACHT]: 50,
-    } as const;
-
-    const multisets = new Map<string, ReturnType<typeof evaluateDice>>();
-    for (const a of FACES) {
-      for (const b of FACES) {
-        for (const c of FACES) {
-          for (const d of FACES) {
-            for (const e of FACES) {
-              const dice: Dice = [a, b, c, d, e];
-              const sorted: [DieFace, DieFace, DieFace, DieFace, DieFace] = [...dice];
-              sorted.sort((left, right) => left - right);
-              const key = sorted.join(',');
-              let expected = multisets.get(key);
-              if (expected === undefined) {
-                expected = evaluateDice(sorted);
-                multisets.set(key, expected);
-                expected.scores.forEach((score, index) => {
-                  expect(Number.isInteger(score)).toBe(true);
-                  expect(score).toBeGreaterThanOrEqual(0);
-                  expect(score).toBeLessThanOrEqual(maxima[CATEGORY_IDS[index]!]);
-                });
-              }
-              expect(evaluateDice(dice)).toEqual(expected);
+  const multisets = new Map<string, { dice: Dice; orderings: Dice[] }>();
+  for (const a of FACES) {
+    for (const b of FACES) {
+      for (const c of FACES) {
+        for (const d of FACES) {
+          for (const e of FACES) {
+            const dice: Dice = [a, b, c, d, e];
+            const sorted: [DieFace, DieFace, DieFace, DieFace, DieFace] = [...dice];
+            sorted.sort((left, right) => left - right);
+            const key = sorted.join(',');
+            let group = multisets.get(key);
+            if (group === undefined) {
+              group = { dice: sorted, orderings: [] };
+              multisets.set(key, group);
             }
+            group.orderings.push(dice);
           }
         }
       }
     }
+  }
+  test('covers all 252 multisets in the exhaustive scoring corpus', () => {
     expect(multisets.size).toBe(252);
+    expect(
+      [...multisets.values()].reduce((total, group) => total + group.orderings.length, 0),
+    ).toBe(6 ** 5);
   });
+
+  const maxima = {
+    [CATEGORY_ID.ONES]: 5,
+    [CATEGORY_ID.TWOS]: 10,
+    [CATEGORY_ID.THREES]: 15,
+    [CATEGORY_ID.FOURS]: 20,
+    [CATEGORY_ID.FIVES]: 25,
+    [CATEGORY_ID.SIXES]: 30,
+    [CATEGORY_ID.CHOICE]: 30,
+    [CATEGORY_ID.FOUR_OF_A_KIND]: 30,
+    [CATEGORY_ID.FULL_HOUSE]: 28,
+    [CATEGORY_ID.SMALL_STRAIGHT]: 15,
+    [CATEGORY_ID.LARGE_STRAIGHT]: 30,
+    [CATEGORY_ID.YACHT]: 50,
+  } as const;
+  test.each([...multisets.values()])(
+    'preserves scores and combinations across every ordering of $dice',
+    ({ dice, orderings }) => {
+      const expected = evaluateDice(dice);
+      expected.scores.forEach((score, index) => {
+        expect(Number.isInteger(score)).toBe(true);
+        expect(score).toBeGreaterThanOrEqual(0);
+        expect(score).toBeLessThanOrEqual(maxima[CATEGORY_IDS[index]!]);
+      });
+      for (const ordering of orderings) {
+        expect(evaluateDice(ordering)).toEqual(expected);
+      }
+    },
+  );
 
   test('does not reorder the caller’s dice while scoring or classifying', () => {
     const dice: Dice = [5, 1, 4, 2, 3];

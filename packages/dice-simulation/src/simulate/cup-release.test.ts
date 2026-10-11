@@ -285,60 +285,58 @@ test('remembers a mouth crossing during shaking when the die later rests behind 
   }
 });
 
-test.each(['oblique', 'burst'] as const)(
-  'pours five %s dice without a late second batch',
-  (style) => {
+test.each(
+  (['oblique', 'burst'] as const).flatMap((style) => {
     const seeds =
       style === 'oblique'
         ? Array.from({ length: 10 }, (_, sequence) => `coherent-pour-baseline-5-${sequence}`)
         : ['browser-parity-v1', 'coherent-pour-baseline-5-4', 'pour-direction-1'];
-    for (const seed of seeds) {
-      const motion = createCupMotion(seed, style);
-      const exits = new Map<number, number>();
-      let elapsedSeconds = 0;
-      const stepWorld = RAPIER.World.prototype.step;
-      const observer = spyOn(RAPIER.World.prototype, 'step').mockImplementation(function (
-        this: RAPIER.World,
-        ...args: Parameters<typeof stepWorld>
-      ) {
-        stepWorld.apply(this, args);
-        elapsedSeconds += this.timestep;
-        const t = Math.round((elapsedSeconds - FIXED_STEP_SECONDS) * 1000);
-        const bodies: RAPIER.RigidBody[] = [];
-        this.forEachRigidBody((body) => bodies.push(body));
-        const body = bodies.find((body) => body.isKinematic());
-        if (!body || t < motion.pourAtMs) return;
-        const cup = {
-          geometry: DEFAULT_CUP_GEOMETRY,
-          body,
-          colliders: Array.from({ length: body.numColliders() }, (_, i) => body.collider(i)),
-        };
-        for (const body of bodies.filter((body) => body.isDynamic())) {
-          const die = { id: String(body.handle), body, collider: body.collider(0) };
-          if (!exits.has(body.handle) && haveDiceClearedCupMouth(cup, [die]))
-            exits.set(body.handle, t);
-        }
-      });
-      try {
-        simulateRollTimeline({
-          rollId: seed,
-          seed,
-          rolledSlots: [0, 1, 2, 3, 4],
-          pourStyle: style,
-        });
-        expect(exits.size).toBe(5);
-        const times = [...exits.values()].sort((a, b) => a - b);
-        // An early die is fine; a long wait for the next die reads as another pour.
-        // Bound inter-die pauses, not the duration of a continuous five-die stream.
-        expect(
-          Math.max(...times.slice(1).map((t, index) => t - times[index]!)),
-        ).toBeLessThanOrEqual(250);
-      } finally {
-        observer.mockRestore();
-      }
+    return seeds.map((seed) => [style, seed] as const);
+  }),
+)('pours five %s dice without a late second batch for %s', (style, seed) => {
+  const motion = createCupMotion(seed, style);
+  const exits = new Map<number, number>();
+  let elapsedSeconds = 0;
+  const stepWorld = RAPIER.World.prototype.step;
+  const observer = spyOn(RAPIER.World.prototype, 'step').mockImplementation(function (
+    this: RAPIER.World,
+    ...args: Parameters<typeof stepWorld>
+  ) {
+    stepWorld.apply(this, args);
+    elapsedSeconds += this.timestep;
+    const t = Math.round((elapsedSeconds - FIXED_STEP_SECONDS) * 1000);
+    const bodies: RAPIER.RigidBody[] = [];
+    this.forEachRigidBody((body) => bodies.push(body));
+    const body = bodies.find((body) => body.isKinematic());
+    if (!body || t < motion.pourAtMs) return;
+    const cup = {
+      geometry: DEFAULT_CUP_GEOMETRY,
+      body,
+      colliders: Array.from({ length: body.numColliders() }, (_, i) => body.collider(i)),
+    };
+    for (const body of bodies.filter((body) => body.isDynamic())) {
+      const die = { id: String(body.handle), body, collider: body.collider(0) };
+      if (!exits.has(body.handle) && haveDiceClearedCupMouth(cup, [die])) exits.set(body.handle, t);
     }
-  },
-);
+  });
+  try {
+    simulateRollTimeline({
+      rollId: seed,
+      seed,
+      rolledSlots: [0, 1, 2, 3, 4],
+      pourStyle: style,
+    });
+    expect(exits.size).toBe(5);
+    const times = [...exits.values()].sort((a, b) => a - b);
+    // An early die is fine; a long wait for the next die reads as another pour.
+    // Bound inter-die pauses, not the duration of a continuous five-die stream.
+    expect(Math.max(...times.slice(1).map((t, index) => t - times[index]!))).toBeLessThanOrEqual(
+      250,
+    );
+  } finally {
+    observer.mockRestore();
+  }
+});
 
 test.each([...POUR_STYLES])(
   'exposes the %s die beyond the opaque cup before its exit fade',

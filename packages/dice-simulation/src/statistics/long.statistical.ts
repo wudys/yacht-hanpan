@@ -6,6 +6,7 @@ import { sampleRolls } from './sample-rolls';
 const ROLLS_PER_GROUP = 400;
 
 describe('extended dice distribution', () => {
+  // The joint distribution/coupling audit needs all 4,000 physical rolls on slower CI CPUs.
   test('retains every first-candidate denominator and audits accepted distribution/coupling', async () => {
     const groups = await sampleRolls(ROLLS_PER_GROUP, 'statistical');
     const samples = groups.flatMap((group) => group.samples);
@@ -54,7 +55,7 @@ describe('extended dice distribution', () => {
       }
     }
     expect(Math.abs(leftMean - rightMean)).toBeLessThan(0.35);
-  });
+  }, 300_000);
 });
 
 function mean(values: readonly number[]): number {

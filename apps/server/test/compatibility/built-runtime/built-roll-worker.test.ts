@@ -6,7 +6,7 @@ import { expect, spyOn, test } from 'bun:test';
 
 import { RollSimulationWorkerPool } from '@/roll/worker/roll-simulation-worker-pool';
 
-import { verifyBuiltWorker, verifyBuiltWorkerBudgetExpiry } from './built-roll-worker';
+import { verifyBuiltWorker, verifyBuiltWorkerBudgetExpiry } from './verify-built-roll-worker';
 
 test.each(['crash', 'budget'] as const)(
   'removes the acquired %s wrapper directory and preserves a write failure',

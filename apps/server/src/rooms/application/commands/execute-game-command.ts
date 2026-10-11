@@ -20,7 +20,7 @@ import {
   reserveRetryableAction,
   type SuccessfulLogicalActionResult,
 } from '@/rooms/application/commands/action-ledger';
-import { captureCommandTime } from '@/rooms/application/commands/command-time';
+import { toRoomCommandTime } from '@/rooms/application/commands/command-time';
 import type { PendingActionRegistry } from '@/rooms/application/commands/pending-action-registry';
 import { projectRoomView } from '@/rooms/application/projection/room-view';
 import {
@@ -93,7 +93,7 @@ export async function executeGameCommand(
   input: ExecuteGameCommandInput,
   dependencies: ExecuteGameCommandDependencies,
 ): Promise<ExecuteGameCommandResult> {
-  const commandTime = captureCommandTime(input.command.type, input.receivedAt);
+  const commandTime = toRoomCommandTime(input.command.type, input.receivedAt);
   const fingerprint = fingerprintGameCommand(input.command);
   const key = `${input.seatIndex}:${input.command.actionId}`;
   const pending = await dependencies.pending.run(

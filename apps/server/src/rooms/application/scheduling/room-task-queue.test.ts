@@ -1,7 +1,7 @@
 import { GAME_COMMAND_TYPE } from '@repo/game-protocol/socket';
 import { describe, expect, test } from 'bun:test';
 
-import { captureCommandTime } from '@/rooms/application/commands/command-time';
+import { toRoomCommandTime } from '@/rooms/application/commands/command-time';
 import { InMemoryRoomTaskQueue } from '@/rooms/application/scheduling/room-task-queue';
 import { roomId } from '@/rooms/domain/room-model';
 
@@ -45,7 +45,7 @@ describe('in-memory room task queue', () => {
     const forfeit = queue.runRequest(
       id,
       () => order.push('forfeit'),
-      captureCommandTime(GAME_COMMAND_TYPE.FORFEIT_MATCH, 1_000),
+      toRoomCommandTime(GAME_COMMAND_TYPE.FORFEIT_MATCH, 1_000),
     );
     expect(await queue.runRequest(id, () => order.push('rejected'))).toEqual({
       ok: false,
@@ -71,22 +71,22 @@ describe('in-memory room task queue', () => {
     const forfeit = queue.runRequest(
       id,
       () => order.push('forfeit'),
-      captureCommandTime(GAME_COMMAND_TYPE.FORFEIT_MATCH, 1_000),
+      toRoomCommandTime(GAME_COMMAND_TYPE.FORFEIT_MATCH, 1_000),
     );
     const roll = queue.runRequest(
       id,
       () => order.push('roll'),
-      captureCommandTime(GAME_COMMAND_TYPE.ROLL_DICE, 1_000),
+      toRoomCommandTime(GAME_COMMAND_TYPE.ROLL_DICE, 1_000),
     );
     const score = queue.runRequest(
       id,
       () => order.push('score'),
-      captureCommandTime(GAME_COMMAND_TYPE.SELECT_SCORE_CATEGORY, 1_000),
+      toRoomCommandTime(GAME_COMMAND_TYPE.SELECT_SCORE_CATEGORY, 1_000),
     );
     const later = queue.runRequest(
       id,
       () => order.push('later'),
-      captureCommandTime(GAME_COMMAND_TYPE.ROLL_DICE, 1_001),
+      toRoomCommandTime(GAME_COMMAND_TYPE.ROLL_DICE, 1_001),
     );
     await advance(1_001);
     await Promise.all([forfeit, roll, score, later]);
@@ -102,7 +102,7 @@ describe('in-memory room task queue', () => {
       () => {
         ran = true;
       },
-      captureCommandTime(GAME_COMMAND_TYPE.FORFEIT_MATCH, 1_000),
+      toRoomCommandTime(GAME_COMMAND_TYPE.FORFEIT_MATCH, 1_000),
     );
     expect(result).toEqual({ ok: false, reason: 'waitExpired' });
     expect(ran).toBeFalse();
@@ -123,7 +123,7 @@ describe('in-memory room task queue', () => {
         () => {
           ran = true;
         },
-        captureCommandTime(GAME_COMMAND_TYPE.FORFEIT_MATCH, 1_000),
+        toRoomCommandTime(GAME_COMMAND_TYPE.FORFEIT_MATCH, 1_000),
       );
       const stale = scheduled.values().next().value;
       if (stale === undefined) throw new Error('wake missing');

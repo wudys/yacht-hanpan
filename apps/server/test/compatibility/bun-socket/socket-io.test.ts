@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { io, type Socket } from 'socket.io-client';
 
-import { type CompatibilitySocketServer, startCompatibilitySocketServer } from './socket-server';
+import { type CompatibilitySocketServer, startCompatibilitySocketServer } from './probe-server';
 
 const clients: Socket[] = [];
 let server: CompatibilitySocketServer | undefined;

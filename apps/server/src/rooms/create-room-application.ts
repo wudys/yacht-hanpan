@@ -3,7 +3,7 @@ import type { CompatibilityContract } from '@repo/game-protocol/version';
 
 import type { RollCommandExecutor } from '@/roll/roll-command-executor';
 import { CreateRoomRateLimiter } from '@/rooms/application/admission/create-room-rate-limiter';
-import { closeRoomApplicationResources } from '@/rooms/application/close-room-resources';
+import { closeRoomApplicationResources } from '@/rooms/application/close-room-application-resources';
 import type { ExecuteGameCommandResult } from '@/rooms/application/commands/execute-game-command';
 import { PendingActionRegistry } from '@/rooms/application/commands/pending-action-registry';
 import { ConnectionRegistry } from '@/rooms/application/connections/connection-registry';

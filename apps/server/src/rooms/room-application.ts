@@ -32,7 +32,7 @@ import {
   executeResumeRoom,
   type ResumeRoomApplicationResult,
 } from '@/rooms/application/admission/resume-room';
-import { closeRoomApplicationResources } from '@/rooms/application/close-room-resources';
+import { closeRoomApplicationResources } from '@/rooms/application/close-room-application-resources';
 import {
   executeGameCommand,
   type ExecuteGameCommandInput,

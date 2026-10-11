@@ -2,7 +2,7 @@ import { GAME_COMMAND_TYPE, type GameCommand } from '@repo/game-protocol/socket'
 
 import type { RoomCommandTime } from '@/rooms/domain/event-time';
 
-export function captureCommandTime(
+export function toRoomCommandTime(
   commandType: GameCommand['type'],
   receivedAt: number,
 ): RoomCommandTime {

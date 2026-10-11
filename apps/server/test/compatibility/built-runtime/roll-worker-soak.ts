@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { RollSimulationWorkerPool } from '@/roll/worker/roll-simulation-worker-pool';
 import { ROLL_WORKER_GOLDEN_INPUT } from '@/roll/worker/roll-worker-golden';
 
-import { assertGoldenResult, builtWorkerUrl } from './built-roll-worker';
+import { assertGoldenResult, builtWorkerUrl } from './verify-built-roll-worker';
 
 const ITERATIONS = 256;
 const BATCH_SIZE = 8;

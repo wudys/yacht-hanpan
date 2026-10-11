@@ -19,7 +19,7 @@ import {
   ROLL_WORKER_GOLDEN_OUTCOME,
 } from '@/roll/worker/roll-worker-golden';
 
-export const builtWorkerUrl = new URL('../../dist/roll-simulation.worker.js', import.meta.url);
+export const builtWorkerUrl = new URL('../../../dist/roll-simulation.worker.js', import.meta.url);
 
 export async function assertGoldenResult(result: RollCandidateEvaluation): Promise<void> {
   assert.ok(isRollCandidateEvaluation(result));

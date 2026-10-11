@@ -8,10 +8,10 @@ import { CATEGORY_ID, parseRoomView, type RoomView } from '@repo/game-protocol/s
 import productRelease from '@repo/product-release';
 import { v7 as uuidV7 } from 'uuid';
 
-import { verifyBuiltWorker } from './built-roll-worker';
 import { withBuiltServerArtifact } from './built-server-artifact';
+import { verifyBuiltWorker } from './verify-built-roll-worker';
 
-const packageRoot = resolve(import.meta.dir, '../..');
+const packageRoot = resolve(import.meta.dir, '../../..');
 const distFiles = await readdir(resolve(packageRoot, 'dist'));
 if (distFiles.some((file) => file.endsWith('.png'))) {
   throw new Error('Built server must not emit character image assets');

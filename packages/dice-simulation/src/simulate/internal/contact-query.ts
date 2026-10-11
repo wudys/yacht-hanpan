@@ -11,8 +11,9 @@ export function hasSolverContact(world: World, first: Collider, second: Collider
 export function hasLowerSupportContact(world: World, die: Collider, supports: Collider[]): boolean {
   let hasLowerContact = false;
 
-  supports.forEach((support) => {
+  for (const support of supports) {
     world.contactPair(die, support, (manifold, flipped) => {
+      if (hasLowerContact) return;
       // A rounded edge can carry weight at or above the centre of the supported
       // die. The contact normal, not contact-point height, identifies support.
       const upwardNormal = manifold.normal().y * (flipped ? 1 : -1);
@@ -20,10 +21,14 @@ export function hasLowerSupportContact(world: World, die: Collider, supports: Co
       // Solver contacts also include separated, predicted collisions. Those
       // neighbours must not act as current supports or steer the escape push.
       for (let index = 0; index < manifold.numSolverContacts(); index += 1) {
-        if (manifold.solverContactDist(index) <= 0.005) hasLowerContact = true;
+        if (manifold.solverContactDist(index) <= 0.005) {
+          hasLowerContact = true;
+          return;
+        }
       }
     });
-  });
+    if (hasLowerContact) return true;
+  }
   return hasLowerContact;
 }
 

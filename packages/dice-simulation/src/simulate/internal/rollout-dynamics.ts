@@ -1,6 +1,26 @@
 import type { PhysicsDie } from './physics-environment';
 import { interpolateMotionCap, limitPlanarVelocity } from './rollout-motion';
 
+const ROLLOUT_X_CAPS = [
+  { t: 0, value: 3.3 },
+  { t: 0.18, value: 5.0 },
+  { t: 0.45, value: 4.5 },
+  { t: 1.1, value: 3.4 },
+  { t: 2.2, value: 2.1 },
+];
+const ROLLOUT_Z_CAPS = [
+  { t: 0, value: 3.1 },
+  { t: 0.18, value: 4.5 },
+  { t: 0.45, value: 4.0 },
+  { t: 1.1, value: 3.1 },
+  { t: 2.2, value: 2.0 },
+];
+const ROLLOUT_ANGULAR_CAPS = [
+  { t: 0, value: 14 },
+  { t: 0.16, value: 12.2 },
+  { t: 0.45, value: 11.2 },
+];
+
 export function constrainRolloutVelocity(dice: PhysicsDie[], elapsedSeconds: number): void {
   if (elapsedSeconds > 3.4) return;
 
@@ -25,24 +45,9 @@ export function constrainRolloutVelocity(dice: PhysicsDie[], elapsedSeconds: num
 }
 
 function rolloutSpeedCaps(elapsedSeconds: number): { maxXSpeed: number; maxZSpeed: number } {
-  return speedCaps(elapsedSeconds, [3.3, 5.0, 4.5, 3.4, 2.1], [3.1, 4.5, 4.0, 3.1, 2.0]);
-}
-
-function speedCaps(
-  elapsedSeconds: number,
-  xCaps: number[],
-  zCaps: number[],
-): { maxXSpeed: number; maxZSpeed: number } {
-  const times = [0, 0.18, 0.45, 1.1, 2.2];
   return {
-    maxXSpeed: interpolateMotionCap(
-      elapsedSeconds,
-      times.map((t, index) => ({ t, value: xCaps[index] })),
-    ),
-    maxZSpeed: interpolateMotionCap(
-      elapsedSeconds,
-      times.map((t, index) => ({ t, value: zCaps[index] })),
-    ),
+    maxXSpeed: interpolateMotionCap(elapsedSeconds, ROLLOUT_X_CAPS),
+    maxZSpeed: interpolateMotionCap(elapsedSeconds, ROLLOUT_Z_CAPS),
   };
 }
 
@@ -69,11 +74,7 @@ export function constrainRolloutAngularVelocity(dice: PhysicsDie[], elapsedSecon
 }
 
 function rolloutAngularSpeedCap(elapsedSeconds: number, planarSpeed: number): number {
-  const angularSpeedCeiling = interpolateMotionCap(elapsedSeconds, [
-    { t: 0, value: 14 },
-    { t: 0.16, value: 12.2 },
-    { t: 0.45, value: 11.2 },
-  ]);
+  const angularSpeedCeiling = interpolateMotionCap(elapsedSeconds, ROLLOUT_ANGULAR_CAPS);
   const coupledCap = 5.8 + planarSpeed * 2.75;
   return Math.min(angularSpeedCeiling, coupledCap);
 }

@@ -16,18 +16,24 @@ const FACE_BY_NORMAL: FaceByNormal[] = [
 ];
 
 export function recognizeTopFace(q: QuaternionLike): DieFace {
+  return observeTopFace(q).face;
+}
+
+export function observeTopFace(q: QuaternionLike): { face: DieFace; alignment: number } {
   let best = FACE_BY_NORMAL[0];
   let bestY = -Infinity;
+  let alignment = -Infinity;
   for (const face of FACE_BY_NORMAL) {
     const rotated = rotateVectorByQuat(face.n, q);
+    alignment = Math.max(alignment, rotated[1]);
     if (rotated[1] > bestY) {
       bestY = rotated[1];
       best = face;
     }
   }
-  return best.value;
+  return { face: best.value, alignment };
 }
 
 export function topFaceAlignment(q: QuaternionLike): number {
-  return Math.max(...FACE_BY_NORMAL.map((face) => rotateVectorByQuat(face.n, q)[1]));
+  return observeTopFace(q).alignment;
 }

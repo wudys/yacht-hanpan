@@ -2,7 +2,7 @@ import type { Collider, World } from '@dimforge/rapier3d-deterministic';
 
 import { hasActualLowerSupportContact } from '../contact-query';
 import type { PhysicsDie } from '../physics-environment';
-import { recognizeTopFace, topFaceAlignment } from '../result-recognition';
+import { observeTopFace } from '../result-recognition';
 import { DIE_SIZE, FLOOR_TOP_Y } from '../roll-simulation-constants';
 import {
   normalizedQuatDistance,
@@ -156,19 +156,17 @@ export function createSettlementPolicy(): SettlementPolicy {
 
           // Separation, the same neighbour recontacting, a changed neighbour,
           // and small motion all retain history until this die truly recovers.
-          const supported =
-            current.floorSupported ||
-            dice.some(
-              (other) => other !== die && !!die.collider.contactCollider(other.collider, 0.005),
-            );
           if (
-            supported &&
             current.alignment <= 0.9 &&
             current.linearSpeed < SLOW_LINEAR_SPEED &&
             current.angularSpeed < SLOW_ANGULAR_SPEED &&
             history.count >= 3 &&
             history.firstAssistMs !== null &&
-            simulationMs - history.firstAssistMs >= 900
+            simulationMs - history.firstAssistMs >= 900 &&
+            (current.floorSupported ||
+              dice.some(
+                (other) => other !== die && !!die.collider.contactCollider(other.collider, 0.005),
+              ))
           ) {
             repeated = true;
           }
@@ -194,13 +192,13 @@ function observeDie(world: World, die: PhysicsDie, floor: Collider): DieObservat
   const linear = die.body.linvel();
   const angular = die.body.angvel();
   const floorSupported = hasActualLowerSupportContact(world, die.collider, floor);
-  const alignment = topFaceAlignment(q);
+  const { face, alignment } = observeTopFace(q);
   const linearSpeed = Math.hypot(linear.x, linear.y, linear.z);
   const angularSpeed = Math.hypot(angular.x, angular.y, angular.z);
   return {
     position: [p.x, p.y, p.z],
     rotation: [q.x, q.y, q.z, q.w],
-    face: recognizeTopFace(q),
+    face,
     alignment,
     floorSupported,
     linearSpeed,

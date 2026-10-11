@@ -246,6 +246,8 @@ export function releaseRestingWallLeans(
   const cooldownMs = 180;
 
   dice.forEach((die) => {
+    const releaseKey = die.id;
+    if (clockMs - (releaseTimes.get(releaseKey) ?? Number.NEGATIVE_INFINITY) < cooldownMs) return;
     const position = die.body.translation();
     const lift = position.y - floorContactY;
     if (lift < wallLeanLiftThreshold) return;
@@ -273,8 +275,6 @@ export function releaseRestingWallLeans(
     const inwardLength = Math.hypot(inwardX, inwardZ);
     if (inwardLength === 0) return;
 
-    const releaseKey = die.id;
-    if (clockMs - (releaseTimes.get(releaseKey) ?? Number.NEGATIVE_INFINITY) < cooldownMs) return;
     releaseTimes.set(releaseKey, clockMs);
 
     applySettlingImpulse(

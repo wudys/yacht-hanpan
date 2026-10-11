@@ -116,8 +116,8 @@ for (const locale of ['ko', 'en'] as const) {
             }),
         );
         expect(feedbackAtFirstPaint.busy).toBe(true);
-        expect(feedbackAtFirstPaint.shadow).not.toBe(idleSurfaceShadow);
-        expect(feedbackAtFirstPaint.spinnerVisible).toBe(false);
+        expect(feedbackAtFirstPaint.shadow).toBe(idleSurfaceShadow);
+        expect(feedbackAtFirstPaint.spinnerVisible).toBe(true);
         await expect(rollAction).toHaveAttribute('aria-busy', 'true');
         await expect(rollAction).toHaveAccessibleName(rollLabel);
         await page.screenshot({
@@ -138,9 +138,6 @@ for (const locale of ['ko', 'en'] as const) {
         expect(labelBounds).not.toBeNull();
         expect(progressBounds).not.toBeNull();
         expect(progressBounds!.x + progressBounds!.width).toBeLessThan(labelBounds!.x);
-        await page.screenshot({
-          path: `/tmp/hanpan-roll-pending-spinner-${locale}-${rollNumber}-320-${testInfo.project.name}.png`,
-        });
         const rollBounds = await rollAction.boundingBox();
         expect(rollBounds).not.toBeNull();
         expect(rollBounds!.x).toBeCloseTo(idleRollBounds!.x, 1);

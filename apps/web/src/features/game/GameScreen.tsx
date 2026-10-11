@@ -36,7 +36,6 @@ import {
   deriveGameRecoveryPresentation,
   type GameLayer,
 } from '@/features/game/interaction/game-interaction';
-import { useDelayedRollSpinner } from '@/features/game/interaction/use-delayed-roll-spinner';
 import { useGameCommands } from '@/features/game/interaction/use-game-commands';
 import { SettledDiceControls } from '@/features/game/SettledDiceControls';
 import {
@@ -166,8 +165,7 @@ export default function GameScreen({
     recheck: recheckDeadline,
   } = useDeadlineReadiness(clock, deadlineAt, startedAt);
   const rollPending = pendingCommandKind === 'roll';
-  const rollSpinnerVisible = useDelayedRollSpinner(rollPending, holderSnapshot.session);
-  const rollProgress = rollSpinnerVisible ? <GameRollSpinner /> : undefined;
+  const rollProgress = rollPending ? <GameRollSpinner /> : undefined;
   const viewerTurnIdentity =
     holderSnapshot.authority !== null &&
     game?.match.status === 'playing' &&

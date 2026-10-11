@@ -98,6 +98,12 @@ export function createSettlementPolicy(): SettlementPolicy {
     },
 
     observe(world, dice, floor, simulationMs, active) {
+      if (!active) {
+        readableAnchor = null;
+        flatSinceMs = null;
+        stackAnchors.clear();
+        return { readable: false, flat: false, rejection: null };
+      }
       const observations = dice.map((die) => observeDie(world, die, floor));
       const allReadable = active && observations.every((current) => current.readable);
       if (!allReadable) readableAnchor = null;

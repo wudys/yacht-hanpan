@@ -229,6 +229,7 @@ test('only that die’s150ms readable recovery clears its unresolved assist epis
     dice[0].body.setTranslation({ x: 0, y: floorY, z: 0 }, true);
     refresh();
     policy.observe(world, dice, floor, 700, true);
+    policy.observe(world, dice, floor, 775, false);
     policy.observe(world, dice, floor, 850, true);
     dice[0].body.setRotation(
       { x: 0, y: 0, z: Math.sin(Math.PI / 8), w: Math.cos(Math.PI / 8) },
@@ -368,3 +369,69 @@ test.each([
     }
   },
 );
+
+test('an inactive observation restarts readable and flat stability after an active phase', () => {
+  const { world, floor, dice } = fixture([{ x: 0, y: floorY }]);
+  try {
+    const policy = createSettlementPolicy();
+    policy.observe(world, dice, floor, 0, true);
+    expect(policy.observe(world, dice, floor, 150, true)).toEqual({
+      readable: true,
+      flat: true,
+      rejection: null,
+    });
+    expect(policy.observe(world, dice, floor, 200, false)).toEqual({
+      readable: false,
+      flat: false,
+      rejection: null,
+    });
+    expect(policy.observe(world, dice, floor, 250, true).readable).toBe(false);
+    expect(policy.observe(world, dice, floor, 399, true).flat).toBe(false);
+    expect(policy.observe(world, dice, floor, 400, true)).toEqual({
+      readable: true,
+      flat: true,
+      rejection: null,
+    });
+  } finally {
+    world.free();
+  }
+});
+
+test('an inactive observation discards the old stack anchor before the same stack returns', () => {
+  const { world, floor, dice } = fixture([
+    { x: 0, y: floorY },
+    { x: 0, y: floorY + DIE_SIZE - 0.001 },
+  ]);
+  try {
+    const policy = createSettlementPolicy();
+    expect(hasActualLowerSupportContact(world, dice[1].collider, dice[0].collider)).toBe(true);
+    policy.observe(world, dice, floor, 0, true);
+    expect(policy.observe(world, dice, floor, 199, true).rejection).toBeNull();
+    expect(policy.observe(world, dice, floor, 200, false).rejection).toBeNull();
+    expect(policy.observe(world, dice, floor, 300, true).rejection).toBeNull();
+    expect(policy.observe(world, dice, floor, 499, true).rejection).toBeNull();
+    expect(policy.observe(world, dice, floor, 500, true).rejection).toEqual({
+      reason: 'stable-stack',
+      simulationMs: 500,
+    });
+  } finally {
+    world.free();
+  }
+});
+
+test('inactive observations retain an unresolved assistance episode', () => {
+  const { world, floor, dice } = fixture([{ x: 0, y: tiltedY, angle: Math.PI / 4 }]);
+  try {
+    const policy = createSettlementPolicy();
+    for (const simulationMs of [0, 300, 600])
+      policy.recordAssist({ dieId: dice[0].id, simulationMs, kind: 'side', actualDelta: 0.1 });
+    expect(policy.observe(world, dice, floor, 899, true).rejection).toBeNull();
+    expect(policy.observe(world, dice, floor, 900, false).rejection).toBeNull();
+    expect(policy.observe(world, dice, floor, 901, true).rejection).toEqual({
+      reason: 'repeated-assist',
+      simulationMs: 901,
+    });
+  } finally {
+    world.free();
+  }
+});

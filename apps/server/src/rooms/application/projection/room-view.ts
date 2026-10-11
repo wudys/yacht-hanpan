@@ -1,8 +1,8 @@
 import { type GameSnapshot, parseRoomView, type RoomView } from '@repo/game-protocol/state';
 
-import { projectGameSnapshot } from '@/rooms/application/projection/game-snapshot';
-import { projectPresenceSnapshot } from '@/rooms/application/projection/presence-snapshot';
-import { projectPublicRoom } from '@/rooms/application/projection/public-room';
+import { projectGameSnapshotInput } from '@/rooms/application/projection/game-snapshot';
+import { projectPresenceSnapshotInput } from '@/rooms/application/projection/presence-snapshot';
+import { projectPublicRoomInput } from '@/rooms/application/projection/public-room';
 import type {
   FinishedRoomRecord,
   PlayingRoomRecord,
@@ -15,8 +15,9 @@ export function projectRoomView(
 export function projectRoomView(record: RoomRecord): RoomView;
 export function projectRoomView(record: RoomRecord): RoomView {
   return parseRoomView({
-    room: projectPublicRoom(record.room),
-    game: record.match === null ? null : projectGameSnapshot(record.match, record.stateVersion),
-    presence: projectPresenceSnapshot(record.room, record.presenceVersion),
+    room: projectPublicRoomInput(record.room),
+    game:
+      record.match === null ? null : projectGameSnapshotInput(record.match, record.stateVersion),
+    presence: projectPresenceSnapshotInput(record.room, record.presenceVersion),
   });
 }

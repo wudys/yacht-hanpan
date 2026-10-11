@@ -1,9 +1,4 @@
-import {
-  type GameSnapshot,
-  type GameSnapshotInput,
-  MATCH_END_REASON,
-  parseGameSnapshot,
-} from '@repo/game-protocol/state';
+import { type GameSnapshotInput, MATCH_END_REASON } from '@repo/game-protocol/state';
 
 import type { Match, MatchDie, MatchPlayer, MatchTurn } from '@/rooms/domain/match';
 
@@ -57,7 +52,7 @@ function projectResult(
   return { reason: result.reason, winnerSeatIndex: result.winnerSeatIndex };
 }
 
-export function projectGameSnapshot(match: Match, stateVersion: number): GameSnapshot {
+export function projectGameSnapshotInput(match: Match, stateVersion: number): GameSnapshotInput {
   const players: GameSnapshotInput['match']['players'] = [
     projectPlayer(match.players[0]),
     projectPlayer(match.players[1]),
@@ -70,5 +65,5 @@ export function projectGameSnapshot(match: Match, stateVersion: number): GameSna
           players,
           result: projectResult(match.result),
         };
-  return parseGameSnapshot({ stateVersion, match: projectedMatch } satisfies GameSnapshotInput);
+  return { stateVersion, match: projectedMatch } satisfies GameSnapshotInput;
 }

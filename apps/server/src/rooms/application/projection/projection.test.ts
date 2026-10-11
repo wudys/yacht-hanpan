@@ -6,9 +6,9 @@ import {
 import { describe, expect, test } from 'bun:test';
 
 import { hashSeatToken } from '@/rooms/application/connections/seat-token';
-import { projectGameSnapshot } from '@/rooms/application/projection/game-snapshot';
-import { projectPresenceSnapshot } from '@/rooms/application/projection/presence-snapshot';
-import { projectPublicRoom } from '@/rooms/application/projection/public-room';
+import { projectGameSnapshotInput } from '@/rooms/application/projection/game-snapshot';
+import { projectPresenceSnapshotInput } from '@/rooms/application/projection/presence-snapshot';
+import { projectPublicRoomInput } from '@/rooms/application/projection/public-room';
 import { projectRoomView } from '@/rooms/application/projection/room-view';
 import type {
   FinishedRoomRecord,
@@ -18,7 +18,7 @@ import type {
 } from '@/rooms/application/room-record';
 import { createRoom } from '@/rooms/domain/create-room';
 import { joinRoom } from '@/rooms/domain/join-room';
-import { createMatch, forfeitMatch, turnId } from '@/rooms/domain/match';
+import { applyRollResult, createMatch, forfeitMatch, turnId } from '@/rooms/domain/match';
 import { PRESENCE_STATUS } from '@/rooms/domain/room-constants';
 import { markRoomFinished } from '@/rooms/domain/room-match-lifecycle';
 import { type PlayingRoom, roomId, type WaitingRoom } from '@/rooms/domain/room-model';
@@ -106,6 +106,33 @@ function playingRecord(): PlayingRoomRecord {
         fingerprint: 'private-payload',
       },
     ],
+  };
+}
+
+function rolledRecord(): PlayingRoomRecord {
+  const current = playingRecord();
+  const rolled = applyRollResult(current.match, {
+    plan: {
+      turnId: current.match.currentTurn.id,
+      seatIndex: 0,
+      rollCountBefore: 0,
+      rollingSlots: [0, 1, 2, 3, 4],
+    },
+    facesBySlot: [
+      { slot: 0, value: 1 },
+      { slot: 1, value: 2 },
+      { slot: 2, value: 3 },
+      { slot: 3, value: 4 },
+      { slot: 4, value: 5 },
+    ],
+  });
+  if (!rolled.ok) throw new Error('fixture roll failed');
+  return {
+    ...current,
+    match: {
+      ...rolled.match,
+      currentTurn: { ...rolled.match.currentTurn, heldSlots: [0, 2] },
+    },
   };
 }
 
@@ -227,10 +254,85 @@ describe('server projections', () => {
     expect(() => projectRoomView(record as unknown as RoomRecord)).toThrow();
   });
 
-  test('projects a waiting room without presence or credential internals', () => {
-    const projected = projectPublicRoom(waitingRoom());
+  test.each([
+    {
+      label: 'unknown character',
+      corrupt: (record: PlayingRoomRecord) =>
+        Reflect.set(record.room.seats[0].profile, 'characterId', 'unknown-character'),
+    },
+    {
+      label: 'invalid score',
+      corrupt: (record: PlayingRoomRecord) =>
+        Reflect.set(record.match.players[0].scorecard, 'ones', 51),
+    },
+    {
+      label: 'invalid die',
+      corrupt: (record: PlayingRoomRecord) =>
+        Reflect.set(record.match.currentTurn.diceState.dice![0], 'value', 7),
+    },
+    {
+      label: 'duplicate held slots',
+      corrupt: (record: PlayingRoomRecord) =>
+        Reflect.set(record.match.currentTurn, 'heldSlots', [0, 0]),
+    },
+    {
+      label: 'invalid turn deadline',
+      corrupt: (record: PlayingRoomRecord) =>
+        Reflect.set(record.match.currentTurn, 'deadlineAt', Number.NaN),
+    },
+    {
+      label: 'invalid state version',
+      corrupt: (record: PlayingRoomRecord) => Reflect.set(record, 'stateVersion', -1),
+    },
+    {
+      label: 'invalid presence version',
+      corrupt: (record: PlayingRoomRecord) => Reflect.set(record, 'presenceVersion', -1),
+    },
+    {
+      label: 'invalid reconnect deadline',
+      corrupt: (record: PlayingRoomRecord) =>
+        Reflect.set(record.room.seats[0].presence, 'reconnectDeadlineAt', -1),
+    },
+  ])('rejects a malformed subtree at the complete view boundary: $label', ({ corrupt }) => {
+    const record = rolledRecord();
+    corrupt(record);
+    expect(() => projectRoomView(record)).toThrow();
+  });
 
-    expect(parsePublicRoom(projected)).toEqual(projected);
+  test('rejects unrolled held slots at the complete view boundary', () => {
+    const record = playingRecord();
+    Reflect.set(record.match.currentTurn, 'heldSlots', [0]);
+    expect(() => projectRoomView(record)).toThrow('Unrolled turn cannot contain held dice');
+  });
+
+  test('detaches nested public values from the authoritative record in both directions', () => {
+    const record = rolledRecord();
+    const originalRecord = structuredClone(record);
+    const view = projectRoomView(record);
+    if (view.game.match.status !== 'playing' || view.game.match.currentTurn.dice === null) {
+      throw new Error('expected rolled view');
+    }
+    Reflect.set(view.room.seats[0].profile, 'variant', true);
+    Reflect.set(view.game.match.players[0].scorecard, 'ones', 5);
+    Reflect.set(view.game.match.currentTurn.dice[0], 'value', 6);
+    Reflect.set(view.game.match.currentTurn.heldSlots, '0', 4);
+    Reflect.set(view.presence.seats[0], 'reconnectDeadlineAt', 95_000);
+    expect(record).toEqual(originalRecord);
+
+    const captured = projectRoomView(record);
+    const originalView = structuredClone(captured);
+    Reflect.set(record.room.seats[0].profile, 'variant', true);
+    Reflect.set(record.match.players[0].scorecard, 'ones', 5);
+    Reflect.set(record.match.currentTurn.diceState.dice![0], 'value', 6);
+    Reflect.set(record.match.currentTurn.heldSlots, '0', 4);
+    Reflect.set(record.room.seats[0].presence, 'reconnectDeadlineAt', 95_000);
+    expect(captured).toEqual(originalView);
+  });
+
+  test('projects a waiting room without presence or credential internals', () => {
+    const projected = projectPublicRoomInput(waitingRoom());
+
+    expect<unknown>(parsePublicRoom(projected)).toEqual(projected);
     expect(projected as unknown).toEqual({
       status: 'waiting',
       roomId: ROOM_ID,
@@ -253,7 +355,7 @@ describe('server projections', () => {
     const joined = joinRoom(waitingRoom(), { characterId, variant, joinedAt: 2_000 });
     if (!joined.ok) throw new Error('fixture join failed');
 
-    const projected = projectPublicRoom(joined.room);
+    const projected = projectPublicRoomInput(joined.room);
     if (projected.status !== 'playing') throw new Error('expected playing projection');
 
     expect(projected.seats[0].profile.variant).toBe(false);
@@ -262,13 +364,13 @@ describe('server projections', () => {
 
   test('projects reconnectable both-disconnected play as public playing state', () => {
     const room = bothDisconnectedRoom();
-    const projectedRoom = projectPublicRoom(room);
-    const projectedPresence = projectPresenceSnapshot(room, 7);
+    const projectedRoom = projectPublicRoomInput(room);
+    const projectedPresence = projectPresenceSnapshotInput(room, 7);
 
-    expect(parsePublicRoom(projectedRoom)).toEqual(projectedRoom);
+    expect<unknown>(parsePublicRoom(projectedRoom)).toEqual(projectedRoom);
     expect(projectedRoom.status).toBe('playing');
     expect(JSON.stringify(projectedRoom)).not.toContain('cleanup');
-    expect(parsePresenceSnapshot(projectedPresence)).toEqual(projectedPresence);
+    expect<unknown>(parsePresenceSnapshot(projectedPresence)).toEqual(projectedPresence);
     expect(projectedPresence as unknown).toEqual({
       roomId: ROOM_ID,
       presenceVersion: 7,
@@ -293,7 +395,7 @@ describe('server projections', () => {
       },
     });
     expect(() =>
-      projectGameSnapshot(
+      projectGameSnapshotInput(
         {
           ...match,
           currentTurn: { ...match.currentTurn, heldSlots: [0] },
@@ -310,9 +412,9 @@ describe('server projections', () => {
         startedAt: epochMilliseconds(2_000),
       },
     });
-    const projected = projectGameSnapshot(match, 11);
+    const projected = projectGameSnapshotInput(match, 11);
 
-    expect(parseGameSnapshot(projected)).toEqual(projected);
+    expect<unknown>(parseGameSnapshot(projected)).toEqual(projected);
     expect(Number(projected.stateVersion)).toBe(11);
     expect(projected.match.players).toHaveLength(2);
     expect(projected.match).toMatchObject({

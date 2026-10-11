@@ -1,4 +1,4 @@
-import { parsePublicRoom, type PublicRoom, type PublicRoomInput } from '@repo/game-protocol/state';
+import type { PublicRoomInput } from '@repo/game-protocol/state';
 
 import { ROOM_STATUS } from '@/rooms/domain/room-constants';
 import { type Room, type Seat } from '@/rooms/domain/room-model';
@@ -17,30 +17,30 @@ function projectSeats(seats: readonly [Seat] | readonly [Seat, Seat]): PublicRoo
   return [creator, projectSeat(seats[1])];
 }
 
-export function projectPublicRoom(room: Room): PublicRoom {
+export function projectPublicRoomInput(room: Room): PublicRoomInput {
   const identity = { roomId: room.id, roomCode: room.code, createdAt: room.createdAt };
 
   if (room.status === ROOM_STATUS.WAITING) {
-    return parsePublicRoom({
+    return {
       status: ROOM_STATUS.WAITING,
       ...identity,
       expiresAt: room.expiresAt,
       seats: projectSeats(room.seats),
-    } satisfies PublicRoomInput);
+    } satisfies PublicRoomInput;
   }
   if (room.status === ROOM_STATUS.PLAYING) {
-    return parsePublicRoom({
+    return {
       status: ROOM_STATUS.PLAYING,
       ...identity,
       startedAt: room.startedAt,
       seats: projectSeats(room.seats),
-    } satisfies PublicRoomInput);
+    } satisfies PublicRoomInput;
   }
-  return parsePublicRoom({
+  return {
     status: ROOM_STATUS.FINISHED,
     ...identity,
     startedAt: room.startedAt,
     finishedAt: room.finishedAt,
     seats: projectSeats(room.seats),
-  } satisfies PublicRoomInput);
+  } satisfies PublicRoomInput;
 }

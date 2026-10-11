@@ -2,7 +2,7 @@
 /* eslint-disable testing-library/no-manual-cleanup -- Vitest globals are disabled; register cleanup explicitly. */
 
 import { parseSimulationInput, type SimulationResult } from '@repo/dice-simulation/contract';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useSyncExternalStore } from 'react';
 import { afterEach, beforeEach, expect, type Mock, test, vi } from 'vitest';
 
@@ -129,6 +129,7 @@ async function mount() {
   return { view, ports };
 }
 async function warmup(ports: CanvasPorts) {
+  await waitFor(() => expect(ports.renderer.getSnapshot().status).toBe('warming'));
   await act(async () => ports.renderer.run(ports.renderer.getSnapshot().attempt, async () => {}));
   expect(ports.renderer.getSnapshot().status).toBe('ready');
 }

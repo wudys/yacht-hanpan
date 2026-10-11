@@ -1,5 +1,5 @@
 export {
-  createProceduralResourceRegistry,
-  type ProceduralResourceRegistry,
-} from '@/runtime/dice/resources/procedural-resource-registry';
+  createProceduralResourceCache,
+  type ProceduralResourceCache,
+} from '@/runtime/dice/resources/procedural-resource-cache';
 export type { ProceduralDiceResources } from '@/runtime/dice/resources/procedural-resources';

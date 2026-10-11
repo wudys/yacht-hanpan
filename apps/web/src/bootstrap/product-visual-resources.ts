@@ -11,9 +11,9 @@ import {
   type VisualAssetManifestEntry,
 } from '@/bootstrap/preload-assets';
 import {
-  createProceduralResourceRegistry,
+  createProceduralResourceCache,
   type ProceduralDiceResources,
-  type ProceduralResourceRegistry,
+  type ProceduralResourceCache,
 } from '@/runtime/dice/resources';
 
 async function decodeImage(
@@ -41,8 +41,8 @@ function disposedError(): Error {
 export type ProductVisualResourcesOptions = Readonly<{
   decodeAsset?: AssetDecoder;
   initializeRuntime?: typeof initializeDeterministicRapierForBrowser;
-  /** Transfers this registry's disposal ownership to this visual owner. */
-  proceduralRegistry?: ProceduralResourceRegistry;
+  /** Transfers this cache's disposal ownership to this visual owner. */
+  proceduralCache?: ProceduralResourceCache;
 }>;
 
 export interface ProductVisualResources {
@@ -66,7 +66,7 @@ export function createProductVisualResources(
     return value;
   });
   const initializeRuntime = options.initializeRuntime ?? initializeDeterministicRapierForBrowser;
-  const proceduralRegistry = options.proceduralRegistry ?? createProceduralResourceRegistry();
+  const proceduralCache = options.proceduralCache ?? createProceduralResourceCache();
   let resources: ProceduralDiceResources | null = null;
   let loading: Promise<ProceduralDiceResources> | null = null;
   let simulationReady = false;
@@ -124,7 +124,7 @@ export function createProductVisualResources(
           }
           throw error;
         }),
-      proceduralRegistry.preload().then((value) => {
+      proceduralCache.preload().then((value) => {
         if (!controller.signal.aborted) {
           proceduralReady = true;
           publish();
@@ -167,7 +167,7 @@ export function createProductVisualResources(
       preparation?.abort(disposedError());
       reporters.clear();
       disposal = (async () => {
-        await Promise.all([assetPreloader.dispose(), proceduralRegistry.dispose()]);
+        await Promise.all([assetPreloader.dispose(), proceduralCache.dispose()]);
         resources = null;
       })();
       return disposal;

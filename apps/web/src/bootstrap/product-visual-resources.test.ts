@@ -68,7 +68,7 @@ describe('createProductVisualResources', () => {
     const runtime = createProductVisualResources({
       decodeAsset: async () => new Image(),
       initializeRuntime,
-      proceduralRegistry: {
+      proceduralCache: {
         preload: async () => resources,
         dispose: async () => resources.dispose(),
       },
@@ -117,7 +117,7 @@ describe('createProductVisualResources', () => {
     const runtime = createProductVisualResources({
       decodeAsset: async () => new Image(),
       initializeRuntime: () => wasm.promise,
-      proceduralRegistry: {
+      proceduralCache: {
         preload: async () => createProceduralResources(),
         dispose: async () => {},
       },
@@ -141,7 +141,7 @@ describe('createProductVisualResources', () => {
     const runtime = createProductVisualResources({
       decodeAsset,
       initializeRuntime,
-      proceduralRegistry: { preload: preloadProcedural, dispose: async () => resources.dispose() },
+      proceduralCache: { preload: preloadProcedural, dispose: async () => resources.dispose() },
     });
 
     const [left, right] = await Promise.all([runtime.preload(), runtime.preload()]);
@@ -155,7 +155,7 @@ describe('createProductVisualResources', () => {
     expect(preloadProcedural).toHaveBeenCalledTimes(1);
   });
 
-  test('retries a failed decode while reusing WASM and the registry resource', async () => {
+  test('retries a failed decode while reusing WASM and the cache resource', async () => {
     const resources = createProceduralResources();
     const preloadProcedural = vi.fn(async () => resources);
     const initializeRuntime = vi.fn(async () => 'rapier-version');
@@ -170,7 +170,7 @@ describe('createProductVisualResources', () => {
     const runtime = createProductVisualResources({
       decodeAsset,
       initializeRuntime,
-      proceduralRegistry: { preload: preloadProcedural, dispose: async () => resources.dispose() },
+      proceduralCache: { preload: preloadProcedural, dispose: async () => resources.dispose() },
     });
 
     await expect(runtime.preload()).rejects.toThrow('decode failed');

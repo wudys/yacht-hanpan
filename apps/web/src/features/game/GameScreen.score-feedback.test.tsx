@@ -159,7 +159,7 @@ function scoreTransition(
 async function createHarness(
   viewerSeat: 0 | 1 = 0,
   initial: RoomView = beforeScore,
-  acknowledgementTimeoutMs: number = 100,
+  responseTimeoutMs: number = 100,
 ) {
   const meta = {
     requestId: '11111111-1111-4111-8111-000000000003',
@@ -190,7 +190,12 @@ async function createHarness(
         contract: createCompatibilityContract('test-release'),
         socketUrl: 'https://game.example.test',
         socketFactory: { create: () => socket },
-        retryPolicy: { acknowledgementTimeoutMs, maximumAttempts: 1, retryDelayMs: 0 },
+        retryPolicy: {
+          synchronizationTimeoutMs: responseTimeoutMs,
+          commandResponseTimeoutMs: responseTimeoutMs,
+          maximumAttempts: 1,
+          retryIntervalMs: responseTimeoutMs,
+        },
       }),
   });
   const session = sessions.installAuthority({ ...authority, seatIndex: viewerSeat });

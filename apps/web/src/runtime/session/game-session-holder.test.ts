@@ -57,6 +57,7 @@ function sessionSnapshot(connection: GameSessionSnapshot['connection']): GameSes
   return {
     connection,
     syncStatus: 'idle',
+    syncFailureRequiresRefresh: false,
     syncRevision: 0,
     room: null,
     game: null,

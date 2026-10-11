@@ -51,6 +51,7 @@ function recoveryFixture() {
   let snapshot: GameSessionSnapshot = {
     connection: 'connected',
     syncStatus: 'idle',
+    syncFailureRequiresRefresh: false,
     syncRevision: 1,
     game: playingGame,
     room: null,
@@ -94,6 +95,7 @@ it.each(['new', 'resumed'] as const)(
     let snapshot: GameSessionSnapshot = {
       connection: 'connected',
       syncStatus: 'idle',
+      syncFailureRequiresRefresh: false,
       syncRevision: 1,
       game: null,
       room: null,

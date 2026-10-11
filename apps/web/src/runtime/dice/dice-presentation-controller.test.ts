@@ -159,6 +159,7 @@ function activeSnapshot(
       room: null,
       connection: 'connected',
       syncStatus: 'idle',
+      syncFailureRequiresRefresh: false,
       syncRevision: 1,
       game,
       presence: null,

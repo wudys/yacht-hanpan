@@ -6,7 +6,7 @@ import {
 } from '@repo/game-protocol/socket';
 import { parseGameSnapshot, parseRoomView } from '@repo/game-protocol/state';
 import { createCompatibilityContract, GAME_PROTOCOL_VERSION } from '@repo/game-protocol/version';
-import { describe, expect, jest, test } from 'bun:test';
+import { describe, expect, jest, spyOn, test } from 'bun:test';
 
 import { CLIENT_ERROR_CODE } from '../errors';
 import { createCommandRunner } from './command-runner';
@@ -103,48 +103,267 @@ function successData(receipt: Readonly<{ stateVersion: number; roll?: typeof ROL
 
 describe('command runner', () => {
   test('retries a byte-equivalent logical command with one actionId', async () => {
-    const commands: string[] = [];
-    let currentGame = playingGame();
-    let attempt = 0;
-    let actionIds = 0;
+    jest.useFakeTimers();
+    try {
+      const commands: string[] = [];
+      let currentGame = playingGame();
+      let attempt = 0;
+      let actionIds = 0;
+      const runner = createCommandRunner({
+        retryPolicy: {
+          commandResponseTimeoutMs: 6,
+          retryIntervalMs: 2,
+          maximumAttempts: 3,
+          synchronizationTimeoutMs: 2,
+        },
+        createActionId: () => {
+          actionIds += 1;
+          return ACTION_ID;
+        },
+        getGame: () => currentGame,
+        emit: (command, acknowledge) => {
+          commands.push(JSON.stringify(command));
+          attempt += 1;
+          currentGame = playingGame(3, 'de305d54-75b4-431b-adb2-eb6b9e546099');
+          if (attempt === 3) {
+            acknowledge({
+              ok: true,
+              data: successData({ stateVersion: 3, roll: ROLL }),
+              meta: META,
+            });
+          }
+        },
+        synchronize: async () => ({ ok: true }),
+        applySuccess: () => 'accepted',
+        applyRecovery: () => 'accepted',
+      });
+
+      const pending = runner.rollDice();
+      jest.advanceTimersByTime(4);
+      const result = await pending;
+
+      expect(result).toMatchObject({ ok: true, actionId: ACTION_ID, requestId: REQUEST_ID });
+      expect(result).toMatchObject({ data: { stateVersion: 3, roll: ROLL } });
+      expect(actionIds).toBe(1);
+      expect(commands).toHaveLength(3);
+      expect(commands).toEqual([commands[0]!, commands[0]!, commands[0]!]);
+      expect(JSON.parse(commands[0]!)).toEqual({
+        type: GAME_COMMAND_TYPE.ROLL_DICE,
+        actionId: ACTION_ID,
+        turnId: TURN_ID,
+      });
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  test('accepts the first attempt acknowledgement after every early retransmission', async () => {
+    jest.useFakeTimers();
+    const callbacks: ((value: unknown) => void)[] = [];
+    let syncs = 0;
     const runner = createCommandRunner({
-      retryPolicy: { acknowledgementTimeoutMs: 2, maximumAttempts: 3, retryDelayMs: 0 },
-      createActionId: () => {
-        actionIds += 1;
-        return ACTION_ID;
+      retryPolicy: {
+        commandResponseTimeoutMs: 45_000,
+        retryIntervalMs: 3150,
+        maximumAttempts: 3,
+        synchronizationTimeoutMs: 3_000,
       },
-      getGame: () => currentGame,
-      emit: (command, acknowledge) => {
-        commands.push(JSON.stringify(command));
-        attempt += 1;
-        currentGame = playingGame(3, 'de305d54-75b4-431b-adb2-eb6b9e546099');
-        if (attempt === 3) {
+      createActionId: () => ACTION_ID,
+      getGame: playingGame,
+      emit: (_command, acknowledge) => {
+        callbacks.push(acknowledge);
+      },
+      synchronize: async () => {
+        syncs += 1;
+        return { ok: true };
+      },
+      applySuccess: () => 'accepted',
+      applyRecovery: () => 'accepted',
+    });
+    try {
+      let result: unknown;
+      const pending = runner.rollDice().then((value) => {
+        result = value;
+        return value;
+      });
+      for (const elapsed of [3_000, 150, 3_000, 150, 3_000]) {
+        jest.advanceTimersByTime(elapsed);
+        await Promise.resolve();
+        await Promise.resolve();
+      }
+      expect(callbacks).toHaveLength(3);
+      expect(syncs).toBe(0);
+      expect(result).toBeUndefined();
+      callbacks[0]!({ ok: true, data: successData({ stateVersion: 3, roll: ROLL }), meta: META });
+      expect(await pending).toMatchObject({ ok: true, data: { stateVersion: 3, roll: ROLL } });
+      jest.advanceTimersByTime(45_000);
+      expect(callbacks).toHaveLength(3);
+      expect(syncs).toBe(0);
+      expect(jest.getTimerCount()).toBe(0);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  test('closes all attempt callbacks at the response deadline before final confirmation', async () => {
+    jest.useFakeTimers();
+    const callbacks: ((value: unknown) => void)[] = [];
+    const confirmation = Promise.withResolvers<Readonly<{ ok: boolean }>>();
+    let syncs = 0;
+    let successes = 0;
+    const runner = createCommandRunner({
+      retryPolicy: {
+        commandResponseTimeoutMs: 45_000,
+        retryIntervalMs: 3150,
+        maximumAttempts: 3,
+        synchronizationTimeoutMs: 3_000,
+      },
+      createActionId: () => ACTION_ID,
+      getGame: playingGame,
+      emit: (_command, acknowledge) => {
+        callbacks.push(acknowledge);
+        // An emit exception can occur after delivery and cannot establish non-execution.
+        throw new Error('transport failed after delivery');
+      },
+      synchronize: (requireRefresh) => {
+        expect(requireRefresh).toBe(true);
+        syncs += 1;
+        return confirmation.promise;
+      },
+      applySuccess: () => {
+        successes += 1;
+        return 'accepted';
+      },
+      applyRecovery: () => 'accepted',
+    });
+    try {
+      const pending = runner.rollDice();
+      jest.advanceTimersByTime(44_999);
+      await Promise.resolve();
+      expect(callbacks).toHaveLength(3);
+      expect(syncs).toBe(0);
+      jest.advanceTimersByTime(1);
+      await Promise.resolve();
+      expect(syncs).toBe(1);
+      for (const acknowledge of callbacks)
+        acknowledge({ ok: true, data: successData({ stateVersion: 3, roll: ROLL }), meta: META });
+      confirmation.resolve({ ok: true });
+      expect(await pending).toMatchObject({
+        ok: false,
+        error: { code: CLIENT_ERROR_CODE.ACK_TIMEOUT },
+      });
+      expect(await pending).not.toHaveProperty('retry');
+      expect(successes).toBe(0);
+      jest.advanceTimersByTime(45_000);
+      expect(syncs).toBe(1);
+      expect(jest.getTimerCount()).toBe(0);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  test.each(['acknowledgement', 'retransmission'] as const)(
+    'checks the response deadline when a delayed %s callback runs before its timeout',
+    async (callback) => {
+      jest.useFakeTimers();
+      let clock = performance.now();
+      const now = spyOn(performance, 'now').mockImplementation(() => clock);
+      let acknowledge!: (value: unknown) => void;
+      let emits = 0;
+      let syncs = 0;
+      const runner = createCommandRunner({
+        retryPolicy: {
+          commandResponseTimeoutMs: 45_000,
+          retryIntervalMs: 3150,
+          maximumAttempts: 3,
+          synchronizationTimeoutMs: 3_000,
+        },
+        createActionId: () => ACTION_ID,
+        getGame: playingGame,
+        emit: (_command, reply) => {
+          acknowledge = reply;
+          emits += 1;
+        },
+        synchronize: async () => {
+          syncs += 1;
+          return { ok: true };
+        },
+        applySuccess: () => 'accepted',
+        applyRecovery: () => 'accepted',
+      });
+      try {
+        const pending = runner.rollDice();
+        clock += 45_000;
+        if (callback === 'acknowledgement')
           acknowledge({ ok: true, data: successData({ stateVersion: 3, roll: ROLL }), meta: META });
-        }
+        else jest.advanceTimersByTime(3_150);
+        expect(await pending).toMatchObject({
+          ok: false,
+          error: { code: CLIENT_ERROR_CODE.ACK_TIMEOUT },
+        });
+        expect(emits).toBe(1);
+        expect(syncs).toBe(1);
+        expect(jest.getTimerCount()).toBe(0);
+      } finally {
+        now.mockRestore();
+        jest.useRealTimers();
+      }
+    },
+  );
+
+  test('an explicit same-action retry starts a new response deadline', async () => {
+    jest.useFakeTimers();
+    const commands: GameCommand[] = [];
+    const callbacks: ((value: unknown) => void)[] = [];
+    const runner = createCommandRunner({
+      retryPolicy: {
+        commandResponseTimeoutMs: 45_000,
+        retryIntervalMs: 3150,
+        maximumAttempts: 3,
+        synchronizationTimeoutMs: 3_000,
+      },
+      createActionId: () => ACTION_ID,
+      getGame: playingGame,
+      emit: (command, acknowledge) => {
+        commands.push(command);
+        callbacks.push(acknowledge);
       },
       synchronize: async () => ({ ok: true }),
       applySuccess: () => 'accepted',
       applyRecovery: () => 'accepted',
     });
-
-    const result = await runner.rollDice();
-
-    expect(result).toMatchObject({ ok: true, actionId: ACTION_ID, requestId: REQUEST_ID });
-    expect(result).toMatchObject({ data: { stateVersion: 3, roll: ROLL } });
-    expect(actionIds).toBe(1);
-    expect(commands).toHaveLength(3);
-    expect(commands).toEqual([commands[0]!, commands[0]!, commands[0]!]);
-    expect(JSON.parse(commands[0]!)).toEqual({
-      type: GAME_COMMAND_TYPE.ROLL_DICE,
-      actionId: ACTION_ID,
-      turnId: TURN_ID,
-    });
+    try {
+      const original = runner.rollDice();
+      callbacks[0]!({
+        ok: false,
+        error: { code: PUBLIC_ERROR_CODE.INTERNAL_ERROR, params: {} },
+        meta: META,
+      });
+      const rejected = await original;
+      if (rejected.ok || !rejected.retry) throw new Error('expected retry');
+      jest.advanceTimersByTime(44_000);
+      const retried = rejected.retry.run();
+      jest.advanceTimersByTime(44_000);
+      callbacks[1]!({ ok: true, data: successData({ stateVersion: 3, roll: ROLL }), meta: META });
+      expect(await retried).toMatchObject({ ok: true });
+      expect(commands).toHaveLength(4);
+      expect(
+        commands.every((command) => JSON.stringify(command) === JSON.stringify(commands[0])),
+      ).toBe(true);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   test('constructs hold, score, and forfeit commands from semantic calls', async () => {
     const commands: GameCommand[] = [];
     const runner = createCommandRunner({
-      retryPolicy: { acknowledgementTimeoutMs: 10, maximumAttempts: 1, retryDelayMs: 0 },
+      retryPolicy: {
+        commandResponseTimeoutMs: 10,
+        retryIntervalMs: 10,
+        maximumAttempts: 1,
+        synchronizationTimeoutMs: 10,
+      },
       createActionId: () => ACTION_ID,
       getGame: playingGame,
       emit: (command, acknowledge) => {
@@ -183,7 +402,12 @@ describe('command runner', () => {
       undefined,
     ];
     const runner = createCommandRunner({
-      retryPolicy: { acknowledgementTimeoutMs: 1, maximumAttempts: 1, retryDelayMs: 0 },
+      retryPolicy: {
+        commandResponseTimeoutMs: 1,
+        retryIntervalMs: 1,
+        maximumAttempts: 1,
+        synchronizationTimeoutMs: 1,
+      },
       createActionId: () => ACTION_ID,
       getGame: playingGame,
       emit: (_command, acknowledge) => {
@@ -215,7 +439,12 @@ describe('command runner', () => {
       let syncs = 0;
       let successes = 0;
       const runner = createCommandRunner({
-        retryPolicy: { acknowledgementTimeoutMs: 10, maximumAttempts: 1, retryDelayMs: 0 },
+        retryPolicy: {
+          commandResponseTimeoutMs: 10,
+          retryIntervalMs: 10,
+          maximumAttempts: 1,
+          synchronizationTimeoutMs: 10,
+        },
         createActionId: () => ACTION_ID,
         getGame: playingGame,
         emit: (_command, acknowledge) =>
@@ -254,7 +483,12 @@ describe('command runner', () => {
     let syncs = 0;
     let successes = 0;
     const runner = createCommandRunner({
-      retryPolicy: { acknowledgementTimeoutMs: 10, maximumAttempts: 1, retryDelayMs: 0 },
+      retryPolicy: {
+        commandResponseTimeoutMs: 10,
+        retryIntervalMs: 10,
+        maximumAttempts: 1,
+        synchronizationTimeoutMs: 10,
+      },
       createActionId: () => ACTION_ID,
       getGame: playingGame,
       emit: (_command, acknowledge) =>
@@ -298,7 +532,12 @@ describe('command runner', () => {
       const commands: string[] = [];
       let retryAcknowledge: ((value: unknown) => void) | undefined;
       const runner = createCommandRunner({
-        retryPolicy: { acknowledgementTimeoutMs: 20, maximumAttempts: 1, retryDelayMs: 0 },
+        retryPolicy: {
+          commandResponseTimeoutMs: 20,
+          retryIntervalMs: 20,
+          maximumAttempts: 1,
+          synchronizationTimeoutMs: 20,
+        },
         createActionId: () => ACTION_ID,
         getGame: () => currentGame,
         emit: (command, acknowledge) => {
@@ -351,7 +590,12 @@ describe('command runner', () => {
 
   test('does not offer internal-error retry when the latest full sync fails', async () => {
     const runner = createCommandRunner({
-      retryPolicy: { acknowledgementTimeoutMs: 20, maximumAttempts: 1, retryDelayMs: 0 },
+      retryPolicy: {
+        commandResponseTimeoutMs: 20,
+        retryIntervalMs: 20,
+        maximumAttempts: 1,
+        synchronizationTimeoutMs: 20,
+      },
       createActionId: () => ACTION_ID,
       getGame: playingGame,
       emit: (_command, acknowledge) =>
@@ -385,7 +629,12 @@ describe('command runner', () => {
     async (_case, syncResult, synchronizedGame, retryable) => {
       let currentGame = playingGame(2);
       const runner = createCommandRunner({
-        retryPolicy: { acknowledgementTimeoutMs: 20, maximumAttempts: 1, retryDelayMs: 0 },
+        retryPolicy: {
+          commandResponseTimeoutMs: 20,
+          retryIntervalMs: 20,
+          maximumAttempts: 1,
+          synchronizationTimeoutMs: 20,
+        },
         createActionId: () => ACTION_ID,
         getGame: () => currentGame,
         emit: (_command, acknowledge) =>
@@ -422,7 +671,12 @@ describe('command runner', () => {
     let currentGame = playingGame();
     let emits = 0;
     const runner = createCommandRunner({
-      retryPolicy: { acknowledgementTimeoutMs: 20, maximumAttempts: 1, retryDelayMs: 0 },
+      retryPolicy: {
+        commandResponseTimeoutMs: 20,
+        retryIntervalMs: 20,
+        maximumAttempts: 1,
+        synchronizationTimeoutMs: 20,
+      },
       createActionId: () => ACTION_ID,
       getGame: () => currentGame,
       emit: (_command, acknowledge) => {
@@ -449,7 +703,12 @@ describe('command runner', () => {
   test('never offers a manual retry after exhausted acknowledgement loss', async () => {
     let currentGame = playingGame(2);
     const runner = createCommandRunner({
-      retryPolicy: { acknowledgementTimeoutMs: 1, maximumAttempts: 1, retryDelayMs: 0 },
+      retryPolicy: {
+        commandResponseTimeoutMs: 1,
+        retryIntervalMs: 1,
+        maximumAttempts: 1,
+        synchronizationTimeoutMs: 1,
+      },
       createActionId: () => ACTION_ID,
       getGame: () => currentGame,
       emit: () => {},
@@ -474,7 +733,12 @@ describe('command runner', () => {
     const lifecycle = new AbortController();
     let emits = 0;
     const runner = createCommandRunner({
-      retryPolicy: { acknowledgementTimeoutMs: 20, maximumAttempts: 1, retryDelayMs: 0 },
+      retryPolicy: {
+        commandResponseTimeoutMs: 20,
+        retryIntervalMs: 20,
+        maximumAttempts: 1,
+        synchronizationTimeoutMs: 20,
+      },
       createActionId: () => ACTION_ID,
       getGame: playingGame,
       emit: (_command, acknowledge) => {
@@ -504,7 +768,12 @@ describe('command runner', () => {
     const lifecycle = new AbortController();
     let emits = 0;
     const runner = createCommandRunner({
-      retryPolicy: { acknowledgementTimeoutMs: 1, maximumAttempts: 3, retryDelayMs: 5_000 },
+      retryPolicy: {
+        commandResponseTimeoutMs: 10003,
+        retryIntervalMs: 5001,
+        maximumAttempts: 3,
+        synchronizationTimeoutMs: 1,
+      },
       createActionId: () => ACTION_ID,
       getGame: playingGame,
       emit: () => {

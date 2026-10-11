@@ -29,7 +29,12 @@ describe('game session commands', () => {
       contract: createCompatibilityContract('release-1'),
       socketFactory: { create: () => socket },
       createActionId: () => ROOM_ID,
-      retryPolicy: { acknowledgementTimeoutMs: 20, maximumAttempts: 1, retryDelayMs: 0 },
+      retryPolicy: {
+        commandResponseTimeoutMs: 20,
+        retryIntervalMs: 20,
+        maximumAttempts: 1,
+        synchronizationTimeoutMs: 20,
+      },
     });
     try {
       expect(await session.connect()).toEqual({ ok: true });
@@ -67,7 +72,12 @@ describe('game session commands', () => {
       authority: AUTHORITY,
       contract: createCompatibilityContract('release-1'),
       socketFactory: { create: () => socket },
-      retryPolicy: { acknowledgementTimeoutMs: 20, maximumAttempts: 1, retryDelayMs: 0 },
+      retryPolicy: {
+        commandResponseTimeoutMs: 20,
+        retryIntervalMs: 20,
+        maximumAttempts: 1,
+        synchronizationTimeoutMs: 20,
+      },
       createActionId: () => 'de305d54-75b4-431b-adb2-eb6b9e546010',
     });
     await session.connect();
@@ -317,6 +327,161 @@ describe('game session commands', () => {
     expect(session.getSnapshot()).toBe(finalSnapshot);
   });
 
+  test.each(['disconnect', 'dispose', 'replace', 'transport disconnect'] as const)(
+    '%s controls pending command cancellation without retaining timers or late state changes',
+    async (ending) => {
+      jest.useFakeTimers();
+      const socket = new FakeSocket();
+      const respond = socket.emitCommand;
+      let sent!: GameCommand;
+      let acknowledge!: (value: unknown) => void;
+      let emits = 0;
+      socket.emitCommand = (command, reply) => {
+        sent = command;
+        acknowledge = reply;
+        emits += 1;
+      };
+      const session = createGameSession({
+        socketUrl: 'https://game.example.test',
+        authority: AUTHORITY,
+        contract: createCompatibilityContract('release-1'),
+        socketFactory: { create: () => socket },
+      });
+      try {
+        await session.connect();
+        const pending = session.rollDice();
+        if (ending === 'dispose') session.dispose();
+        else if (ending === 'replace') for (const listener of socket.listeners.replaced) listener();
+        else if (ending === 'disconnect') session.disconnect();
+        else socket.disconnect();
+        if (ending === 'transport disconnect') {
+          await session.connect();
+          respond(sent, acknowledge);
+          expect(await pending).toMatchObject({ ok: true, data: { roll: ROLL } });
+        } else {
+          expect(await pending).toMatchObject({ ok: false, error: { code: 'SESSION_DISPOSED' } });
+          if (ending === 'disconnect') await session.connect();
+          const ended = session.getSnapshot();
+          respond(sent, acknowledge);
+          jest.advanceTimersByTime(48_000);
+          expect(session.getSnapshot()).toBe(ended);
+        }
+        expect(emits).toBe(1);
+        expect(jest.getTimerCount()).toBe(0);
+      } finally {
+        session.dispose();
+        jest.useRealTimers();
+      }
+    },
+  );
+
+  test('explicit disconnect expires an offered retry even after the session reconnects', async () => {
+    const socket = new FakeSocket();
+    let emits = 0;
+    socket.emitCommand = (command, acknowledge) => {
+      emits += 1;
+      acknowledge({
+        ok: false,
+        error: { code: PUBLIC_ERROR_CODE.INTERNAL_ERROR, params: {} },
+        meta: {
+          requestId: REQUEST_ID,
+          gameProtocolVersion: GAME_PROTOCOL_VERSION,
+          actionId: command.actionId,
+        },
+      });
+    };
+    const session = createGameSession({
+      socketUrl: 'https://game.example.test',
+      authority: AUTHORITY,
+      contract: createCompatibilityContract('release-1'),
+      socketFactory: { create: () => socket },
+    });
+    try {
+      await session.connect();
+      const result = await session.rollDice();
+      if (result.ok || !result.retry) throw new Error('expected retry');
+      session.disconnect();
+      await session.connect();
+      expect(result.retry.isAvailable()).toBe(false);
+      expect(result.retry.run()).toBeNull();
+      expect(emits).toBe(1);
+      await session.rollDice();
+      expect(emits).toBe(2);
+    } finally {
+      session.dispose();
+    }
+  });
+
+  test.each(['success', 'failure'] as const)(
+    'upgrades a shared sync before publishing final command confirmation %s',
+    async (outcome) => {
+      jest.useFakeTimers();
+      const socket = new FakeSocket();
+      socket.emitCommand = () => {};
+      const session = createGameSession({
+        socketUrl: 'https://game.example.test',
+        authority: AUTHORITY,
+        contract: createCompatibilityContract('release-1'),
+        socketFactory: { create: () => socket },
+      });
+      try {
+        await session.connect();
+        const pending = session.rollDice();
+        jest.advanceTimersByTime(44_000);
+        let acknowledge!: (value: unknown) => void;
+        socket.syncResponder = (reply) => {
+          acknowledge = reply;
+        };
+        const shared = session.synchronize();
+        const observations: { status: string; flag: boolean; revision: number; error: boolean }[] =
+          [];
+        session.subscribe(() => {
+          const snapshot = session.getSnapshot();
+          observations.push({
+            status: snapshot.syncStatus,
+            flag: snapshot.syncFailureRequiresRefresh,
+            revision: snapshot.syncRevision,
+            error: snapshot.error !== null,
+          });
+        });
+        jest.advanceTimersByTime(1_000);
+        await Promise.resolve();
+        expect(socket.syncCount).toBe(2);
+        expect(observations).toEqual([
+          { status: 'synchronizing', flag: true, revision: 1, error: false },
+        ]);
+        if (outcome === 'success')
+          acknowledge({
+            ok: true,
+            data: viewFromGame(game(1)),
+            meta: {
+              requestId: REQUEST_ID,
+              gameProtocolVersion: GAME_PROTOCOL_VERSION,
+              serverTime: 1_000,
+            },
+          });
+        else
+          acknowledge({
+            ok: false,
+            error: { code: PUBLIC_ERROR_CODE.INTERNAL_ERROR, params: {} },
+            meta: { requestId: REQUEST_ID, gameProtocolVersion: GAME_PROTOCOL_VERSION },
+          });
+        expect(await shared).toMatchObject({ ok: outcome === 'success' });
+        expect(await pending).toMatchObject({ ok: false, error: { code: 'ACK_TIMEOUT' } });
+        expect(observations.at(-1)).toEqual({
+          status: 'idle',
+          flag: outcome === 'failure',
+          revision: outcome === 'success' ? 2 : 1,
+          error: outcome === 'failure',
+        });
+        expect(socket.syncCount).toBe(2);
+      } finally {
+        session.dispose();
+        jest.useRealTimers();
+      }
+    },
+  );
+
   test('aborts an in-flight command and clears its acknowledgement timer on dispose', async () => {
     const socket = new FakeSocket();
     socket.emitCommand = () => {};
@@ -325,7 +490,12 @@ describe('game session commands', () => {
       authority: AUTHORITY,
       contract: createCompatibilityContract('release-1'),
       socketFactory: { create: () => socket },
-      retryPolicy: { acknowledgementTimeoutMs: 5_000, maximumAttempts: 3, retryDelayMs: 1_000 },
+      retryPolicy: {
+        commandResponseTimeoutMs: 17000,
+        retryIntervalMs: 6000,
+        maximumAttempts: 3,
+        synchronizationTimeoutMs: 5_000,
+      },
       createActionId: () => 'de305d54-75b4-431b-adb2-eb6b9e546010',
     });
     jest.useFakeTimers();

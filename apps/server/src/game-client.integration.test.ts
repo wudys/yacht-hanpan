@@ -33,7 +33,12 @@ describe('game-client-sdk with the real game server', () => {
     const client = createGameClient({
       serverUrl: server.url,
       releaseId: 'game-client-integration',
-      retryPolicy: { acknowledgementTimeoutMs: 2_000, maximumAttempts: 2, retryDelayMs: 5 },
+      retryPolicy: {
+        commandResponseTimeoutMs: 4005,
+        retryIntervalMs: 2005,
+        maximumAttempts: 2,
+        synchronizationTimeoutMs: 2_000,
+      },
     });
 
     const created = await client.createRoom({

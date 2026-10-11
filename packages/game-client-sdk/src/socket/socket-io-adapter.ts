@@ -73,10 +73,10 @@ export function createSocketIoGameSocket(url: string, getAuth: () => SocketAuth)
       socket.close();
     },
     emitCommand: (command, acknowledge) => {
-      socket.emit(SOCKET_EVENT.GAME_COMMAND, command, acknowledge);
+      if (socket.connected) socket.emit(SOCKET_EVENT.GAME_COMMAND, command, acknowledge);
     },
     emitSync: (acknowledge) => {
-      socket.emit(SOCKET_EVENT.GAME_SYNC, acknowledge);
+      if (socket.connected) socket.emit(SOCKET_EVENT.GAME_SYNC, acknowledge);
     },
     onConnected: (listener) => {
       socket.on(SOCKET_IO_CLIENT_EVENT.CONNECT, listener);

@@ -45,7 +45,7 @@ describe('game session presentation', () => {
       });
       await session.connect();
       const pending = session.rollDice();
-      session.disconnect();
+      socket.disconnect();
       socket.syncVersion = synchronizedVersion;
       const baseline = game(synchronizedVersion);
       if (baseline.match.status !== 'playing') throw new Error('expected playing fixture');
@@ -152,7 +152,12 @@ describe('game session presentation', () => {
       authority: AUTHORITY,
       contract: createCompatibilityContract('release-1'),
       socketFactory: { create: () => socket },
-      retryPolicy: { acknowledgementTimeoutMs: 20, maximumAttempts: 1, retryDelayMs: 0 },
+      retryPolicy: {
+        commandResponseTimeoutMs: 20,
+        retryIntervalMs: 20,
+        maximumAttempts: 1,
+        synchronizationTimeoutMs: 20,
+      },
       createActionId: () => 'de305d54-75b4-431b-adb2-eb6b9e546010',
     });
     await session.connect();
@@ -578,7 +583,12 @@ describe('game session presentation', () => {
         authority: AUTHORITY,
         contract: createCompatibilityContract('release-1'),
         socketFactory: { create: () => socket },
-        retryPolicy: { acknowledgementTimeoutMs: 10, maximumAttempts: 1, retryDelayMs: 0 },
+        retryPolicy: {
+          commandResponseTimeoutMs: 10,
+          retryIntervalMs: 10,
+          maximumAttempts: 1,
+          synchronizationTimeoutMs: 10,
+        },
       });
       try {
         await session.connect();

@@ -1,11 +1,13 @@
 export const GAME_CLIENT_RETRY_POLICY = {
-  acknowledgementTimeoutMs: 3_000,
+  commandResponseTimeoutMs: 45_000,
+  retryIntervalMs: 3150,
   maximumAttempts: 3,
-  retryDelayMs: 150,
+  synchronizationTimeoutMs: 3_000,
 } as const;
 
 export interface RetryPolicy {
-  readonly acknowledgementTimeoutMs: number;
+  readonly retryIntervalMs: number;
+  readonly commandResponseTimeoutMs: number;
   readonly maximumAttempts: number;
-  readonly retryDelayMs: number;
+  readonly synchronizationTimeoutMs: number;
 }

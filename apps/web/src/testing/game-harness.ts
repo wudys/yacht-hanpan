@@ -146,6 +146,7 @@ function sessionSnapshot(
   return {
     connection: 'connected',
     syncStatus: 'idle',
+    syncFailureRequiresRefresh: false,
     syncRevision: 1,
     ...gameRoomView(game, presentedRoom),
     presentation: { kind: 'settled' },

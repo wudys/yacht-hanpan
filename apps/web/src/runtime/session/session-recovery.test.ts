@@ -690,6 +690,44 @@ describe('Game recovery', () => {
     expect(recovery.getSnapshot()).toEqual({ status: 'refreshRequired', error });
   });
 
+  test('command confirmation preserves the original ordinary recovery deadline', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    const session = createSessionFixture({ connection: 'disconnected', syncRevision: 1 });
+    const recovery = createSessionRecovery({
+      sessions: createInstalledHolder(session.value),
+      now: Date.now,
+    });
+    recovery.start();
+    await vi.advanceTimersByTimeAsync(25_000);
+    session.publish({
+      connection: 'connected',
+      syncStatus: 'synchronizing',
+      syncFailureRequiresRefresh: true,
+    });
+    expect(recovery.getSnapshot().status).toBe('synchronizing');
+    await vi.advanceTimersByTimeAsync(4_999);
+    expect(session.value.disconnect).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(recovery.getSnapshot().status).toBe('refreshRequired');
+    expect(session.value.disconnect).toHaveBeenCalledOnce();
+    expect(session.value.synchronize).not.toHaveBeenCalled();
+    recovery.dispose();
+  });
+
+  test('finished authority takes precedence over failed final command confirmation', () => {
+    const session = createSessionFixture({
+      game: FINISHED_GAME,
+      syncFailureRequiresRefresh: true,
+      error: { kind: 'transport', code: CLIENT_ERROR_CODE.ACK_TIMEOUT },
+    });
+    const recovery = createSessionRecovery({ sessions: createInstalledHolder(session.value) });
+    recovery.start();
+    expect(recovery.getSnapshot()).toEqual({ status: 'idle' });
+    expect(session.value.disconnect).not.toHaveBeenCalled();
+    recovery.dispose();
+  });
+
   test('ignores confirmed ordinary command rejections', () => {
     const session = createSessionFixture();
     const recovery = createSessionRecovery({ sessions: createInstalledHolder(session.value) });
@@ -898,6 +936,7 @@ function createSessionFixture(initial: Partial<GameSessionSnapshot> = {}) {
   let snapshot: GameSessionSnapshot = {
     connection: 'connected',
     syncStatus: 'idle',
+    syncFailureRequiresRefresh: false,
     syncRevision: 0,
     room: null,
     game: PLAYING_GAME,

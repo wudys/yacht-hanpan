@@ -45,6 +45,7 @@ export interface GameSessionSnapshot {
   readonly room: PublicRoom | null;
   readonly connection: ConnectionStatus;
   readonly syncStatus: 'idle' | 'synchronizing';
+  readonly syncFailureRequiresRefresh: boolean;
   readonly syncRevision: number;
   readonly game: GameSnapshot | null;
   readonly presence: PresenceSnapshot | null;
@@ -85,6 +86,8 @@ export function createGameSession(options: CreateGameSessionOptions): GameSessio
   let disposed = false;
   let syncStatus: GameSessionSnapshot['syncStatus'] = 'idle';
   let syncRevision = 0;
+  let syncFailureRequiresRefresh = false;
+  let commands = new AbortController();
   let activeSynchronization: {
     readonly controller: AbortController;
     readonly promise: Promise<SessionOperationResult>;
@@ -136,19 +139,27 @@ export function createGameSession(options: CreateGameSessionOptions): GameSessio
     incoming.room.roomId === options.authority.roomId &&
     incoming.room.seats[options.authority.seatIndex] !== undefined;
 
-  const synchronize = (): Promise<SessionOperationResult> => {
+  const synchronize = (requireRefreshOnFailure = false): Promise<SessionOperationResult> => {
     if (lifecycle.signal.aborted) {
       return Promise.resolve({
         ok: false,
         error: createProtocolError(CLIENT_ERROR_CODE.SESSION_DISPOSED),
       });
     }
-    if (activeSynchronization !== null) return activeSynchronization.promise;
+    if (activeSynchronization !== null) {
+      const pending = activeSynchronization.promise;
+      if (requireRefreshOnFailure && !syncFailureRequiresRefresh) {
+        syncFailureRequiresRefresh = true;
+        publish();
+      }
+      return pending;
+    }
+    syncFailureRequiresRefresh = requireRefreshOnFailure;
     const controller = new AbortController();
     const clockSample = options.clock?.beginSample();
     syncStatus = 'synchronizing';
     const pending = requestSync({
-      timeoutMs: (options.retryPolicy ?? GAME_CLIENT_RETRY_POLICY).acknowledgementTimeoutMs,
+      timeoutMs: (options.retryPolicy ?? GAME_CLIENT_RETRY_POLICY).synchronizationTimeoutMs,
       emit: (acknowledge) => socket.emitSync(acknowledge),
       signal: controller.signal,
     }).then((response): SessionOperationResult => {
@@ -174,6 +185,7 @@ export function createGameSession(options: CreateGameSessionOptions): GameSessio
           state = reduction.state;
           lastError = null;
           syncRevision += 1;
+          syncFailureRequiresRefresh = false;
           result = { ok: true };
         }
       }
@@ -222,6 +234,9 @@ export function createGameSession(options: CreateGameSessionOptions): GameSessio
     cancelConnectionAttempt(createTransportError(CLIENT_ERROR_CODE.SOCKET_DISCONNECTED));
     connectionRevision += 1;
     connectionSync = null;
+    if (activeSynchronization !== null && syncFailureRequiresRefresh) {
+      lastError = createTransportError(CLIENT_ERROR_CODE.SOCKET_DISCONNECTED);
+    }
     cancelSynchronization();
     connection = 'disconnected';
     return changed;
@@ -234,6 +249,8 @@ export function createGameSession(options: CreateGameSessionOptions): GameSessio
     if (lifecycle.signal.aborted) return;
     connection = 'replaced';
     lastError = null;
+    commands.abort();
+    syncFailureRequiresRefresh = false;
     lifecycle.abort();
     cancelConnectionAttempt(createProtocolError(CLIENT_ERROR_CODE.SESSION_DISPOSED));
     connectionRevision += 1;
@@ -318,7 +335,7 @@ export function createGameSession(options: CreateGameSessionOptions): GameSessio
       if (reduction.kind !== 'invalid' && reduction.state !== state) replaceState(reduction.state);
       return reduction.kind === 'invalid' ? 'invalid' : 'accepted';
     },
-    signal: lifecycle.signal,
+    getSignal: () => commands.signal,
   });
 
   function createSnapshot(): GameSessionSnapshot {
@@ -326,6 +343,7 @@ export function createGameSession(options: CreateGameSessionOptions): GameSessio
       room: state.view?.room ?? null,
       connection,
       syncStatus,
+      syncFailureRequiresRefresh,
       syncRevision,
       game: state.view?.game ?? null,
       presence: state.view?.presence ?? null,
@@ -351,6 +369,8 @@ export function createGameSession(options: CreateGameSessionOptions): GameSessio
   };
 
   const executeConnect = async (): Promise<SessionOperationResult> => {
+    if (commands.signal.aborted) commands = new AbortController();
+    syncFailureRequiresRefresh = false;
     const attempt = { controller: new AbortController(), error: null as ClientError | null };
     connectionAttempt = attempt;
     connectionEventsEnabled = true;
@@ -407,6 +427,7 @@ export function createGameSession(options: CreateGameSessionOptions): GameSessio
     disconnect: () => {
       if (lifecycle.signal.aborted) return;
       connectionEventsEnabled = false;
+      commands.abort();
       const changed = acceptDisconnected();
       const revision = connectionRevision;
       disconnecting = true;
@@ -424,6 +445,8 @@ export function createGameSession(options: CreateGameSessionOptions): GameSessio
       connectionRevision += 1;
       connectionSync = null;
       cancelSynchronization();
+      commands.abort();
+      syncFailureRequiresRefresh = false;
       lifecycle.abort();
       connection = 'disposed';
       unsubscriptions.forEach((unsubscribe) => unsubscribe());
@@ -431,7 +454,7 @@ export function createGameSession(options: CreateGameSessionOptions): GameSessio
       subscribers.clear();
       snapshot = createSnapshot();
     },
-    synchronize,
+    synchronize: () => synchronize(),
     getSnapshot: () => snapshot,
     subscribe: (listener) => {
       if (lifecycle.signal.aborted) return () => {};

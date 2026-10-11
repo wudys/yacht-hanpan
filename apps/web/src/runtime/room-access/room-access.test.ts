@@ -20,6 +20,7 @@ function setup(providedReentry?: StoredRoomReentry) {
   let snapshot: GameSessionSnapshot = {
     connection: 'idle',
     syncStatus: 'idle',
+    syncFailureRequiresRefresh: false,
     syncRevision: 0,
     room: null,
     game: null,

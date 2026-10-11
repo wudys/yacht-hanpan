@@ -39,6 +39,7 @@ function setup(
   let snapshot: GameSessionSnapshot = {
     connection: 'idle',
     syncStatus: 'idle',
+    syncFailureRequiresRefresh: false,
     syncRevision: 1,
     room: null,
     game: null,

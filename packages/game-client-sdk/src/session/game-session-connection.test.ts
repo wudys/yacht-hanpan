@@ -65,7 +65,12 @@ describe('game session connection', () => {
       authority: AUTHORITY,
       contract: createCompatibilityContract('release-1'),
       socketFactory: { create: () => socket },
-      retryPolicy: { acknowledgementTimeoutMs: 20, maximumAttempts: 3, retryDelayMs: 0 },
+      retryPolicy: {
+        commandResponseTimeoutMs: 60,
+        retryIntervalMs: 20,
+        maximumAttempts: 3,
+        synchronizationTimeoutMs: 20,
+      },
     });
     await session.connect();
     socket.syncResponder = (acknowledge) => {
@@ -241,7 +246,12 @@ describe('game session connection', () => {
       authority: AUTHORITY,
       contract: createCompatibilityContract('release-1'),
       socketFactory: factory,
-      retryPolicy: { acknowledgementTimeoutMs: 20, maximumAttempts: 1, retryDelayMs: 0 },
+      retryPolicy: {
+        commandResponseTimeoutMs: 20,
+        retryIntervalMs: 20,
+        maximumAttempts: 1,
+        synchronizationTimeoutMs: 20,
+      },
       createActionId: () => 'de305d54-75b4-431b-adb2-eb6b9e546010',
     });
 
@@ -276,7 +286,12 @@ describe('game session connection', () => {
       authority: AUTHORITY,
       contract: createCompatibilityContract('release-1'),
       socketFactory: { create: () => socket },
-      retryPolicy: { acknowledgementTimeoutMs: 20, maximumAttempts: 1, retryDelayMs: 0 },
+      retryPolicy: {
+        commandResponseTimeoutMs: 20,
+        retryIntervalMs: 20,
+        maximumAttempts: 1,
+        synchronizationTimeoutMs: 20,
+      },
       createActionId: () => 'de305d54-75b4-431b-adb2-eb6b9e546010',
     });
     let notifications = 0;
@@ -306,7 +321,12 @@ describe('game session connection', () => {
       authority: AUTHORITY,
       contract: createCompatibilityContract('release-1'),
       socketFactory: { create: () => socket },
-      retryPolicy: { acknowledgementTimeoutMs: 20, maximumAttempts: 1, retryDelayMs: 0 },
+      retryPolicy: {
+        commandResponseTimeoutMs: 20,
+        retryIntervalMs: 20,
+        maximumAttempts: 1,
+        synchronizationTimeoutMs: 20,
+      },
     });
 
     const pending = session.connect();
@@ -352,7 +372,12 @@ describe('game session connection', () => {
       authority: AUTHORITY,
       contract: createCompatibilityContract('release-1'),
       socketFactory: { create: () => socket },
-      retryPolicy: { acknowledgementTimeoutMs: 20, maximumAttempts: 1, retryDelayMs: 0 },
+      retryPolicy: {
+        commandResponseTimeoutMs: 20,
+        retryIntervalMs: 20,
+        maximumAttempts: 1,
+        synchronizationTimeoutMs: 20,
+      },
       createActionId: () => 'de305d54-75b4-431b-adb2-eb6b9e546010',
     });
 
@@ -821,7 +846,12 @@ describe('game session connection', () => {
         socketUrl: `http://127.0.0.1:${server.port}`,
         authority,
         contract: createCompatibilityContract('release-1'),
-        retryPolicy: { acknowledgementTimeoutMs: 1000, maximumAttempts: 1, retryDelayMs: 0 },
+        retryPolicy: {
+          commandResponseTimeoutMs: 1000,
+          retryIntervalMs: 1000,
+          maximumAttempts: 1,
+          synchronizationTimeoutMs: 1000,
+        },
       });
       let cancelled = false;
       const publications: { connection: string; syncStatus: string }[] = [];

@@ -31,7 +31,12 @@ describe('game session sync', () => {
       authority: AUTHORITY,
       contract: createCompatibilityContract('release-1'),
       socketFactory: { create: () => socket },
-      retryPolicy: { acknowledgementTimeoutMs: 20, maximumAttempts: 1, retryDelayMs: 0 },
+      retryPolicy: {
+        commandResponseTimeoutMs: 20,
+        retryIntervalMs: 20,
+        maximumAttempts: 1,
+        synchronizationTimeoutMs: 20,
+      },
     });
     try {
       expect(await session.connect()).toEqual({ ok: true });
@@ -53,7 +58,12 @@ describe('game session sync', () => {
       authority: AUTHORITY,
       contract: createCompatibilityContract('release-1'),
       socketFactory: { create: () => socket },
-      retryPolicy: { acknowledgementTimeoutMs: 20, maximumAttempts: 1, retryDelayMs: 0 },
+      retryPolicy: {
+        commandResponseTimeoutMs: 20,
+        retryIntervalMs: 20,
+        maximumAttempts: 1,
+        synchronizationTimeoutMs: 20,
+      },
     });
     const observedSyncLifecycle: Array<{
       connection: string;
@@ -267,7 +277,12 @@ describe('game session sync', () => {
       authority: AUTHORITY,
       contract: createCompatibilityContract('release-1'),
       socketFactory: { create: () => socket },
-      retryPolicy: { acknowledgementTimeoutMs: 20, maximumAttempts: 1, retryDelayMs: 0 },
+      retryPolicy: {
+        commandResponseTimeoutMs: 20,
+        retryIntervalMs: 20,
+        maximumAttempts: 1,
+        synchronizationTimeoutMs: 20,
+      },
     });
     await session.connect();
     socket.syncResponder = (acknowledge): void =>
@@ -292,7 +307,12 @@ describe('game session sync', () => {
       authority: AUTHORITY,
       contract: createCompatibilityContract('release-1'),
       socketFactory: { create: () => socket },
-      retryPolicy: { acknowledgementTimeoutMs: 20, maximumAttempts: 1, retryDelayMs: 0 },
+      retryPolicy: {
+        commandResponseTimeoutMs: 20,
+        retryIntervalMs: 20,
+        maximumAttempts: 1,
+        synchronizationTimeoutMs: 20,
+      },
     });
     await session.connect();
     let acknowledge: ((value: unknown) => void) | undefined;
@@ -335,7 +355,12 @@ describe('game session sync', () => {
       authority: AUTHORITY,
       contract: createCompatibilityContract('release-1'),
       socketFactory: { create: () => socket },
-      retryPolicy: { acknowledgementTimeoutMs: 20, maximumAttempts: 1, retryDelayMs: 0 },
+      retryPolicy: {
+        commandResponseTimeoutMs: 20,
+        retryIntervalMs: 20,
+        maximumAttempts: 1,
+        synchronizationTimeoutMs: 20,
+      },
     });
     await session.connect();
     let acknowledge: ((value: unknown) => void) | undefined;
@@ -424,7 +449,12 @@ describe('game session sync', () => {
       authority: AUTHORITY,
       contract: createCompatibilityContract('release-1'),
       socketFactory: { create: () => socket },
-      retryPolicy: { acknowledgementTimeoutMs: 20, maximumAttempts: 1, retryDelayMs: 0 },
+      retryPolicy: {
+        commandResponseTimeoutMs: 20,
+        retryIntervalMs: 20,
+        maximumAttempts: 1,
+        synchronizationTimeoutMs: 20,
+      },
     });
     await session.connect();
     let disconnected = false;
@@ -453,7 +483,12 @@ describe('game session sync', () => {
       authority: AUTHORITY,
       contract: createCompatibilityContract('release-1'),
       socketFactory: { create: () => socket },
-      retryPolicy: { acknowledgementTimeoutMs: 20, maximumAttempts: 1, retryDelayMs: 0 },
+      retryPolicy: {
+        commandResponseTimeoutMs: 20,
+        retryIntervalMs: 20,
+        maximumAttempts: 1,
+        synchronizationTimeoutMs: 20,
+      },
     });
     await session.connect();
     let acknowledge: ((value: unknown) => void) | undefined;
@@ -489,7 +524,12 @@ describe('game session sync', () => {
       authority: AUTHORITY,
       contract: createCompatibilityContract('release-1'),
       socketFactory: { create: () => socket },
-      retryPolicy: { acknowledgementTimeoutMs: 5_000, maximumAttempts: 1, retryDelayMs: 0 },
+      retryPolicy: {
+        commandResponseTimeoutMs: 5000,
+        retryIntervalMs: 5000,
+        maximumAttempts: 1,
+        synchronizationTimeoutMs: 5_000,
+      },
     });
     await session.connect();
     let acknowledge: ((value: unknown) => void) | undefined;
@@ -525,7 +565,12 @@ describe('game session sync', () => {
       authority: AUTHORITY,
       contract: createCompatibilityContract('release-1'),
       socketFactory: { create: () => socket },
-      retryPolicy: { acknowledgementTimeoutMs: 20, maximumAttempts: 1, retryDelayMs: 0 },
+      retryPolicy: {
+        commandResponseTimeoutMs: 20,
+        retryIntervalMs: 20,
+        maximumAttempts: 1,
+        synchronizationTimeoutMs: 20,
+      },
       createActionId: () => 'de305d54-75b4-431b-adb2-eb6b9e546010',
     });
     await session.connect();
@@ -557,7 +602,12 @@ describe('game session sync', () => {
       authority: AUTHORITY,
       contract: createCompatibilityContract('release-1'),
       socketFactory: { create: () => socket },
-      retryPolicy: { acknowledgementTimeoutMs: 20, maximumAttempts: 1, retryDelayMs: 0 },
+      retryPolicy: {
+        commandResponseTimeoutMs: 20,
+        retryIntervalMs: 20,
+        maximumAttempts: 1,
+        synchronizationTimeoutMs: 20,
+      },
     });
     await session.connect();
 

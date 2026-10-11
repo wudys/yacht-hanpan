@@ -15,7 +15,7 @@ import {
   createServerError,
   createTransportError,
 } from '../errors';
-import { waitForAcknowledgement } from '../socket/acknowledgement';
+import { waitForCommandAcknowledgement } from './command-acknowledgement';
 import type { RetryPolicy } from './retry-policy';
 
 type HoldCommand = Extract<GameCommand, { readonly type: typeof GAME_COMMAND_TYPE.SET_DIE_HELD }>;
@@ -54,13 +54,16 @@ export interface CreateCommandRunnerOptions {
   readonly createActionId: () => string;
   readonly getGame: () => GameSnapshot | null;
   readonly emit: (command: GameCommand, acknowledge: (value: unknown) => void) => void;
-  readonly synchronize: () => Promise<Readonly<{ ok: boolean }>>;
+  readonly synchronize: (
+    requireRefreshOnFailure?: boolean,
+  ) => Promise<Readonly<{ ok: boolean; error?: ClientError }>>;
   readonly applySuccess: (
     data: SuccessfulCommandData,
     command: GameCommand,
   ) => AuthoritativeAcceptance;
   readonly applyRecovery: (view: RoomView) => AuthoritativeAcceptance;
   readonly signal?: AbortSignal;
+  readonly getSignal?: () => AbortSignal;
 }
 
 /** Accepted views need not advance game authority or change session state or presentation. */
@@ -73,6 +76,7 @@ export function createCommandRunner(options: CreateCommandRunnerOptions): Comman
     command: GameCommand,
     expectedStateVersion: number | null,
   ): Promise<CommandResult> => {
+    const signal = options.getSignal?.() ?? options.signal;
     const disposedResult = (): CommandResult => ({
       ok: false,
       error: createProtocolError(CLIENT_ERROR_CODE.SESSION_DISPOSED, {
@@ -81,7 +85,7 @@ export function createCommandRunner(options: CreateCommandRunnerOptions): Comman
     });
     const invalidResponse = async (requestId?: string): Promise<CommandResult> => {
       await options.synchronize();
-      if (options.signal?.aborted) return disposedResult();
+      if (signal?.aborted) return disposedResult();
       return {
         ok: false,
         error: createProtocolError(CLIENT_ERROR_CODE.INVALID_RESPONSE, {
@@ -90,90 +94,87 @@ export function createCommandRunner(options: CreateCommandRunnerOptions): Comman
         }),
       };
     };
-    for (let attempt = 1; attempt <= options.retryPolicy.maximumAttempts; attempt += 1) {
-      const received = await waitForAcknowledgement(
-        (acknowledge) => options.emit(command, acknowledge),
-        options.retryPolicy.acknowledgementTimeoutMs,
-        options.signal,
-      );
-      if (options.signal?.aborted || (!received.ok && received.reason === 'aborted')) {
+    const received = await waitForCommandAcknowledgement(
+      (acknowledge) => options.emit(command, acknowledge),
+      options.retryPolicy,
+      signal,
+    );
+    if (signal?.aborted || (!received.ok && received.reason === 'aborted')) {
+      return disposedResult();
+    }
+    if (!received.ok) {
+      const confirmation = await options.synchronize(true);
+      if (
+        signal?.aborted &&
+        (confirmation.ok ||
+          (confirmation.error?.kind === 'protocol' &&
+            confirmation.error.code === CLIENT_ERROR_CODE.SESSION_DISPOSED))
+      ) {
         return disposedResult();
       }
-      if (!received.ok) {
-        if (attempt < options.retryPolicy.maximumAttempts) {
-          const delayed = await delay(options.retryPolicy.retryDelayMs, options.signal);
-          if (!delayed || options.signal?.aborted) return disposedResult();
-          continue;
-        }
-        await options.synchronize();
-        if (options.signal?.aborted) return disposedResult();
-        return {
-          ok: false,
-          error: createTransportError(CLIENT_ERROR_CODE.ACK_TIMEOUT, {
-            actionId: command.actionId,
-          }),
-        };
-      }
-
-      let ack;
-      try {
-        ack = parseCommandAck(received.value);
-      } catch {
-        return invalidResponse();
-      }
-      if (ack.meta.actionId !== command.actionId) {
-        return invalidResponse(ack.meta.requestId);
-      }
-      if (ack.ok) {
-        if ((command.type === GAME_COMMAND_TYPE.ROLL_DICE) !== 'roll' in ack.data.receipt) {
-          return invalidResponse(ack.meta.requestId);
-        }
-        const application = options.applySuccess(ack.data, command);
-        if (options.signal?.aborted) return disposedResult();
-        if (application === 'invalid') {
-          return invalidResponse(ack.meta.requestId);
-        }
-        return {
-          ok: true,
-          data: ack.data.receipt,
-          actionId: command.actionId,
-          requestId: ack.meta.requestId,
-        };
-      }
-      let synchronized: Readonly<{ ok: boolean }> | null = null;
-      if (ack.recovery !== undefined) {
-        const application = options.applyRecovery(ack.recovery);
-        if (options.signal?.aborted) return disposedResult();
-        if (application === 'invalid') {
-          return invalidResponse(ack.meta.requestId);
-        }
-      } else {
-        synchronized = await options.synchronize();
-        if (options.signal?.aborted) return disposedResult();
-      }
-      const rejectionCode = ack.error.code;
-      const isRetryAvailable = (): boolean =>
-        !options.signal?.aborted &&
-        (rejectionCode === PUBLIC_ERROR_CODE.INTERNAL_ERROR ||
-          (rejectionCode === PUBLIC_ERROR_CODE.ROLL_UNAVAILABLE &&
-            isOriginalRollCurrent(command, expectedStateVersion, options.getGame())));
-      const retryable = synchronized?.ok === true && isRetryAvailable();
+      // Final confirmation can publish a terminal failure whose observer disconnects.
+      // The command's already established unknown outcome still belongs to this run.
       return {
         ok: false,
-        error: createServerError(ack.error, {
-          requestId: ack.meta.requestId,
-          actionId: command.actionId,
-        }),
-        ...(retryable
-          ? {
-              retry: memoizeCommandRetry(isRetryAvailable, () =>
-                run(command, expectedStateVersion),
-              ),
-            }
-          : {}),
+        error: createTransportError(CLIENT_ERROR_CODE.ACK_TIMEOUT, { actionId: command.actionId }),
       };
     }
-    throw new Error('unreachable retry state');
+
+    let ack;
+    try {
+      ack = parseCommandAck(received.value);
+    } catch {
+      return invalidResponse();
+    }
+    if (ack.meta.actionId !== command.actionId) {
+      return invalidResponse(ack.meta.requestId);
+    }
+    if (ack.ok) {
+      if ((command.type === GAME_COMMAND_TYPE.ROLL_DICE) !== 'roll' in ack.data.receipt) {
+        return invalidResponse(ack.meta.requestId);
+      }
+      const application = options.applySuccess(ack.data, command);
+      if (signal?.aborted) return disposedResult();
+      if (application === 'invalid') {
+        return invalidResponse(ack.meta.requestId);
+      }
+      return {
+        ok: true,
+        data: ack.data.receipt,
+        actionId: command.actionId,
+        requestId: ack.meta.requestId,
+      };
+    }
+    let synchronized: Readonly<{ ok: boolean }> | null = null;
+    if (ack.recovery !== undefined) {
+      const application = options.applyRecovery(ack.recovery);
+      if (signal?.aborted) return disposedResult();
+      if (application === 'invalid') {
+        return invalidResponse(ack.meta.requestId);
+      }
+    } else {
+      synchronized = await options.synchronize();
+      if (signal?.aborted) return disposedResult();
+    }
+    const rejectionCode = ack.error.code;
+    const isRetryAvailable = (): boolean =>
+      !signal?.aborted &&
+      (rejectionCode === PUBLIC_ERROR_CODE.INTERNAL_ERROR ||
+        (rejectionCode === PUBLIC_ERROR_CODE.ROLL_UNAVAILABLE &&
+          isOriginalRollCurrent(command, expectedStateVersion, options.getGame())));
+    const retryable = synchronized?.ok === true && isRetryAvailable();
+    return {
+      ok: false,
+      error: createServerError(ack.error, {
+        requestId: ack.meta.requestId,
+        actionId: command.actionId,
+      }),
+      ...(retryable
+        ? {
+            retry: memoizeCommandRetry(isRetryAvailable, () => run(command, expectedStateVersion)),
+          }
+        : {}),
+    };
   };
 
   const withTurn = (
@@ -266,32 +267,15 @@ function isOriginalRollCurrent(
 
 function validateRetryPolicy(policy: RetryPolicy): void {
   if (
-    !Number.isSafeInteger(policy.acknowledgementTimeoutMs) ||
-    policy.acknowledgementTimeoutMs < 1 ||
+    !Number.isSafeInteger(policy.commandResponseTimeoutMs) ||
+    policy.commandResponseTimeoutMs < 1 ||
+    !Number.isSafeInteger(policy.retryIntervalMs) ||
+    policy.retryIntervalMs < 1 ||
     !Number.isSafeInteger(policy.maximumAttempts) ||
     policy.maximumAttempts < 1 ||
-    !Number.isSafeInteger(policy.retryDelayMs) ||
-    policy.retryDelayMs < 0
+    !Number.isSafeInteger(policy.synchronizationTimeoutMs) ||
+    policy.synchronizationTimeoutMs < 1
   ) {
     throw new RangeError('invalid retry policy');
   }
-}
-
-async function delay(milliseconds: number, signal?: AbortSignal): Promise<boolean> {
-  if (signal?.aborted) return false;
-  if (milliseconds === 0) return true;
-  return await new Promise<boolean>((resolve) => {
-    let finish: (completed: boolean) => void = () => {};
-    const timeout = setTimeout(() => finish(true), milliseconds);
-    const onAbort = (): void => finish(false);
-    let finished = false;
-    finish = (completed: boolean): void => {
-      if (finished) return;
-      finished = true;
-      clearTimeout(timeout);
-      signal?.removeEventListener('abort', onAbort);
-      resolve(completed);
-    };
-    signal?.addEventListener('abort', onAbort, { once: true });
-  });
 }

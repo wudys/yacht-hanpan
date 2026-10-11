@@ -229,12 +229,26 @@ export function createSessionRecovery(options: CreateSessionRecoveryOptions): Se
       publish(IDLE);
     }
     if (current.error !== null && terminateForError(session, current.error)) return;
+    if (current.syncFailureRequiresRefresh) {
+      cancelConfirmation();
+      if (current.syncStatus === 'idle' && current.error !== null) {
+        terminate(session, { status: 'refreshRequired', error: current.error });
+      } else if (incidentSession !== null && now() >= incidentDeadline) {
+        expireIncident(incidentGeneration);
+      } else {
+        publish({ status: current.connection === 'connected' ? 'synchronizing' : 'reconnecting' });
+      }
+      return;
+    }
     const needsRecovery =
       current.connection === 'disconnected' ||
       current.syncStatus === 'synchronizing' ||
       current.error !== null;
     if (incidentSession === null && needsRecovery) beginIncident(session, current.syncRevision);
-    if (incidentSession === null) return;
+    if (incidentSession === null) {
+      publish(IDLE);
+      return;
+    }
     if (now() >= incidentDeadline) {
       expireIncident(incidentGeneration);
       return;

@@ -53,7 +53,12 @@ try {
     serverUrl: server.url,
     releaseId: RELEASE_ID,
     httpTimeoutMs: 20_000,
-    retryPolicy: { acknowledgementTimeoutMs: 10_000, maximumAttempts: 2, retryDelayMs: 5 },
+    retryPolicy: {
+      commandResponseTimeoutMs: 20005,
+      retryIntervalMs: 10005,
+      maximumAttempts: 2,
+      synchronizationTimeoutMs: 10_000,
+    },
   });
 
   const bootstrapStartedAt = performance.now();

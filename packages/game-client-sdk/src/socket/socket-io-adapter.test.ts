@@ -1,5 +1,6 @@
 import {
   parseCommittedRoomUpdate,
+  parseGameCommand,
   parseSocketAuth,
   SOCKET_EVENT,
 } from '@repo/game-protocol/socket';
@@ -64,6 +65,68 @@ describe('Socket.IO authentication boundary', () => {
       new Response(subprocess.stderr).text(),
     ]);
     expect({ exitCode, stderr }).toEqual({ exitCode: 0, stderr: '' });
+  });
+
+  test('does not buffer disconnected commands or confirmations for a later connection', async () => {
+    const commands: unknown[] = [];
+    let syncs = 0;
+    const server = Bun.serve({
+      hostname: '127.0.0.1',
+      port: 0,
+      fetch(request, server) {
+        if (server.upgrade(request)) return;
+        return new Response(null, { status: 400 });
+      },
+      websocket: {
+        open(socket) {
+          socket.send(
+            `0${JSON.stringify({ sid: 'buffer-engine', upgrades: [], pingInterval: 60_000, pingTimeout: 60_000, maxPayload: 1_024 })}`,
+          );
+        },
+        message(socket, message) {
+          const packet = String(message);
+          if (packet.startsWith('40')) {
+            socket.send(`40${JSON.stringify({ sid: 'buffer-socket' })}`);
+            return;
+          }
+          const event = /^42(\d+)(\[.*\])$/u.exec(packet);
+          if (!event) return;
+          const data: unknown[] = JSON.parse(event[2]!);
+          if (data[0] === SOCKET_EVENT.GAME_COMMAND) commands.push(data[1]);
+          if (data[0] === SOCKET_EVENT.GAME_SYNC) syncs += 1;
+          socket.send(`43${event[1]}[null]`);
+        },
+      },
+    });
+    const socket = createSocketIoGameSocket(
+      `http://127.0.0.1:${server.port}`,
+      () => authentication,
+    );
+    const expired = parseGameCommand({
+      type: 'forfeitMatch',
+      actionId: '11111111-1111-4111-8111-000000000001',
+    });
+    const current = parseGameCommand({
+      type: 'forfeitMatch',
+      actionId: '11111111-1111-4111-8111-000000000002',
+    });
+    try {
+      socket.emitCommand(expired, () => {});
+      socket.emitSync(() => {});
+      await socket.connect();
+      await new Promise<void>((resolve) => socket.emitSync(() => resolve()));
+      socket.disconnect();
+      socket.emitCommand(expired, () => {});
+      socket.emitSync(() => {});
+      await socket.connect();
+      socket.emitCommand(current, () => {});
+      await new Promise<void>((resolve) => socket.emitSync(() => resolve()));
+      expect(commands).toEqual([current]);
+      expect(syncs).toBe(2);
+    } finally {
+      socket.dispose();
+      await server.stop(true);
+    }
   });
 
   test('delivers one complete room-state event and removes its listener on unsubscribe', async () => {

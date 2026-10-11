@@ -617,7 +617,12 @@ describe('game server lifecycle integration', () => {
     const session = createGameClient({
       serverUrl: server.url,
       releaseId: RELEASE_ID,
-      retryPolicy: { acknowledgementTimeoutMs: 1_000, maximumAttempts: 1, retryDelayMs: 0 },
+      retryPolicy: {
+        commandResponseTimeoutMs: 1000,
+        retryIntervalMs: 1000,
+        maximumAttempts: 1,
+        synchronizationTimeoutMs: 1_000,
+      },
     }).createSession(created.data.authority);
     const disconnected = Promise.withResolvers<void>();
     session.subscribe(() => {
@@ -746,7 +751,12 @@ describe('game server lifecycle integration', () => {
       const session = createGameClient({
         serverUrl: server.url,
         releaseId: RELEASE_ID,
-        retryPolicy: { acknowledgementTimeoutMs: 1_000, maximumAttempts: 1, retryDelayMs: 0 },
+        retryPolicy: {
+          commandResponseTimeoutMs: 1000,
+          retryIntervalMs: 1000,
+          maximumAttempts: 1,
+          synchronizationTimeoutMs: 1_000,
+        },
       }).createSession(created.data.authority);
       const disconnected = Promise.withResolvers<void>();
       const finished = Promise.withResolvers<void>();

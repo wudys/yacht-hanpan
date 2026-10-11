@@ -113,6 +113,7 @@ function createSession(): GameSession {
   const snapshot: GameSessionSnapshot = {
     connection: 'idle',
     syncStatus: 'idle',
+    syncFailureRequiresRefresh: false,
     syncRevision: 0,
     room: null,
     game: null,

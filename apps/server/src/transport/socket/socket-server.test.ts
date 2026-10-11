@@ -625,7 +625,12 @@ describe('authoritative Socket server', () => {
       serverUrl: server.url,
       releaseId: RELEASE_ID,
       createActionId: () => 'a635fe2c-c4c8-4382-80d7-c35c5d5d455d',
-      retryPolicy: { acknowledgementTimeoutMs: 40, maximumAttempts: 2, retryDelayMs: 0 },
+      retryPolicy: {
+        commandResponseTimeoutMs: 80,
+        retryIntervalMs: 40,
+        maximumAttempts: 2,
+        synchronizationTimeoutMs: 40,
+      },
       socketFactory: { create: () => raw },
     }).createSession(created.data.authority);
     try {

@@ -1,10 +1,10 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, jest, test } from 'bun:test';
 
 import type { LogFields, Logger } from '@/runtime/logger';
 import { ServerTelemetryMonitor } from '@/runtime/server-telemetry';
 
 describe('ServerTelemetryMonitor', () => {
-  test('reports only aggregate bounded runtime state and stops its unref timer', async () => {
+  test('reports only aggregate bounded runtime state and stops its unref timer', () => {
     const entries: Array<{ event: string; fields?: LogFields }> = [];
     const logger: Logger = {
       debug: () => undefined,
@@ -25,31 +25,37 @@ describe('ServerTelemetryMonitor', () => {
       workerStats: null,
     });
 
-    monitor.start();
-    await Bun.sleep(18);
-    const snapshot = monitor.snapshot();
-    expect(snapshot).toMatchObject({
-      rooms: { records: 2, codeIndex: 2, actionLedgerEntries: 3 },
-      actions: { pending: 1 },
-      presence: { rooms: 1, connections: 2 },
-      retention: {
-        httpRequests: 1,
-        roomRequests: 2,
-        queueRooms: 1,
-        transports: 3,
-        authenticating: 1,
-        createAddresses: 2,
-      },
-      workers: { enabled: false, ready: 0, running: 0, queued: 0, restarts: 0 },
-    });
-    expect(snapshot.runtime.eventLoopLagMs).toBeGreaterThanOrEqual(0);
-    expect(snapshot.runtime.rssBytes).toBeGreaterThan(0);
-    expect(JSON.stringify(snapshot)).not.toMatch(/roomId|seat|token|authority|secret/iu);
-    expect(entries.some((entry) => entry.event === 'game.server.telemetry')).toBeTrue();
+    jest.useFakeTimers();
+    try {
+      monitor.start();
+      jest.advanceTimersByTime(5);
+      const snapshot = monitor.snapshot();
+      expect(snapshot).toMatchObject({
+        rooms: { records: 2, codeIndex: 2, actionLedgerEntries: 3 },
+        actions: { pending: 1 },
+        presence: { rooms: 1, connections: 2 },
+        retention: {
+          httpRequests: 1,
+          roomRequests: 2,
+          queueRooms: 1,
+          transports: 3,
+          authenticating: 1,
+          createAddresses: 2,
+        },
+        workers: { enabled: false, ready: 0, running: 0, queued: 0, restarts: 0 },
+      });
+      expect(snapshot.runtime.eventLoopLagMs).toBeGreaterThanOrEqual(0);
+      expect(snapshot.runtime.rssBytes).toBeGreaterThan(0);
+      expect(JSON.stringify(snapshot)).not.toMatch(/roomId|seat|token|authority|secret/iu);
+      expect(entries.some((entry) => entry.event === 'game.server.telemetry')).toBeTrue();
 
-    monitor.close();
-    const loggedBeforeClose = entries.length;
-    await Bun.sleep(12);
-    expect(entries).toHaveLength(loggedBeforeClose);
+      monitor.close();
+      const loggedBeforeClose = entries.length;
+      jest.advanceTimersByTime(50);
+      expect(entries).toHaveLength(loggedBeforeClose);
+    } finally {
+      monitor.close();
+      jest.useRealTimers();
+    }
   });
 });

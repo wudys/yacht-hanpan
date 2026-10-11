@@ -34,6 +34,46 @@ for (const origin of [PRODUCT_GAME_ORIGIN, BUILT_WEB_ORIGIN]) {
         name: locale === 'ko' ? '개인정보처리방침' : 'Privacy Policy',
         exact: true,
       });
+      const start = page.getByRole('button', {
+        name: locale === 'ko' ? '게임 시작' : 'Start Game',
+        exact: true,
+      });
+      const serverNotice = page.locator('.entry-view__server-notice');
+      await expect(serverNotice).toBeVisible();
+      for (const viewport of [
+        { width: 320, height: 445 },
+        { width: 320, height: 568 },
+      ]) {
+        await page.setViewportSize(viewport);
+        const entryFrame = (await page.locator('.game-logical-canvas').boundingBox())!;
+        const privacyBounds = (await link.boundingBox())!;
+        const startBounds = (await start.boundingBox())!;
+        const noticeBounds = (await serverNotice.boundingBox())!;
+        expect(privacyBounds.x).toBeGreaterThan(entryFrame.x + entryFrame.width / 2);
+        expect(privacyBounds.y).toBeGreaterThanOrEqual(entryFrame.y);
+        expect(privacyBounds.y).toBeGreaterThan(noticeBounds.y + noticeBounds.height);
+        expect(privacyBounds.y + privacyBounds.height).toBeLessThanOrEqual(
+          entryFrame.y + entryFrame.height,
+        );
+        expect(privacyBounds.x + privacyBounds.width).toBeLessThanOrEqual(
+          entryFrame.x + entryFrame.width,
+        );
+        expect(noticeBounds.y).toBeGreaterThan(startBounds.y + startBounds.height);
+        expect(noticeBounds.y + noticeBounds.height).toBeLessThan(entryFrame.y + entryFrame.height);
+        expect(
+          await serverNotice.evaluate((element) => ({
+            fitsWidth: element.scrollWidth <= element.clientWidth,
+            lines: element.clientHeight / Number.parseFloat(getComputedStyle(element).lineHeight),
+          })),
+        ).toEqual({ fitsWidth: true, lines: 2 });
+      }
+      await page.evaluate(
+        () =>
+          new Promise<void>((resolve) => {
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+          }),
+      );
+      await page.screenshot({ path: test.info().outputPath(`entry-${locale}.png`) });
       await link.click();
       const notice = page.getByRole('dialog');
       await expect(notice).toBeVisible();

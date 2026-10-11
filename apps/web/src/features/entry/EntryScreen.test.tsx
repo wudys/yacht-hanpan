@@ -28,6 +28,7 @@ const actors: Array<ReturnType<typeof createActor<typeof appLifecycleMachine>>> 
 
 afterEach(() => {
   cleanup();
+  vi.unstubAllEnvs();
   for (const actor of actors.splice(0)) actor.stop();
   navigate.mockReset();
 });
@@ -81,6 +82,18 @@ function renderEntry({
   return { actor, activateAudio };
 }
 
+test.each([undefined, '', 'false', 'true'])(
+  'shows the demo server notice only with the enabled build flag (%s)',
+  (value) => {
+    vi.stubEnv('VITE_DEMO_NOTICE_ENABLED', value);
+    renderEntry();
+    expect(
+      screen.queryByText(translate(LOCALE.EN, 'app.demoServerNotice').replace('\n', ' ')) !== null,
+    ).toBe(value === 'true');
+    expect(screen.getByRole('button', { name: 'Start Game' })).not.toBeNull();
+  },
+);
+
 test('shows activation failure inline and retries audio activation from the start action', async () => {
   const activateAudio = vi
     .fn<() => Promise<void>>()
@@ -123,8 +136,7 @@ test('replaces Entry with a full-frame unsupported notice without CTA or technic
     within(notice).getByText(translate(locale, 'capability.unsupportedMessage')),
   ).not.toBeNull();
   expect(screen.queryByRole('button', { name: '게임 시작' })).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: '개인정보처리방침' }));
-  expect(screen.getByRole('dialog', { name: '개인정보처리방침' })).not.toBeNull();
+  expect(screen.queryByRole('button', { name: '개인정보처리방침' })).toBeNull();
   expect(screen.queryByText('WEBGL_UNAVAILABLE')).toBeNull();
 });
 
@@ -151,24 +163,17 @@ test('keeps the global offline action accessible above privacy and retains its i
   expect(screen.getByRole('button', { name: 'Privacy Policy' })).toBe(trigger);
 });
 
-test.each([true, false])(
-  'privacy blocks only Entry content and unlocks it after closing with supported=%s',
-  (supported) => {
-    const { actor } = renderEntry({
-      capabilities: supported
-        ? { ok: true }
-        : { ok: false, code: CAPABILITY_FAILURE_CODE.WEBGL_UNAVAILABLE },
-    });
-    const trigger = screen.getByRole('button', { name: 'Privacy Policy' });
-    fireEvent.click(trigger);
-    const privacy = screen.getByRole('dialog', { name: 'Privacy Policy' });
-    expect(trigger.closest('[inert]')).not.toBeNull();
-    expect(privacy.closest('[inert]')).toBeNull();
-    const globalHost = screen.getByTestId('global-layer-host');
-    expect(globalHost.closest('[inert]')).toBeNull();
-    act(() => actor.send({ type: 'NETWORK.CHANGED', status: 'offline' }));
-    act(() => actor.send({ type: 'NETWORK.CHANGED', status: 'online' }));
-    fireEvent.click(within(privacy).getByRole('button', { name: 'OK' }));
-    expect(trigger.closest('[inert]')).toBeNull();
-  },
-);
+test('privacy blocks only Entry content and unlocks it after closing', () => {
+  const { actor } = renderEntry();
+  const trigger = screen.getByRole('button', { name: 'Privacy Policy' });
+  fireEvent.click(trigger);
+  const privacy = screen.getByRole('dialog', { name: 'Privacy Policy' });
+  expect(trigger.closest('[inert]')).not.toBeNull();
+  expect(privacy.closest('[inert]')).toBeNull();
+  const globalHost = screen.getByTestId('global-layer-host');
+  expect(globalHost.closest('[inert]')).toBeNull();
+  act(() => actor.send({ type: 'NETWORK.CHANGED', status: 'offline' }));
+  act(() => actor.send({ type: 'NETWORK.CHANGED', status: 'online' }));
+  fireEvent.click(within(privacy).getByRole('button', { name: 'OK' }));
+  expect(trigger.closest('[inert]')).toBeNull();
+});

@@ -30,6 +30,7 @@ We use Google and Sentry services, both based in the United States. Network info
   'profile.style2': 'Style 2',
   'app.startTitle': 'Yacht Hanpan',
   'app.startAction': 'Start Game',
+  'app.demoServerNotice': 'This demo runs on a free server.\nResponses may be slightly delayed.',
   'app.activationFailure': 'Couldn’t start the game.',
   'lobby.title': 'Lobby',
   'lobby.profile': 'Profile Settings',

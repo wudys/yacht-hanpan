@@ -20,27 +20,9 @@
   border: 0;
 }
 
-.entry-view .brand-lockup {
-  position: absolute;
-  top: 122px;
-  left: 60px;
-  width: 240px;
-  gap: 10px;
-}
-
-.entry-view .brand-lockup__ci {
-  width: 140px;
-  max-height: 82px;
-}
-
-.entry-view .brand-lockup__logo {
-  width: 210px;
-  max-height: 76px;
-}
-
 .entry-view__action {
   position: absolute;
-  top: 346px;
+  top: 322px;
   left: 54px;
   display: grid;
   gap: 10px;
@@ -48,6 +30,9 @@
 }
 
 .entry-view__activation-failure {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  width: 100%;
   margin: 0;
   color: #ffd197;
   font-size: 12px;
@@ -73,10 +58,18 @@
   background: #e9a72e;
 }
 
-.entry-view__footer {
-  position: absolute;
-  right: 24px;
-  bottom: 16px;
-  left: 24px;
+.entry-view__server-notice {
+  margin: 0;
+  color: var(--product-muted);
+  font-size: 12px;
+  line-height: 1.5;
   text-align: center;
+  white-space: pre-line;
+  word-break: keep-all;
+}
+
+.entry-view__privacy {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
 }

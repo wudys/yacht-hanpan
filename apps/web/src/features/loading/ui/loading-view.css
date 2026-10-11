@@ -9,29 +9,11 @@
   background: radial-gradient(ellipse at 50% 27%, #173d33 0%, #031a16 100%), #031a18;
 }
 
-.loading-view .brand-lockup {
-  position: absolute;
-  top: 128px;
-  width: 190px;
-  margin: 0;
-  gap: 8px;
-}
-
-.loading-view .brand-lockup__ci {
-  width: 112px;
-  max-height: 62px;
-}
-
-.loading-view .brand-lockup__logo {
-  width: 156px;
-  max-height: 56px;
-}
-
 .loading-view > .dice-loader {
   --dice-loader-size: 32px;
   --dice-loader-gap: 14px;
   position: absolute;
-  top: 260px;
+  top: 288px;
 }
 
 .loading-view__label {

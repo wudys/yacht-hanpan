@@ -28,6 +28,7 @@ Google(미국)과 Sentry(미국) 서비스와 연계됩니다. 전송 시 IP 등
   'profile.style2': '스타일 2',
   'app.startTitle': '요트 한판',
   'app.startAction': '게임 시작',
+  'app.demoServerNotice': '무료 서버로 운영되는 데모입니다.\n응답이 다소 지연될 수 있습니다.',
   'app.activationFailure': '게임을 시작하지 못했어요.',
   'lobby.title': '로비',
   'lobby.profile': '프로필 설정',

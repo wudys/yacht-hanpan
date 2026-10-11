@@ -117,7 +117,7 @@ test('missing fetch still reaches the unsupported notice instead of failing duri
   const unsupported = page.locator('[data-capability-failure="FETCH_UNAVAILABLE"]');
   await expect(unsupported).toBeVisible();
   await expect(page.getByRole('button', { name: /Start Game|게임 시작/u })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: /Privacy|개인정보처리방침/u })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Privacy|개인정보처리방침/u })).toHaveCount(0);
   expect(errors).toEqual([]);
   const frame = await page.locator('.game-logical-canvas').boundingBox();
   const notice = await unsupported.boundingBox();
@@ -153,7 +153,7 @@ test('missing WebGL2 replaces Entry before activation or heavy resource loading'
   await page.goto(PRODUCT_GAME_ORIGIN);
   await expect(page.locator('[data-capability-failure="WEBGL_UNAVAILABLE"]')).toBeVisible();
   await expect(page.getByRole('button', { name: /Start Game|게임 시작/u })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: /Privacy|개인정보처리방침/u })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Privacy|개인정보처리방침/u })).toHaveCount(0);
   await expect(page.locator('.web-dice-canvas-host canvas')).toHaveCount(0);
   expect(heavyRequests).toEqual([]);
   const frame = await page.locator('.game-logical-canvas').boundingBox();
@@ -221,6 +221,46 @@ for (const locale of ['ko', 'en'] as const) {
         }),
     );
     await page.screenshot({ path: `/tmp/hanpan-entry-${locale}-320-${testInfo.project.name}.png` });
+
+    const entryBrandBounds = await images.evaluateAll((nodes) =>
+      nodes.map((node) => {
+        const { x, y, width, height } = node.getBoundingClientRect();
+        return { x, y, width, height };
+      }),
+    );
+    let releaseWasm!: () => void;
+    const wasmGate = new Promise<void>((resolve) => {
+      releaseWasm = resolve;
+    });
+    await page.route('**/runtime/*.wasm', async (route) => {
+      await wasmGate;
+      await route.continue();
+    });
+    try {
+      await start.click();
+      const loading = page.locator('.loading-view');
+      await expect(loading).toBeVisible();
+      await expect(loading.locator('progress')).toBeVisible();
+      await page.screenshot({
+        path: testInfo.outputPath(`loading-${locale}.png`),
+        animations: 'disabled',
+      });
+      const loadingBrandBounds = await loading.locator('.brand-lockup img').evaluateAll((nodes) =>
+        nodes.map((node) => {
+          const { x, y, width, height } = node.getBoundingClientRect();
+          return { x, y, width, height };
+        }),
+      );
+      expect(loadingBrandBounds).toEqual(entryBrandBounds);
+      const brand = (await loading.locator('.brand-lockup').boundingBox())!;
+      const loader = (await loading.locator('.dice-loader').boundingBox())!;
+      const label = (await loading.locator('.loading-view__label').boundingBox())!;
+      expect(loader.y).toBeGreaterThan(brand.y + brand.height);
+      expect(label.y).toBeGreaterThan(loader.y + loader.height);
+    } finally {
+      releaseWasm();
+    }
+    await expect(page.locator('[data-product-view="lobby"]')).toBeVisible();
   });
 
   test(`Entry retains activation failure and succeeds on a second trusted click in ${locale}`, async ({
@@ -266,6 +306,13 @@ for (const locale of ['ko', 'en'] as const) {
     expect(action!.x).toBeGreaterThanOrEqual(frame!.x);
     expect(action!.x + action!.width).toBeLessThanOrEqual(frame!.x + frame!.width + 0.1);
     expect(action!.y + action!.height).toBeLessThanOrEqual(frame!.y + frame!.height + 0.1);
+    const failure = (await entry.getByRole('alert').boundingBox())!;
+    const serverNotice = (await entry.locator('.entry-view__server-notice').boundingBox())!;
+    const privacy = (await entry
+      .getByRole('button', { name: /Privacy|개인정보처리방침/u })
+      .boundingBox())!;
+    expect(failure.y + failure.height).toBeLessThan(action!.y);
+    expect(serverNotice.y + serverNotice.height).toBeLessThan(privacy.y);
     await page.screenshot({
       path: `/tmp/hanpan-entry-activation-failure-${locale}-320-${testInfo.project.name}.png`,
     });

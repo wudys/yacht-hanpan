@@ -13,3 +13,21 @@
   height: 32px;
   object-fit: contain;
 }
+
+:is(.entry-view, .loading-view) .brand-lockup {
+  position: absolute;
+  top: 98px;
+  left: 60px;
+  width: 240px;
+  gap: 10px;
+}
+
+:is(.entry-view, .loading-view) .brand-lockup .brand-lockup__ci {
+  width: 140px;
+  max-height: 82px;
+}
+
+:is(.entry-view, .loading-view) .brand-lockup .brand-lockup__logo {
+  width: 210px;
+  max-height: 76px;
+}

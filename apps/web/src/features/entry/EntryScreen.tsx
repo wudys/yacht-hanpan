@@ -57,16 +57,20 @@ export function EntryScreen({
         {(privacyLink) =>
           unsupported && !capabilities.ok ? (
             <CapabilityFailureView
-              footer={privacyLink}
               code={capabilities.code}
               title={translate(locale, 'capability.unsupportedTitle')}
               message={translate(locale, 'capability.unsupportedMessage')}
             />
           ) : (
             <EntryView
-              footer={privacyLink}
+              privacyAction={privacyLink}
               title={translate(locale, 'app.startTitle')}
               startLabel={translate(locale, 'app.startAction')}
+              demoServerNotice={
+                import.meta.env.VITE_DEMO_NOTICE_ENABLED === 'true'
+                  ? translate(locale, 'app.demoServerNotice')
+                  : undefined
+              }
               activationFailure={
                 activationFailure ? translate(locale, 'app.activationFailure') : undefined
               }

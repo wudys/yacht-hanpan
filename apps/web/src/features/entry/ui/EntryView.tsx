@@ -5,19 +5,21 @@ import { BrandLockup } from '@/ui/brand';
 export type EntryViewProps = Readonly<{
   title: string;
   startLabel: string;
+  demoServerNotice?: string;
   activationFailure?: string;
   pending: boolean;
   onStart: () => void;
-  footer?: ReactNode;
+  privacyAction?: ReactNode;
 }>;
 
 export function EntryView({
   title,
   startLabel,
+  demoServerNotice,
   activationFailure,
   pending,
   onStart,
-  footer,
+  privacyAction,
 }: EntryViewProps) {
   return (
     <main className='entry-view' data-product-view='entry'>
@@ -41,8 +43,9 @@ export function EntryView({
         >
           {startLabel}
         </button>
+        {demoServerNotice && <p className='entry-view__server-notice'>{demoServerNotice}</p>}
       </div>
-      {footer && <footer className='entry-view__footer'>{footer}</footer>}
+      {privacyAction && <div className='entry-view__privacy'>{privacyAction}</div>}
     </main>
   );
 }

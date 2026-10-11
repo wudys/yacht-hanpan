@@ -1,11 +1,8 @@
-import type { ReactNode } from 'react';
-
 export function CapabilityFailureView({
   code,
   title,
   message,
-  footer,
-}: Readonly<{ code: string; title: string; message: string; footer?: ReactNode }>) {
+}: Readonly<{ code: string; title: string; message: string }>) {
   return (
     <section
       className='game-status-view capability-failure-view'
@@ -15,7 +12,6 @@ export function CapabilityFailureView({
     >
       <h1>{title}</h1>
       <p>{message}</p>
-      {footer && <footer className='entry-view__footer'>{footer}</footer>}
     </section>
   );
 }

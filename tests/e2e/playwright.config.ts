@@ -30,13 +30,13 @@ export default defineConfig({
       timeout: 120_000,
     },
     {
-      command: `VITE_GAME_SERVER_URL=${PRODUCT_SERVER_ORIGIN} bun --bun --filter @repo/web dev --host=127.0.0.1 --port=${PRODUCT_GAME_PORT}`,
+      command: `VITE_DEMO_NOTICE_ENABLED=true VITE_GAME_SERVER_URL=${PRODUCT_SERVER_ORIGIN} bun --bun --filter @repo/web dev --host=127.0.0.1 --port=${PRODUCT_GAME_PORT}`,
       url: PRODUCT_GAME_ORIGIN,
       reuseExistingServer: false,
       timeout: 120_000,
     },
     {
-      command: `VITE_GAME_SERVER_URL=https://game.example.test bun --filter @repo/web build && STATIC_ROOT=../../apps/web/dist PORT=${BUILT_WEB_PORT} bun ./scripts/serve-static-spa.ts`,
+      command: `VITE_DEMO_NOTICE_ENABLED=true VITE_GAME_SERVER_URL=https://game.example.test bun --filter @repo/web build && STATIC_ROOT=../../apps/web/dist PORT=${BUILT_WEB_PORT} bun ./scripts/serve-static-spa.ts`,
       url: BUILT_WEB_ORIGIN,
       reuseExistingServer: false,
       timeout: 120_000,

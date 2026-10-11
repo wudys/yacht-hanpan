@@ -226,13 +226,20 @@ test('mixes more than a lone top die during five-die cup shaking', async () => {
   expect(tumbledDice).toBeGreaterThanOrEqual(30);
 });
 
-test('remembers a mouth crossing during shaking when the die later rests behind the cup', () => {
+test('remembers an open-mouth crossing while another die still occupies the cup', () => {
   const seed = 'early-mouth-crossing';
   const motion = createCupMotion(seed, 'oblique');
   const stepWorld = RAPIER.World.prototype.step;
+  const removeLid = cupPhysics.removeCupShakeLid;
+  let opened = false;
+  let openSubsteps = 0;
   let elapsedSeconds = 0;
   let placedOnTray = false;
   let removedAtMs: number | undefined;
+  const lidObserver = spyOn(cupPhysics, 'removeCupShakeLid').mockImplementation((...args) => {
+    removeLid(...args);
+    opened = true;
+  });
   const observer = spyOn(RAPIER.World.prototype, 'step').mockImplementation(function (
     this: RAPIER.World,
     ...args: Parameters<typeof stepWorld>
@@ -243,30 +250,35 @@ test('remembers a mouth crossing during shaking when the die later rests behind 
     const bodies: RAPIER.RigidBody[] = [];
     this.forEachRigidBody((body) => bodies.push(body));
     const cup = bodies.find((body) => body.isKinematic());
-    const die = bodies.find((body) => body.isDynamic())!;
-    if (cup) {
-      // Exercise an early complete exit followed by a position behind the tilted
-      // cup. Clearance history must survive the later change in mouth direction.
+    const dice = bodies.filter((body) => body.isDynamic());
+    if (cup && opened) {
+      openSubsteps += 1;
       const axis = rotateVectorByQuat([0, 1, 0], cup.rotation());
-      const distance = t < motion.pourAtMs ? 3 : -3;
       const center = cup.translation();
-      die.setTranslation(
-        {
-          x: center.x + axis[0] * distance,
-          y: center.y + axis[1] * distance,
-          z: center.z + axis[2] * distance,
-        },
-        true,
-      );
-      die.setLinvel({ x: 0, y: 0, z: 0 }, true);
-      die.setAngvel({ x: 0, y: 0, z: 0 }, true);
+      dice.forEach((die, index) => {
+        // The first die crosses the open mouth, then bounces behind the cup
+        // while the second die remains inside for another three outer ticks.
+        const distance = index === 0 ? (openSubsteps <= 2 ? 3 : -3) : openSubsteps < 8 ? 0 : 3;
+        die.setTranslation(
+          {
+            x: center.x + axis[0] * distance,
+            y: center.y + axis[1] * distance,
+            z: center.z + axis[2] * distance,
+          },
+          true,
+        );
+        die.setLinvel({ x: 0, y: 0, z: 0 }, true);
+        die.setAngvel({ x: 0, y: 0, z: 0 }, true);
+      });
       this.propagateModifiedBodyPositionsToColliders();
-    } else if (!placedOnTray) {
+    } else if (!cup && !placedOnTray) {
       removedAtMs = t;
-      die.setTranslation({ x: 0, y: 1, z: 0 }, true);
-      die.setRotation({ x: 0, y: 0, z: 0, w: 1 }, true);
-      die.setLinvel({ x: 0, y: 0, z: 0 }, true);
-      die.setAngvel({ x: 0, y: 0, z: 0 }, true);
+      dice.forEach((die, index) => {
+        die.setTranslation({ x: index * 2 - 1, y: 1, z: 0 }, true);
+        die.setRotation({ x: 0, y: 0, z: 0, w: 1 }, true);
+        die.setLinvel({ x: 0, y: 0, z: 0 }, true);
+        die.setAngvel({ x: 0, y: 0, z: 0 }, true);
+      });
       placedOnTray = true;
     }
   });
@@ -274,14 +286,15 @@ test('remembers a mouth crossing during shaking when the die later rests behind 
     const timeline = simulateRollTimeline({
       rollId: seed,
       seed,
-      rolledSlots: [0],
+      rolledSlots: [0, 1],
       pourStyle: 'oblique',
     });
-    expect(timeline.cup.releaseAtMs).toBeGreaterThanOrEqual(motion.pourAtMs);
+    expect(timeline.cup.releaseAtMs - motion.pourAtMs).toBeGreaterThanOrEqual(50);
     expect(timeline.cup.releaseAtMs - motion.pourAtMs).toBeLessThan(100);
     expect(removedAtMs).toBeGreaterThanOrEqual(timeline.cup.exitAtMs);
   } finally {
     observer.mockRestore();
+    lidObserver.mockRestore();
   }
 });
 

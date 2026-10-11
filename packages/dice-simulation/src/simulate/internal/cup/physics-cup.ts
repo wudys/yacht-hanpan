@@ -8,7 +8,7 @@ import {
 } from '../../../contract/cup-geometry';
 import type { PhysicsDie } from '../physics-environment';
 import { DIE_COLLIDER_RADIUS, DIE_SIZE, FIXED_STEP_SECONDS } from '../roll-simulation-constants';
-import { quatFromEuler, rotateVectorByQuat } from '../simulation-math';
+import { quatFromEuler, rotateVectorByQuat, type VectorTuple } from '../simulation-math';
 import type { CupMotionState, CupTransform } from './cup-motion';
 
 export interface PhysicsCup {
@@ -186,9 +186,12 @@ export function applyDieExitImpulse(
 
 /** Full rounded shape outside the mouth, with no remaining cup contact. */
 export function haveDiceClearedCupMouth(cup: PhysicsCup, dice: PhysicsDie[]): boolean {
+  const center = cup.body.translation();
+  const normal = rotateVectorByQuat([0, 1, 0], cup.body.rotation());
   return dice.every(
     (die) =>
-      dieBoundsAlongCupAxis(cup, die, [0, 1, 0]).min > cup.geometry.innerHeight / 2 + 0.005 &&
+      dieBoundsAlongAxis(observeDieBounds(die, center), normal).min >
+        cup.geometry.innerHeight / 2 + 0.005 &&
       !cup.colliders.some((collider) => die.collider.contactCollider(collider, 0.005)),
   );
 }
@@ -197,10 +200,16 @@ export function haveDiceClearedCupMouth(cup: PhysicsCup, dice: PhysicsDie[]): bo
 export function areDiceOutsideCup(cup: PhysicsCup, dice: PhysicsDie[]): boolean {
   const radius =
     Math.max(cup.geometry.innerRadius, cup.geometry.bottomRadius) + cup.geometry.wallThickness;
+  const center = cup.body.translation();
+  const rotation = cup.body.rotation();
+  const xNormal = rotateVectorByQuat([1, 0, 0], rotation);
+  const yNormal = rotateVectorByQuat([0, 1, 0], rotation);
+  const zNormal = rotateVectorByQuat([0, 0, 1], rotation);
   return dice.every((die) => {
-    const x = dieBoundsAlongCupAxis(cup, die, [1, 0, 0]);
-    const y = dieBoundsAlongCupAxis(cup, die, [0, 1, 0]);
-    const z = dieBoundsAlongCupAxis(cup, die, [0, 0, 1]);
+    const bounds = observeDieBounds(die, center);
+    const x = dieBoundsAlongAxis(bounds, xNormal);
+    const y = dieBoundsAlongAxis(bounds, yNormal);
+    const z = dieBoundsAlongAxis(bounds, zNormal);
     const outside =
       x.min > radius + 0.005 ||
       x.max < -radius - 0.005 ||
@@ -216,18 +225,27 @@ export function areDiceOutsideCup(cup: PhysicsCup, dice: PhysicsDie[]): boolean 
   });
 }
 
-function dieBoundsAlongCupAxis(cup: PhysicsCup, die: PhysicsDie, axis: [number, number, number]) {
-  const center = cup.body.translation();
-  const normal = rotateVectorByQuat(axis, cup.body.rotation());
-  const dot = (v: number[]) => v[0] * normal[0] + v[1] * normal[1] + v[2] * normal[2];
+function observeDieBounds(die: PhysicsDie, center: { x: number; y: number; z: number }) {
   const p = die.body.translation();
   const q = die.body.rotation();
+  return {
+    center: [p.x - center.x, p.y - center.y, p.z - center.z] as VectorTuple,
+    axes: [
+      rotateVectorByQuat([1, 0, 0], q),
+      rotateVectorByQuat([0, 1, 0], q),
+      rotateVectorByQuat([0, 0, 1], q),
+    ],
+  };
+}
+
+function dieBoundsAlongAxis(bounds: ReturnType<typeof observeDieBounds>, normal: VectorTuple) {
+  const dot = (v: number[]) => v[0] * normal[0] + v[1] * normal[1] + v[2] * normal[2];
   const support =
     DIE_COLLIDER_RADIUS +
     (DIE_SIZE / 2 - DIE_COLLIDER_RADIUS) *
-      (Math.abs(dot(rotateVectorByQuat([1, 0, 0], q))) +
-        Math.abs(dot(rotateVectorByQuat([0, 1, 0], q))) +
-        Math.abs(dot(rotateVectorByQuat([0, 0, 1], q))));
-  const projectedCenter = dot([p.x - center.x, p.y - center.y, p.z - center.z]);
+      (Math.abs(dot(bounds.axes[0])) +
+        Math.abs(dot(bounds.axes[1])) +
+        Math.abs(dot(bounds.axes[2])));
+  const projectedCenter = dot(bounds.center);
   return { min: projectedCenter - support, max: projectedCenter + support };
 }

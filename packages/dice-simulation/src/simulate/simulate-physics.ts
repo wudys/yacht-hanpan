@@ -198,7 +198,8 @@ export function simulateRollPhysics(
       if (cupRemoved) world.step();
       else stepWorldWithCup(world, physicsCup);
       if (!cupEmptied) applyCupPourAssist(physicsCup, dice, cupMotion, t, clearedDieIds);
-      if (!cupEmptied) {
+      // The shake lid contains every die until pouring opens the mouth.
+      if (!cupEmptied && shakeLidRemoved) {
         for (const die of dice) {
           if (!clearedDieIds.has(die.id) && haveDiceClearedCupMouth(physicsCup, [die])) {
             clearedDieIds.add(die.id);

@@ -34,7 +34,7 @@ import {
   reduceRestoredView,
   type SessionState,
 } from './room-view-reducer';
-import { requestSync } from './sync-request';
+import { requestSync, type SyncRequestResult } from './sync-request';
 
 export type { GamePresentation, ScoreRecord } from './room-view-reducer';
 
@@ -166,29 +166,7 @@ export function createGameSession(options: CreateGameSessionOptions): GameSessio
       if (lifecycle.signal.aborted || activeSynchronization?.promise !== pending) {
         return { ok: false, error: createProtocolError(CLIENT_ERROR_CODE.SESSION_DISPOSED) };
       }
-      let result: SessionOperationResult;
-      if (!response.ok) {
-        result = response;
-      } else {
-        const reduction = validAuthorityView(response.data)
-          ? reduceRestoredView(state, response.data)
-          : { kind: 'invalid' as const };
-        if (reduction.kind === 'invalid') {
-          result = {
-            ok: false,
-            error: createProtocolError(CLIENT_ERROR_CODE.INVALID_RESPONSE, {
-              requestId: response.meta.requestId,
-            }),
-          };
-        } else {
-          if (clockSample) options.clock?.acceptSample(clockSample, response.meta.serverTime);
-          state = reduction.state;
-          lastError = null;
-          syncRevision += 1;
-          syncFailureRequiresRefresh = false;
-          result = { ok: true };
-        }
-      }
+      const result = applySyncResponse(response, clockSample);
       if (!result.ok) lastError = result.error;
       activeSynchronization = null;
       syncStatus = 'idle';
@@ -199,6 +177,30 @@ export function createGameSession(options: CreateGameSessionOptions): GameSessio
     publish();
     return pending;
   };
+
+  function applySyncResponse(
+    response: SyncRequestResult,
+    clockSample: ReturnType<ServerClock['beginSample']> | undefined,
+  ): SessionOperationResult {
+    if (!response.ok) return response;
+    const reduction = validAuthorityView(response.data)
+      ? reduceRestoredView(state, response.data)
+      : { kind: 'invalid' as const };
+    if (reduction.kind === 'invalid') {
+      return {
+        ok: false,
+        error: createProtocolError(CLIENT_ERROR_CODE.INVALID_RESPONSE, {
+          requestId: response.meta.requestId,
+        }),
+      };
+    }
+    if (clockSample) options.clock?.acceptSample(clockSample, response.meta.serverTime);
+    state = reduction.state;
+    lastError = null;
+    syncRevision += 1;
+    syncFailureRequiresRefresh = false;
+    return { ok: true };
+  }
 
   const cancelSynchronization = (): void => {
     const active = activeSynchronization;
@@ -260,6 +262,45 @@ export function createGameSession(options: CreateGameSessionOptions): GameSessio
     publish();
   }
 
+  function handleConnectionError(value: unknown): void {
+    if (lifecycle.signal.aborted) return;
+    const error = normalizeConnectionError(value);
+    if (error.kind === 'server' && error.error.code === PUBLIC_ERROR_CODE.SESSION_REPLACED) {
+      handleSessionReplaced();
+      return;
+    }
+    connectionSync = null;
+    cancelConnectionAttempt(error);
+    connectionRevision += 1;
+    cancelSynchronization();
+    connection = 'disconnected';
+    lastError = error;
+    publish();
+  }
+
+  function handleRoomUpdate(value: unknown): void {
+    if (lifecycle.signal.aborted) return;
+    let update;
+    try {
+      update = parseCommittedRoomUpdate(value);
+    } catch {
+      lastError = createProtocolError(CLIENT_ERROR_CODE.INVALID_RESPONSE);
+      publish();
+      synchronizeIfConnected();
+      return;
+    }
+    const reduction = validAuthorityView(update.view)
+      ? reduceCommittedUpdate(state, update)
+      : { kind: 'invalid' as const };
+    if (reduction.kind === 'invalid') {
+      lastError = createProtocolError(CLIENT_ERROR_CODE.INVALID_RESPONSE);
+      publish();
+      synchronizeIfConnected();
+    } else if (reduction.state !== state) {
+      replaceState(reduction.state);
+    }
+  }
+
   const unsubscriptions = [
     socket.onReplaced(handleSessionReplaced),
     socket.onConnected(() => {
@@ -276,43 +317,8 @@ export function createGameSession(options: CreateGameSessionOptions): GameSessio
       if (lifecycle.signal.aborted || disconnecting) return;
       if (acceptDisconnected()) publish();
     }),
-    socket.onConnectionError((value) => {
-      if (lifecycle.signal.aborted) return;
-      const error = normalizeConnectionError(value);
-      if (error.kind === 'server' && error.error.code === PUBLIC_ERROR_CODE.SESSION_REPLACED) {
-        handleSessionReplaced();
-        return;
-      }
-      connectionSync = null;
-      cancelConnectionAttempt(error);
-      connectionRevision += 1;
-      cancelSynchronization();
-      connection = 'disconnected';
-      lastError = error;
-      publish();
-    }),
-    socket.onRoomUpdate((value) => {
-      if (lifecycle.signal.aborted) return;
-      let update;
-      try {
-        update = parseCommittedRoomUpdate(value);
-      } catch {
-        lastError = createProtocolError(CLIENT_ERROR_CODE.INVALID_RESPONSE);
-        publish();
-        synchronizeIfConnected();
-        return;
-      }
-      const reduction = validAuthorityView(update.view)
-        ? reduceCommittedUpdate(state, update)
-        : { kind: 'invalid' as const };
-      if (reduction.kind === 'invalid') {
-        lastError = createProtocolError(CLIENT_ERROR_CODE.INVALID_RESPONSE);
-        publish();
-        synchronizeIfConnected();
-      } else if (reduction.state !== state) {
-        replaceState(reduction.state);
-      }
-    }),
+    socket.onConnectionError(handleConnectionError),
+    socket.onRoomUpdate(handleRoomUpdate),
   ];
 
   const commandRunner = createCommandRunner({

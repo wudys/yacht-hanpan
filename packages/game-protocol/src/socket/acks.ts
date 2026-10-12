@@ -34,11 +34,10 @@ const commandSuccessDataSchema = v.pipe(
   v.strictObject({ receipt: commandReceiptSchema, view: roomViewSchema }),
   v.check(({ receipt, view }) => {
     if (view.game === null || receipt.stateVersion > view.game.stateVersion) return false;
-    return (
-      receipt.stateVersion < view.game.stateVersion ||
-      !('roll' in receipt) ||
-      rollMatchesGameSnapshot(view.game, receipt.roll)
-    );
+    // A historical receipt belongs to its original state, not the newer view sent with it.
+    if (receipt.stateVersion < view.game.stateVersion) return true;
+    if (!('roll' in receipt)) return true;
+    return rollMatchesGameSnapshot(view.game, receipt.roll);
   }),
 );
 

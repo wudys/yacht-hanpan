@@ -1111,7 +1111,12 @@ test.each([0, 1] as const)(
     );
     expect(tab('lower').getAttribute('aria-selected')).toBe('true');
     expect(yachtRing()).not.toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: /Yacht/u }));
+    const yacht = screen.getByRole('button', { name: 'Yacht · 50' });
+    expect(yacht.getAttribute('data-value-state')).toBe('preview');
+    expect(yacht.getAttribute('aria-disabled')).toBe('true');
+    expect(tab('upper').textContent).toBe('UpperMax 30');
+    expect(tab('lower').textContent).toBe('LowerMax 50');
+    fireEvent.click(yacht);
     expect(harness.socket.emitCommand).not.toHaveBeenCalled();
     fireEvent.click(tab('upper'));
     const beforeRecord = parseRoomView({

@@ -36,7 +36,7 @@ describe('Game input scopes', () => {
     { phase: 'resolving', recordFeedbackActive: false },
     { phase: 'rolling', recordFeedbackActive: false },
     { phase: 'revealing', recordFeedbackActive: false },
-    { phase: 'achievement', recordFeedbackActive: false },
+    { phase: 'achievement', recordFeedbackActive: true },
     { phase: 'settled', recordFeedbackActive: true },
   ] as const)(
     'withholds cell and group previews together during $phase with record=$recordFeedbackActive',
@@ -52,22 +52,24 @@ describe('Game input scopes', () => {
     },
   );
 
-  test.each([{ hasPendingCommand: true }, { recoveryBlocked: true }, { layer: 'bonus' }] as const)(
-    'retains settled preview data while a command or layer is locked: %j',
-    (lock) => {
-      const model = deriveGameViewModel(playingGame, 0);
-      const scopes = inputScopes({ ...ready, ...lock });
-      const interaction = deriveGameInteraction(model, scopes);
+  test.each([
+    { phase: 'achievement' },
+    { hasPendingCommand: true },
+    { recoveryBlocked: true },
+    { layer: 'bonus' },
+  ] as const)('retains revealed preview data while gameplay is locked: %j', (lock) => {
+    const model = deriveGameViewModel(playingGame, 0);
+    const scopes = inputScopes({ ...ready, ...lock });
+    const interaction = deriveGameInteraction(model, scopes);
 
-      expect(
-        interaction.boardModel.scoreRows.find((row) => row.categoryId === 'twos')?.previewScore,
-      ).toBe(2);
-      expect(interaction.boardModel.scoreGroupPreviews).toEqual({ upper: 6, lower: 30 });
-      expect(interaction.canScore).toBe(false);
-      expect(interaction.canRoll).toBe(false);
-      expect(interaction.canHold).toBe(false);
-    },
-  );
+    expect(
+      interaction.boardModel.scoreRows.find((row) => row.categoryId === 'twos')?.previewScore,
+    ).toBe(2);
+    expect(interaction.boardModel.scoreGroupPreviews).toEqual({ upper: 6, lower: 30 });
+    expect(interaction.canScore).toBe(false);
+    expect(interaction.canRoll).toBe(false);
+    expect(interaction.canHold).toBe(false);
+  });
 
   test.each([
     { turnReady: false, recordFeedbackActive: false },
@@ -122,7 +124,7 @@ describe('Game input scopes', () => {
       boardInteractionLocked: true,
       boardInert: false,
       recoveryBlocked: false,
-      previewVisible: false,
+      previewVisible: true,
       canToggleBonus: true,
     });
   });

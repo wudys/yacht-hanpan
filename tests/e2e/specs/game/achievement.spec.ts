@@ -89,9 +89,9 @@ for (const locale of ['ko', 'en'] as const) {
         expect(
           observed.samples.filter(
             (sample) =>
-              sample.previews !== 0 ||
-              sample.upperMaxima !== 0 ||
-              sample.lowerMaxima !== 0 ||
+              sample.previews !== 6 ||
+              sample.upperMaxima !== 1 ||
+              sample.lowerMaxima !== 1 ||
               !sample.scoresLocked ||
               !sample.holdsLocked ||
               !sample.rollLocked ||

@@ -63,7 +63,7 @@ export function deriveGameInputReadiness({
     recoveryBlocked,
     requestReady: connected && !hasPendingCommand && !recoveryBlocked,
     presentationReady: phase === 'hidden' || phase === 'settled',
-    previewRevealed: phase === 'settled',
+    previewRevealed: phase === 'achievement' || phase === 'settled',
   };
 }
 

@@ -819,7 +819,7 @@ test('updates bonus achievement with the authoritative score and the current tur
   );
 });
 
-test('locks gameplay and withholds score previews until physical presentation settles', () => {
+test('reveals score previews at achievement start while locking gameplay until settled', () => {
   const harness = createHarness();
   render(<GameScreen surfaceExposed={true} {...harness} locale={LOCALE.EN} />);
 
@@ -893,7 +893,13 @@ test('locks gameplay and withholds score previews until physical presentation se
   const achievement = screen.getByRole('status');
   expect(within(achievement).getByText('Full House')).not.toBeNull();
   expect(achievement.getAttribute('data-achievement-kind')).toBe('other');
-  expect(getPreviewScoreButtons()).toHaveLength(0);
+  expect(getPreviewScoreButtons().length).toBeGreaterThan(0);
+  expect(getLowerScoreTab().textContent).toMatch(/^LowerMax \d+$/u);
+  for (const button of getPreviewScoreButtons()) {
+    expect(button.getAttribute('aria-disabled')).toBe('true');
+    fireEvent.click(button);
+  }
+  expect(harness.session.selectScoreCategory).not.toHaveBeenCalled();
   expect(screen.queryByRole('button', { name: 'Roll again' })).toBeNull();
 
   fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
@@ -1749,7 +1755,7 @@ test.each([
       setCovered(false);
       expect(screen.queryByRole('status')).toBeNull();
       if (returnAt < 1_980) {
-        expect(getPreviewScoreButtons()).toHaveLength(0);
+        expect(getPreviewScoreButtons().length).toBeGreaterThan(0);
         expect(screen.queryByRole('button', { name: 'Roll again' })).toBeNull();
         // Locale changes and repeated layer visits must not resurrect this roll.
         view.rerender(

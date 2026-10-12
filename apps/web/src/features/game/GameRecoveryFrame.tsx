@@ -4,9 +4,7 @@ import type { ReactNode } from 'react';
 
 import type { GameRecoveryPresentation } from '@/features/game/interaction/game-interaction';
 import { CLIENT_ERROR_MESSAGE_KEY, type Locale, PUBLIC_ERROR_MESSAGE_KEY, translate } from '@/i18n';
-import { Button } from '@/ui/button';
-import { ScrollablePanel } from '@/ui/panel';
-import { ColorCycleDiceLoader } from '@/ui/status';
+import { Button, ColorCycleDiceLoader, ScrollablePanel } from '@/ui';
 
 export function GameRecoveryFrame({
   children,

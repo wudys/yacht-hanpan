@@ -4,8 +4,7 @@ import type { AppLifecycle, AppLifecycleSnapshot } from '@/app/app-lifecycle';
 import { APP_SCREEN_PATH } from '@/app/screen-paths';
 import { type Locale, translate } from '@/i18n';
 import type { SessionCredentialStore } from '@/runtime/session/session-credential-store';
-import { Button } from '@/ui/button';
-import { ScrollablePanel } from '@/ui/panel';
+import { Button, ScrollablePanel } from '@/ui';
 
 const FAILURE_MESSAGES = {
   replaced: {

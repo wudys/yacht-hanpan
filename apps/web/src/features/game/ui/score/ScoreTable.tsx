@@ -3,7 +3,7 @@ import { UPPER_BONUS_THRESHOLD } from '@repo/yacht-rules';
 
 import type { ScoreRowViewModel } from '@/features/game/ui/game-view-model';
 import type { CategoryLabels, PlayerScoreSummaryView } from '@/features/game/ui/score/types';
-import { PlayerAvatar } from '@/ui/profile';
+import { PlayerAvatar } from '@/ui';
 
 export type ScoreTableProps = Readonly<{
   rows: readonly ScoreRowViewModel[];

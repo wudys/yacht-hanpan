@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-import { BrandLockup } from '@/ui/brand';
+import { BrandLockup } from '@/ui';
 
 export type EntryViewProps = Readonly<{
   title: string;

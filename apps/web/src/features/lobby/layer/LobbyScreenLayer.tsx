@@ -13,9 +13,7 @@ import { type Locale, type MessageKeyWithoutParams, translate } from '@/i18n';
 import type { BrowserAudioRuntime } from '@/runtime/audio/browser-audio-runtime';
 import { AUDIO_CUE } from '@/runtime/audio/cue-runtime';
 import type { PreferencesStore } from '@/runtime/preferences/preferences-store';
-import { Button } from '@/ui/button';
-import { ScrollablePanel } from '@/ui/panel';
-import { ColorCycleDiceLoader } from '@/ui/status';
+import { Button, ColorCycleDiceLoader, ScrollablePanel } from '@/ui';
 
 /** Selects the visible layer; accepted inputs and request lifetimes belong to the lobby flow. */
 export function LobbyScreenLayer({

@@ -7,9 +7,7 @@ import { LoadingView } from '@/features/loading/ui/LoadingView';
 import { type Locale, translate } from '@/i18n';
 import type { BrowserAudioRuntime } from '@/runtime/audio/browser-audio-runtime';
 import { useScreenTelemetry } from '@/runtime/telemetry/TelemetryContext';
-import { BrandLockup } from '@/ui/brand';
-import { Button } from '@/ui/button';
-import { ScrollablePanel } from '@/ui/panel';
+import { BrandLockup, Button, ScrollablePanel } from '@/ui';
 
 export function LoadingScreen({
   audio,

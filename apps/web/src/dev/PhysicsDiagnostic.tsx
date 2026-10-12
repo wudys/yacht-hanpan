@@ -18,7 +18,7 @@ import DiceCanvasHost from '@/runtime/dice/canvas/DiceCanvasHost';
 import { createRendererReadiness } from '@/runtime/dice/canvas/renderer-readiness';
 import type { DicePresentationRenderPort } from '@/runtime/dice/dice-presentation-controller';
 import type { ProceduralDiceResources } from '@/runtime/dice/resources';
-import { GameFrame } from '@/ui/layout';
+import { GameFrame } from '@/ui';
 
 export function PhysicsDiagnostic() {
   const [draft, setDraft] = useState({

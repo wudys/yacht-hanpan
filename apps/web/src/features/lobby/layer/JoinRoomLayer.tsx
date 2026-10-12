@@ -4,8 +4,7 @@ import { LobbyLayer, PendingIndicator } from '@/features/lobby/layer/LobbyLayer'
 import { RoomCodeInput } from '@/features/lobby/layer/RoomCodeInput';
 import { type LobbyError, lobbyErrorKey } from '@/features/lobby/lobby-errors';
 import { type Locale, translate } from '@/i18n';
-import { Button, IconButton } from '@/ui/button';
-import { ScrollablePanel } from '@/ui/panel';
+import { Button, IconButton, ScrollablePanel } from '@/ui';
 
 export function JoinRoomLayer({
   locale,

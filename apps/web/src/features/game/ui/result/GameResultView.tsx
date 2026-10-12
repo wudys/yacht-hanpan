@@ -4,8 +4,7 @@ import {
   type PlayerScoreSummaryView,
   ScoreTable,
 } from '@/features/game/ui/score';
-import { Button } from '@/ui/button';
-import { ScrollablePanel } from '@/ui/panel';
+import { Button, ScrollablePanel } from '@/ui';
 
 export type GameResultReason =
   | Readonly<{ kind: 'normal' }>

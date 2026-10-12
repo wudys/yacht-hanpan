@@ -3,8 +3,7 @@ import { type ReactNode, useId, useLayoutEffect, useRef } from 'react';
 
 import { BonusRecordEffect, RecordTransition } from '@/features/game/ui/score/ScoreFeedbackEffects';
 import type { ScoreDisplayOwner, ScoreRecordFeedback } from '@/features/game/ui/score/types';
-import { IconButton } from '@/ui/button';
-import { PlayerAvatar } from '@/ui/profile';
+import { IconButton, PlayerAvatar } from '@/ui';
 
 export type PlayerSummaryProps = Readonly<{
   recordFeedback?: ScoreRecordFeedback | null;

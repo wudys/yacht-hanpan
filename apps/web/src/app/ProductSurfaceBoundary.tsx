@@ -1,7 +1,7 @@
 import { type ReactNode, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import { ProductSurfaceContext } from '@/app/product-surface-context';
-import type { FrameAvailability } from '@/ui/layout';
+import { type FrameAvailability } from '@/ui';
 
 export function ProductSurfaceBoundary({
   frameAvailability,

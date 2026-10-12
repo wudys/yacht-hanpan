@@ -12,7 +12,7 @@ import {
   type ScoreGridMode,
   type ScoreRecordFeedback,
 } from '@/features/game/ui/score';
-import { Button, IconButton } from '@/ui/button';
+import { Button, IconButton } from '@/ui';
 
 const MemoPlayerSummary = memo(PlayerSummary);
 const MemoScoreGrid = memo(ScoreGrid);

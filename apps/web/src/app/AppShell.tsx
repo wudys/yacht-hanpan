@@ -11,7 +11,7 @@ import type { DicePresentationRenderPort } from '@/runtime/dice/dice-presentatio
 import { PersistentDiceCanvas } from '@/runtime/dice/PersistentDiceCanvas';
 import type { PreferencesStore } from '@/runtime/preferences/preferences-store';
 import type { SessionCredentialStore } from '@/runtime/session/session-credential-store';
-import { GameFrame } from '@/ui/layout';
+import { GameFrame } from '@/ui';
 
 const wrapperPatternUrl = requireGameAsset('brand.wrapper-pattern').url;
 const wrapperLogoUrl = requireGameAsset('brand.logo').url;

@@ -1,6 +1,5 @@
 import { ScoreTable, type ScoreTableProps } from '@/features/game/ui/score/ScoreTable';
-import { Button } from '@/ui/button';
-import { ScrollablePanel } from '@/ui/panel';
+import { Button, ScrollablePanel } from '@/ui';
 
 export type GameScoreboardViewProps = Pick<
   ScoreTableProps,

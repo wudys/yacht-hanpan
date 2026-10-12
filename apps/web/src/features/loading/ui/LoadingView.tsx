@@ -1,5 +1,4 @@
-import { BrandLockup } from '@/ui/brand';
-import { BouncingDiceLoader } from '@/ui/status/DiceLoader';
+import { BouncingDiceLoader, BrandLockup } from '@/ui';
 
 export type LoadingViewProps = Readonly<{
   progress: number;

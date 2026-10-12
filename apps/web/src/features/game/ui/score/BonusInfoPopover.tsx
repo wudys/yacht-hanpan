@@ -1,7 +1,7 @@
 import { requireGameAsset } from '@repo/game-assets';
 import { UPPER_BONUS_SCORE, UPPER_BONUS_THRESHOLD } from '@repo/yacht-rules';
 
-import { IconButton } from '@/ui/button/IconButton';
+import { IconButton } from '@/ui';
 
 export type BonusInfoPopoverProps = Readonly<{
   subtotal: number;

@@ -1,9 +1,7 @@
 import { requireGameAsset } from '@repo/game-assets';
 import type { ReactNode } from 'react';
 
-import { BrandLockup } from '@/ui/brand';
-import { Button, IconButton } from '@/ui/button';
-import { PlayerAvatar } from '@/ui/profile';
+import { BrandLockup, Button, IconButton, PlayerAvatar } from '@/ui';
 
 export type LobbyViewProps = Readonly<{
   profile: Readonly<{ imageUrl: string; alt: string }>;

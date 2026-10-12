@@ -11,8 +11,7 @@ import { SettingsPanel } from '@/features/settings/SettingsPanel';
 import { type Locale, translate } from '@/i18n';
 import type { BrowserAudioRuntime } from '@/runtime/audio/browser-audio-runtime';
 import type { PreferencesStore } from '@/runtime/preferences/preferences-store';
-import { Button } from '@/ui/button';
-import { ScrollablePanel } from '@/ui/panel';
+import { Button, ScrollablePanel } from '@/ui';
 
 export function GameScoreboardContent({
   rows,

@@ -4,8 +4,7 @@ import { CHARACTER_CATALOG, type CharacterId } from '@repo/game-assets/character
 import { LobbyLayer } from '@/features/lobby/layer/LobbyLayer';
 import { CharacterChoiceGrid } from '@/features/lobby/ui/CharacterChoiceGrid';
 import { type Locale, translate } from '@/i18n';
-import { IconButton } from '@/ui/button';
-import { ScrollablePanel } from '@/ui/panel';
+import { IconButton, ScrollablePanel } from '@/ui';
 
 export function ProfileLayer({
   locale,

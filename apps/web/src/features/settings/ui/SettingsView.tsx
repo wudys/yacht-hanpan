@@ -1,7 +1,6 @@
 import { requireGameAsset } from '@repo/game-assets';
 
-import { Button, IconButton } from '@/ui/button';
-import { ScrollablePanel } from '@/ui/panel';
+import { Button, IconButton, ScrollablePanel } from '@/ui';
 
 export type SettingsLocale = 'ko' | 'en';
 

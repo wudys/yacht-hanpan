@@ -6,7 +6,7 @@ import { expect, test, vi } from 'vitest';
 
 import { ProductSurfaceContext } from '@/app/product-surface-context';
 import { ProductSurfaceBoundary } from '@/app/ProductSurfaceBoundary';
-import type { FrameAvailability } from '@/ui/layout';
+import { type FrameAvailability } from '@/ui';
 
 test('withholds exposure until measured and composes global coverage without ending children', () => {
   const onRestored = vi.fn();

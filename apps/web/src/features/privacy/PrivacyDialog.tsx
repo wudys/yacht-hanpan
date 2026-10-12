@@ -5,8 +5,7 @@ import { type ReactNode, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 import { type Locale, translate } from '@/i18n';
-import { IconButton } from '@/ui/button';
-import { ScrollablePanel } from '@/ui/panel';
+import { IconButton, ScrollablePanel } from '@/ui';
 
 export function PrivacyDialog({
   locale,

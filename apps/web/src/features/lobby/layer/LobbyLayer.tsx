@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-import { ScrollablePanel } from '@/ui/panel';
+import { ScrollablePanel } from '@/ui';
 
 export function LobbyNoticeLayer({
   title,

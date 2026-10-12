@@ -8,3 +8,31 @@
   text-align: center;
   background: var(--game-frame-bg);
 }
+
+.ui-busy-spinner {
+  display: block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid #77561e;
+  border-top-color: #fff1c8;
+  border-radius: 50%;
+  animation: ui-busy-spin 700ms linear infinite;
+}
+
+@keyframes ui-busy-spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+.ui-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

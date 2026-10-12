@@ -84,7 +84,7 @@ export default function LobbyScreen({
       data-screen='lobby'
       data-testid='lobby-screen'
     >
-      <h1 className='web-lobby-scene__sr-only'>{translate(locale, 'lobby.title')}</h1>
+      <h1 className='ui-visually-hidden'>{translate(locale, 'lobby.title')}</h1>
       <LobbyView
         hideRoomActions={
           !reentryBlocking && ['joinRoom', 'joining', 'waiting', 'matching'].includes(screenState)

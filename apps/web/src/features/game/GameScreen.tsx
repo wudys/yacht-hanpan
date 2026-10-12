@@ -39,7 +39,6 @@ import {
 import { useGameCommands } from '@/features/game/interaction/use-game-commands';
 import { SettledDiceControls } from '@/features/game/SettledDiceControls';
 import { deriveGameViewModel, GameBoard, GameResultView } from '@/features/game/ui';
-import { GameRollSpinner } from '@/features/game/ui/board/GameBoardStatus';
 import { useGameResultLifecycle } from '@/features/game/use-game-result-lifecycle';
 import { type Locale, translate } from '@/i18n';
 import type { BrowserAudioRuntime } from '@/runtime/audio/browser-audio-runtime';
@@ -52,6 +51,7 @@ import type { GameSessionHolder } from '@/runtime/session/game-session-holder';
 import type { SessionCredentialStore } from '@/runtime/session/session-credential-store';
 import type { SessionRecovery } from '@/runtime/session/session-recovery';
 import { useScreenTelemetry } from '@/runtime/telemetry/TelemetryContext';
+import { BusySpinner } from '@/ui/status/BusySpinner';
 
 type GameScreenProps = Readonly<{
   audio: BrowserAudioRuntime;
@@ -67,18 +67,6 @@ type GameScreenProps = Readonly<{
 }>;
 
 const MemoSettledDiceControls = memo(SettledDiceControls);
-
-const VISUALLY_HIDDEN_STYLE = {
-  position: 'absolute',
-  width: 1,
-  height: 1,
-  padding: 0,
-  margin: -1,
-  overflow: 'hidden',
-  clip: 'rect(0, 0, 0, 0)',
-  whiteSpace: 'nowrap',
-  border: 0,
-} as const;
 
 export default function GameScreen({
   audio,
@@ -155,7 +143,7 @@ export default function GameScreen({
     recheck: recheckDeadline,
   } = useDeadlineReadiness(clock, deadlineAt, startedAt);
   const rollPending = pendingCommandKind === 'roll';
-  const rollProgress = rollPending ? <GameRollSpinner /> : undefined;
+  const rollProgress = rollPending ? <BusySpinner /> : undefined;
   const viewerTurnIdentity =
     holderSnapshot.authority !== null &&
     game?.match.status === 'playing' &&
@@ -425,13 +413,13 @@ export default function GameScreen({
 
   return withRecovery(
     <div
-      className='web-game-bonus-host'
+      className='web-game-board-host'
       data-storage-warning={persistence === 'memoryOnly' || undefined}
       data-screen='game'
       data-game-view='board'
       data-game-layer={layer}
     >
-      <h1 style={VISUALLY_HIDDEN_STYLE}>{translate(locale, 'game.title')}</h1>
+      <h1 className='ui-visually-hidden'>{translate(locale, 'game.title')}</h1>
       <div inert={inputScopes.boardInert} aria-hidden={inputScopes.boardInert}>
         <GameBoard
           {...board}

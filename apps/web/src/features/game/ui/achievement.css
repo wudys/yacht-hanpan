@@ -47,7 +47,6 @@
 
 .achievement-sequence[data-achievement-kind='yacht'] .achievement-sequence__title {
   color: #ffd978;
-  font-weight: 600;
   text-shadow:
     0 1px 0 var(--product-ivory),
     0 3px 0 #9d6f26,

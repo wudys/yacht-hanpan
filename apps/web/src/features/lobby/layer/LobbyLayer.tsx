@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 
 import { ScrollablePanel } from '@/ui';
+import { BusySpinner } from '@/ui/status/BusySpinner';
 
 export function LobbyNoticeLayer({
   title,
@@ -48,7 +49,7 @@ export function LobbyLayer({
 export function PendingIndicator({ label }: Readonly<{ label: string }>) {
   return (
     <span className='web-lobby-progress' data-lobby-pending='true'>
-      <span className='web-lobby-progress__spinner' aria-hidden='true' />
+      <BusySpinner />
       {label}
     </span>
   );

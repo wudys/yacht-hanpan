@@ -25,7 +25,7 @@ export function TurnStartCue({ cue, label }: Readonly<{ cue: TurnCueFeedback; la
         <span>YOUR TURN</span>
         <i />
       </div>
-      <span className='game-turn-cue__accessible' role='status'>
+      <span className='game-turn-cue__accessible ui-visually-hidden' role='status'>
         {label}
       </span>
     </>

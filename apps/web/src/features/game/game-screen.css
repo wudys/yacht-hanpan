@@ -1,4 +1,4 @@
-.web-game-bonus-host {
+.web-game-board-host {
   position: relative;
   width: 360px;
   height: 500px;
@@ -46,7 +46,7 @@
 }
 
 .web-game-interaction-surface[inert] > [data-game-layer='scoreboard'],
-.web-game-interaction-surface[inert] > .web-game-bonus-host > *,
+.web-game-interaction-surface[inert] > .web-game-board-host > *,
 body:has(.web-game-interaction-surface[inert]) .web-dice-canvas-host {
   filter: blur(2px);
 }
@@ -93,7 +93,7 @@ body:has(.web-game-interaction-surface[inert]) .web-dice-canvas-host {
   margin: 0;
 }
 
-.web-game-bonus-host[data-storage-warning='true'] .game-board__presence {
+.web-game-board-host[data-storage-warning='true'] .game-board__presence {
   line-height: 13px;
   white-space: normal;
 }

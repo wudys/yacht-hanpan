@@ -23,7 +23,7 @@ export function EntryView({
 }: EntryViewProps) {
   return (
     <main className='entry-view' data-product-view='entry'>
-      <h1 className='entry-view__title'>{title}</h1>
+      <h1 className='ui-visually-hidden'>{title}</h1>
       <BrandLockup />
       <div className='entry-view__action'>
         {activationFailure ? (

@@ -1,7 +1,6 @@
 import { afterEach, expect, test, vi } from 'vitest';
-import { createActor, waitFor } from 'xstate';
 
-import { appLifecycleMachine } from '@/app/app-lifecycle-machine';
+import { createAppLifecycle } from '@/app/app-lifecycle';
 import { prepareProductResources } from '@/bootstrap/prepare-product-resources';
 import { createBrowserAudioRuntime } from '@/runtime/audio/browser-audio-runtime';
 import { renderCueBuffers } from '@/runtime/audio/render-cue-buffers';
@@ -218,21 +217,21 @@ test.each(['constructor', 'resume', 'cues'] as const)(
         prefetchScenes: () => Promise.resolve(),
       }),
     );
-    const actor = createActor(appLifecycleMachine, {
-      input: {
-        capabilities: { ok: true },
-        activateAudio: runtime.activate,
-        onUnexpected,
-        loadResources,
-      },
-    }).start();
-    actor.send({ type: 'BOOTSTRAP.START' });
-    await waitFor(actor, (state) =>
-      state.matches(stage === 'cues' ? 'resourceFailure' : 'activationFailure'),
+    const lifecycle = createAppLifecycle({
+      capabilities: { ok: true },
+      activateAudio: runtime.activate,
+      onUnexpected,
+      loadResources,
+    });
+    lifecycle.startBootstrap();
+    await vi.waitFor(() =>
+      expect(lifecycle.getSnapshot().phase).toBe(
+        stage === 'cues' ? 'resourceFailure' : 'activationFailure',
+      ),
     );
     expect(onUnexpected).toHaveBeenCalledExactlyOnceWith(cause);
     expect(loadResources).toHaveBeenCalledTimes(stage === 'cues' ? 1 : 0);
-    actor.stop();
+    lifecycle.dispose();
     await runtime.dispose();
   },
 );
@@ -250,18 +249,16 @@ test('a denied silent media unlock does not fail activation or report an issue',
   );
   const runtime = createBrowserAudioRuntime();
   const onUnexpected = vi.fn();
-  const actor = createActor(appLifecycleMachine, {
-    input: {
-      capabilities: { ok: true },
-      activateAudio: runtime.activate,
-      onUnexpected,
-      loadResources: () => Promise.resolve(),
-    },
-  }).start();
-  actor.send({ type: 'BOOTSTRAP.START' });
-  await waitFor(actor, (state) => state.matches('ready'));
+  const lifecycle = createAppLifecycle({
+    capabilities: { ok: true },
+    activateAudio: runtime.activate,
+    onUnexpected,
+    loadResources: () => Promise.resolve(),
+  });
+  lifecycle.startBootstrap();
+  await vi.waitFor(() => expect(lifecycle.getSnapshot().phase).toBe('ready'));
   expect(onUnexpected).not.toHaveBeenCalled();
-  actor.stop();
+  lifecycle.dispose();
   await runtime.dispose();
 });
 

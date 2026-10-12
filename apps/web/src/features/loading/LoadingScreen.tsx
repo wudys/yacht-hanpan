@@ -1,9 +1,7 @@
 import { useNavigate } from '@tanstack/react-router';
-import { useSelector } from '@xstate/react';
-import { useEffect } from 'react';
-import type { ActorRefFrom } from 'xstate';
+import { useEffect, useSyncExternalStore } from 'react';
 
-import { appLifecycleMachine } from '@/app/app-lifecycle-machine';
+import type { AppLifecycle } from '@/app/app-lifecycle';
 import { APP_SCREEN_PATH } from '@/app/screen-paths';
 import { LoadingView } from '@/features/loading/ui/LoadingView';
 import { type Locale, translate } from '@/i18n';
@@ -15,20 +13,21 @@ import { ScrollablePanel } from '@/ui/panel';
 
 export function LoadingScreen({
   audio,
-  globalActor,
+  lifecycle,
   locale,
 }: Readonly<{
   audio: BrowserAudioRuntime;
-  globalActor: ActorRefFrom<typeof appLifecycleMachine>;
+  lifecycle: AppLifecycle;
   locale: Locale;
 }>) {
   useScreenTelemetry('loading');
   const navigate = useNavigate();
-  const ready = useSelector(globalActor, (snapshot) => snapshot.matches('ready'));
-  const progress = useSelector(globalActor, (snapshot) => snapshot.context.bootstrapProgress);
-  const resourceFailure = useSelector(globalActor, (snapshot) =>
-    snapshot.matches('resourceFailure'),
+  const { phase, bootstrapProgress: progress } = useSyncExternalStore(
+    lifecycle.subscribe,
+    lifecycle.getSnapshot,
   );
+  const ready = phase === 'ready';
+  const resourceFailure = phase === 'resourceFailure';
 
   useEffect(() => {
     void audio.setScene(null);
@@ -70,7 +69,7 @@ export function LoadingScreen({
           footer={
             <Button
               label={translate(locale, 'common.retry')}
-              onClick={() => globalActor.send({ type: 'BOOTSTRAP.RETRY' })}
+              onClick={() => lifecycle.retryResources()}
             />
           }
         >

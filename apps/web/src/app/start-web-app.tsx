@@ -3,9 +3,8 @@ import '@/app/styles.css';
 import { RouterProvider } from '@tanstack/react-router';
 import { StrictMode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { type ActorRefFrom, createActor } from 'xstate';
 
-import { appLifecycleMachine } from '@/app/app-lifecycle-machine';
+import { type AppLifecycle, createAppLifecycle } from '@/app/app-lifecycle';
 import { createAppRouter } from '@/app/app-router';
 import { createProductExecution } from '@/app/product-execution';
 import { prepareProductResources } from '@/bootstrap/prepare-product-resources';
@@ -52,7 +51,7 @@ export function startWebApp(telemetry: Telemetry): () => void {
   } = execution;
   let disposed = false;
   let visuals: ProductVisualPreparation | undefined;
-  let appActor: ActorRefFrom<typeof appLifecycleMachine> | undefined;
+  let appLifecycle: AppLifecycle | undefined;
   let reactRoot: Root | undefined;
   let stopTelemetry: (() => void) | undefined;
   let unsubscribeReplacement: (() => void) | undefined;
@@ -84,7 +83,7 @@ export function startWebApp(telemetry: Telemetry): () => void {
     cleanup(() => unsubscribeRenderer?.());
     cleanup(() => execution.stop());
     cleanup(() => {
-      appActor?.stop();
+      appLifecycle?.dispose();
     });
     cleanup(() => reactRoot?.unmount());
     cleanup(() => visuals?.dispose(), { stage: 'canvas' });
@@ -111,71 +110,69 @@ export function startWebApp(telemetry: Telemetry): () => void {
       recovery,
       reentry: execution.reentry,
     });
-    const globalActor = createActor(appLifecycleMachine, {
-      input: {
-        capabilities,
-        onUnexpected: (error) => telemetry.reportUnexpected(error, { stage: 'audio' }),
-        activateAudio: audio.activate,
-        loadResources: async (onProgress, signal) => {
-          const startedAt = performance.now();
+    const lifecycle = createAppLifecycle({
+      capabilities,
+      onUnexpected: (error) => telemetry.reportUnexpected(error, { stage: 'audio' }),
+      activateAudio: audio.activate,
+      loadResources: async (onProgress, signal) => {
+        const startedAt = performance.now();
+        try {
           try {
-            try {
-              profile.initialize();
-            } catch (error) {
-              telemetry.reportUnexpected(error, { stage: 'storage' });
-              throw error;
-            }
-            await prepareProductResources({
-              signal,
-              onProgress,
-              onFailure: (stage, error) => {
-                if (!signal.aborted && !activity.aborted)
-                  telemetry.reportUnexpected(error, { stage });
-              },
-              bgmEnabled,
-              prefetchScenes: audio.prefetchScenes,
-              prepareProductAudio: audio.prepareCues,
-              prepareVisuals: productVisuals.prepare,
-              loadModules: () =>
-                Promise.all([
-                  import('@/features/lobby/LobbyScreen'),
-                  import('@/features/game/GameScreen'),
-                ]),
-            });
-            if (signal.aborted || activity.aborted) return;
-            sessionCredentialStore.initialize();
-            telemetry.trackEvent({
-              name: 'bootstrap_result',
-              outcome: 'success',
-              duration_ms: Math.round(performance.now() - startedAt),
-            });
+            profile.initialize();
           } catch (error) {
-            if (signal.aborted || activity.aborted) return;
-            telemetry.trackEvent({
-              name: 'bootstrap_result',
-              outcome: 'failure',
-              duration_ms: Math.round(performance.now() - startedAt),
-            });
+            telemetry.reportUnexpected(error, { stage: 'storage' });
             throw error;
           }
-        },
+          await prepareProductResources({
+            signal,
+            onProgress,
+            onFailure: (stage, error) => {
+              if (!signal.aborted && !activity.aborted)
+                telemetry.reportUnexpected(error, { stage });
+            },
+            bgmEnabled,
+            prefetchScenes: audio.prefetchScenes,
+            prepareProductAudio: audio.prepareCues,
+            prepareVisuals: productVisuals.prepare,
+            loadModules: () =>
+              Promise.all([
+                import('@/features/lobby/LobbyScreen'),
+                import('@/features/game/GameScreen'),
+              ]),
+          });
+          if (signal.aborted || activity.aborted) return;
+          sessionCredentialStore.initialize();
+          telemetry.trackEvent({
+            name: 'bootstrap_result',
+            outcome: 'success',
+            duration_ms: Math.round(performance.now() - startedAt),
+          });
+        } catch (error) {
+          if (signal.aborted || activity.aborted) return;
+          telemetry.trackEvent({
+            name: 'bootstrap_result',
+            outcome: 'failure',
+            duration_ms: Math.round(performance.now() - startedAt),
+          });
+          throw error;
+        }
       },
     });
-    appActor = globalActor;
+    appLifecycle = lifecycle;
     unsubscribeReplacement = sessions.subscribe(() => {
       if (sessions.getSnapshot().sessionSnapshot?.connection === 'replaced') {
         if (activity.aborted) return;
         execution.stop();
-        globalActor.send({ type: 'SESSION.REPLACED' });
+        lifecycle.replaceSession();
       }
     });
-    globalActor.start();
+
     unsubscribeConnectivity = subscribeBrowserConnectivity((online) => {
-      globalActor.send({ type: 'NETWORK.CHANGED', status: online ? 'online' : 'offline' });
+      lifecycle.setNetworkStatus(online ? 'online' : 'offline');
     });
     unsubscribeRenderer = productRenderer.subscribe(() => {
       if (productRenderer.getSnapshot().status === 'runtimeFailed') {
-        globalActor.send({ type: 'RUNTIME.CAPABILITY_FAILED' });
+        lifecycle.reportRuntimeFailure();
       }
     });
     const router = createAppRouter({
@@ -184,7 +181,7 @@ export function startWebApp(telemetry: Telemetry): () => void {
       activity,
       audio,
       feedback,
-      globalActor,
+      lifecycle,
       profile,
       preferences,
       renderer: productRenderer,

@@ -1,9 +1,7 @@
 import { useNavigate } from '@tanstack/react-router';
-import { useSelector } from '@xstate/react';
-import { useEffect } from 'react';
-import type { ActorRefFrom } from 'xstate';
+import { useEffect, useSyncExternalStore } from 'react';
 
-import { appLifecycleMachine } from '@/app/app-lifecycle-machine';
+import type { AppLifecycle } from '@/app/app-lifecycle';
 import { APP_SCREEN_PATH } from '@/app/screen-paths';
 import { CapabilityFailureView } from '@/features/entry/ui/CapabilityFailureView';
 import { EntryView } from '@/features/entry/ui/EntryView';
@@ -14,38 +12,26 @@ import { useScreenTelemetry } from '@/runtime/telemetry/TelemetryContext';
 
 export function EntryScreen({
   audio,
-  globalActor,
+  lifecycle,
   locale,
 }: Readonly<{
   audio: BrowserAudioRuntime;
-  globalActor: ActorRefFrom<typeof appLifecycleMachine>;
+  lifecycle: AppLifecycle;
   locale: Locale;
 }>) {
   useScreenTelemetry('entry');
   const navigate = useNavigate({ from: APP_SCREEN_PATH.ENTRY });
-  const unsupported = useSelector(globalActor, (snapshot) => snapshot.matches('unsupported'));
-  const capabilities = useSelector(
-    globalActor,
-    (snapshot) => snapshot.context.runtime.capabilities,
-  );
-  const activationFailure = useSelector(globalActor, (snapshot) =>
-    snapshot.matches('activationFailure'),
-  );
-  const activatingAudio = useSelector(globalActor, (snapshot) =>
-    snapshot.matches('activatingAudio'),
-  );
-  const loading = useSelector(
-    globalActor,
-    (snapshot) =>
-      snapshot.matches('loadingResources') ||
-      snapshot.matches('resourceFailure') ||
-      snapshot.matches('ready'),
-  );
+  const { phase, capabilities } = useSyncExternalStore(lifecycle.subscribe, lifecycle.getSnapshot);
+  const unsupported = phase === 'unsupported';
+  const activationFailure = phase === 'activationFailure';
+  const activatingAudio = phase === 'activatingAudio';
+  const shouldEnterLoading =
+    phase === 'loadingResources' || phase === 'resourceFailure' || phase === 'ready';
 
   useEffect(() => {
-    if (loading)
+    if (shouldEnterLoading)
       void navigate({ to: APP_SCREEN_PATH.LOADING, replace: true, viewTransition: true });
-  }, [loading, navigate]);
+  }, [shouldEnterLoading, navigate]);
 
   useEffect(() => {
     void audio.setScene(null);
@@ -75,7 +61,7 @@ export function EntryScreen({
                 activationFailure ? translate(locale, 'app.activationFailure') : undefined
               }
               pending={activatingAudio}
-              onStart={() => globalActor.send({ type: 'BOOTSTRAP.START' })}
+              onStart={() => lifecycle.startBootstrap()}
             />
           )
         }

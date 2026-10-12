@@ -72,7 +72,7 @@ function setup(
   return { result, unmount, createRoom, onIntent, profile };
 }
 
-test('uses the owned actor to reject stale layer and duplicate create intents', async () => {
+test('uses current reducer state to reject stale layer and duplicate create intents', async () => {
   const { result, createRoom, onIntent, profile } = setup();
   const { createRoom: create, openProfile } = result.current;
   profile.setSelection({ characterId: 'blonde-buns', variant: true });

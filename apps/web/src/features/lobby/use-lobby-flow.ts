@@ -1,36 +1,27 @@
 import type { ServerClock } from '@repo/game-client-sdk';
 import { useNavigate } from '@tanstack/react-router';
-import { useMachine } from '@xstate/react';
 import { useEffect, useState, useSyncExternalStore } from 'react';
 
 import { APP_SCREEN_PATH } from '@/app/screen-paths';
-import {
-  createLobbyMachine,
-  type LobbyEvent,
-  type LobbyServices,
-  selectLobbyScreenState,
-} from '@/features/lobby/lobby-machine';
+import type { LobbyEvent } from '@/features/lobby/lobby-state';
+import { type LobbyDependencies, useLobbyController } from '@/features/lobby/use-lobby-controller';
 import { useTelemetry } from '@/runtime/telemetry/TelemetryContext';
 
 export function useLobbyFlow({
   clock,
   onIntent,
-  ...services
-}: LobbyServices & { clock: Pick<ServerClock, 'now'>; onIntent: () => void }) {
-  const { access } = services;
+  ...dependencies
+}: LobbyDependencies & { clock: Pick<ServerClock, 'now'>; onIntent: () => void }) {
+  const { access } = dependencies;
   const telemetry = useTelemetry();
   const navigate = useNavigate({ from: APP_SCREEN_PATH.LOBBY });
-  // These service identities stay stable for one route actor instance.
-  const [machine] = useState(() =>
-    createLobbyMachine(services, telemetry, () => {
-      void navigate({ to: APP_SCREEN_PATH.GAME, replace: true });
-    }),
-  );
-  const [state, send, actor] = useMachine(machine);
+  const { state, send } = useLobbyController(dependencies, telemetry, () => {
+    void navigate({ to: APP_SCREEN_PATH.GAME, replace: true });
+  });
   const [showDelayedProgress, setShowDelayedProgress] = useState(false);
   const [remainingSeconds, setRemainingSeconds] = useState(0);
-  const screenState = selectLobbyScreenState(state);
-  const { waitingRoom, error, joinRetryAfterMs } = state.context;
+  const screenState = state.phase === 'handoff' ? 'matching' : state.phase;
+  const { waitingRoom, error, joinRetryAfterMs } = state;
   const accessState = useSyncExternalStore(access.subscribe, access.getSnapshot);
   const readinessOperation = accessState.status === 'preparing' ? accessState.operation : null;
   useEffect(() => {
@@ -62,15 +53,14 @@ export function useLobbyFlow({
   }, [joinRetryAfterMs, send]);
 
   const intent = (event: LobbyEvent, sound = true): void => {
-    if (isRestoreBlocking(access.getSnapshot()) || !actor.getSnapshot().can(event)) return;
-    send(event);
+    if (isReentryBlocking(access.getSnapshot()) || !send(event)) return;
     if (sound) onIntent();
   };
   return {
     screenState,
     waitingRoom,
     error,
-    joinCode: state.context.joinCode,
+    joinCode: state.joinCode,
     rateLimited: joinRetryAfterMs > 0,
     openProfile: () => intent({ type: 'OPEN_PROFILE' }),
     closeProfile: () => intent({ type: 'CLOSE_PROFILE' }),
@@ -83,22 +73,17 @@ export function useLobbyFlow({
     dismissNotice: () => intent({ type: 'DISMISS_NOTICE' }),
     createRoom: () => intent({ type: 'CREATE_REQUESTED' }),
     joinRoom: () => intent({ type: 'JOIN_REQUESTED' }),
-    cancelWaiting: () =>
-      intent({
-        type: actor.getSnapshot().matches({ admitted: 'cancelFailed' })
-          ? 'RETRY_CANCEL'
-          : 'CANCEL_REQUESTED',
-      }),
+    cancelWaiting: () => intent({ type: 'CANCEL_REQUESTED' }),
     readinessOperation,
     showDelayedProgress,
     remainingSeconds,
-    restoreView: restoreDisplay(accessState),
+    reentryState: getReentryState(accessState),
     recoveryPhase: accessState.status === 'waiting' ? accessState.recovery : 'idle',
     confirmAuthorityFailure: access.confirmAuthorityFailure,
   };
 }
 
-function isRestoreBlocking(state: ReturnType<LobbyServices['access']['getSnapshot']>) {
+function isReentryBlocking(state: ReturnType<LobbyDependencies['access']['getSnapshot']>) {
   return (
     state.status === 'restoring' ||
     ((state.status === 'handoff' ||
@@ -107,7 +92,7 @@ function isRestoreBlocking(state: ReturnType<LobbyServices['access']['getSnapsho
       state.origin === 'restore')
   );
 }
-function restoreDisplay(state: ReturnType<LobbyServices['access']['getSnapshot']>) {
+function getReentryState(state: ReturnType<LobbyDependencies['access']['getSnapshot']>) {
   if (state.status === 'restoring') return { status: state.phase };
   if (state.status === 'handoff' && state.origin === 'restore')
     return { status: state.target === 'game' ? ('gameReady' as const) : ('waiting' as const) };

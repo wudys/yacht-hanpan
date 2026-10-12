@@ -1,11 +1,10 @@
 // @vitest-environment jsdom
-/* eslint-disable testing-library/no-manual-cleanup -- the live actor is stopped with the rendered tree. */
+/* eslint-disable testing-library/no-manual-cleanup -- the live lifecycle is stopped with the rendered tree. */
 
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, expect, test, vi } from 'vitest';
-import { createActor } from 'xstate';
 
-import { appLifecycleMachine } from '@/app/app-lifecycle-machine';
+import { type AppLifecycle, createAppLifecycle } from '@/app/app-lifecycle';
 import { GlobalLayerHost } from '@/app/GlobalLayerHost';
 import { APP_SCREEN_PATH } from '@/app/screen-paths';
 import {
@@ -24,12 +23,12 @@ vi.mock('@tanstack/react-router', async (importOriginal) => ({
   useNavigate: () => navigate,
 }));
 
-const actors: Array<ReturnType<typeof createActor<typeof appLifecycleMachine>>> = [];
+const lifecycles: Array<AppLifecycle> = [];
 
 afterEach(() => {
   cleanup();
   vi.unstubAllEnvs();
-  for (const actor of actors.splice(0)) actor.stop();
+  for (const lifecycle of lifecycles.splice(0)) lifecycle.dispose();
   navigate.mockReset();
 });
 
@@ -58,28 +57,26 @@ function renderEntry({
   activateAudio?: () => Promise<void>;
   locale?: Locale;
 }> = {}) {
-  const actor = createActor(appLifecycleMachine, {
-    input: {
-      capabilities,
-      activateAudio,
-      loadResources: () => new Promise<void>(() => {}),
-    },
+  const lifecycle = createAppLifecycle({
+    capabilities,
+    activateAudio,
+    loadResources: () => new Promise<void>(() => {}),
   });
-  actor.start();
-  actors.push(actor);
+
+  lifecycles.push(lifecycle);
   render(
     <div className='game-logical-canvas'>
       <GlobalLayerHost
         sessionCredentialStore={createSessionCredentialStore()}
-        globalActor={actor}
+        lifecycle={lifecycle}
         locale={locale}
         routePath={APP_SCREEN_PATH.ENTRY}
       >
-        <EntryScreen audio={createAudio()} globalActor={actor} locale={locale} />
+        <EntryScreen audio={createAudio()} lifecycle={lifecycle} locale={locale} />
       </GlobalLayerHost>
     </div>,
   );
-  return { actor, activateAudio };
+  return { lifecycle, activateAudio };
 }
 
 test.each([undefined, '', 'false', 'true'])(
@@ -142,13 +139,13 @@ test('replaces Entry with a full-frame unsupported notice without CTA or technic
 
 /* eslint-disable testing-library/no-node-access -- input ownership requires observing inert ancestors across the composed layers. */
 test('keeps the global offline action accessible above privacy and retains its input guard on privacy cleanup', () => {
-  const { actor } = renderEntry();
+  const { lifecycle } = renderEntry();
   const trigger = screen.getByRole('button', { name: 'Privacy Policy' });
   fireEvent.click(trigger);
   const privacy = screen.getByRole('dialog', { name: 'Privacy Policy' });
   const close = within(privacy).getByRole('button', { name: 'Close' });
 
-  act(() => actor.send({ type: 'NETWORK.CHANGED', status: 'offline' }));
+  act(() => lifecycle.setNetworkStatus('offline'));
   const refresh = screen.getByRole('button', { name: 'Refresh' });
   expect(refresh.closest('[inert]')).toBeNull();
   expect(privacy.closest('[inert]')).not.toBeNull();
@@ -158,13 +155,13 @@ test('keeps the global offline action accessible above privacy and retains its i
   expect(screen.queryByRole('dialog', { hidden: true })).toBeNull();
   expect(screen.getByTestId('global-interaction-surface').getAttribute('inert')).toBe('');
 
-  act(() => actor.send({ type: 'NETWORK.CHANGED', status: 'online' }));
+  act(() => lifecycle.setNetworkStatus('online'));
   expect(screen.getByTestId('global-interaction-surface').hasAttribute('inert')).toBe(false);
   expect(screen.getByRole('button', { name: 'Privacy Policy' })).toBe(trigger);
 });
 
 test('privacy blocks only Entry content and unlocks it after closing', () => {
-  const { actor } = renderEntry();
+  const { lifecycle } = renderEntry();
   const trigger = screen.getByRole('button', { name: 'Privacy Policy' });
   fireEvent.click(trigger);
   const privacy = screen.getByRole('dialog', { name: 'Privacy Policy' });
@@ -172,8 +169,8 @@ test('privacy blocks only Entry content and unlocks it after closing', () => {
   expect(privacy.closest('[inert]')).toBeNull();
   const globalHost = screen.getByTestId('global-layer-host');
   expect(globalHost.closest('[inert]')).toBeNull();
-  act(() => actor.send({ type: 'NETWORK.CHANGED', status: 'offline' }));
-  act(() => actor.send({ type: 'NETWORK.CHANGED', status: 'online' }));
+  act(() => lifecycle.setNetworkStatus('offline'));
+  act(() => lifecycle.setNetworkStatus('online'));
   fireEvent.click(within(privacy).getByRole('button', { name: 'OK' }));
   expect(trigger.closest('[inert]')).toBeNull();
 });

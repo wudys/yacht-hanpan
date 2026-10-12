@@ -1,6 +1,7 @@
+import { requireGameAsset } from '@repo/game-assets';
+
 import { LobbyLayer, PendingIndicator } from '@/features/lobby/layer/LobbyLayer';
 import { RoomCodeInput } from '@/features/lobby/layer/RoomCodeInput';
-import { LOBBY_ICONS } from '@/features/lobby/lobby-assets';
 import { type LobbyError, lobbyErrorKey } from '@/features/lobby/lobby-errors';
 import { type Locale, translate } from '@/i18n';
 import { Button, IconButton } from '@/ui/button';
@@ -39,7 +40,7 @@ export function JoinRoomLayer({
         headerAction={
           <IconButton
             label={translate(locale, 'common.close')}
-            icon={<img src={LOBBY_ICONS.close} alt='' />}
+            icon={<img src={requireGameAsset('ui.close').url} alt='' />}
             interactionLocked={joining}
             onClick={onClose}
           />

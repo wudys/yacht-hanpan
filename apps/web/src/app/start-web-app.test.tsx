@@ -162,13 +162,13 @@ test('keeps the replacement shell alive, ignores late bootstrap success, and dis
   );
   const context = await start();
   const disposeRenderer = vi.spyOn(context.renderer, 'dispose');
-  context.globalActor.send({ type: 'BOOTSTRAP.START' });
+  context.lifecycle.startBootstrap();
   await vi.waitFor(() => expect(fixture.loadResources).toHaveBeenCalledOnce());
 
   replaceSession();
 
   expect(context.activity.aborted).toBe(true);
-  expect(context.globalActor.getSnapshot().matches('replaced')).toBe(true);
+  expect(context.lifecycle.getSnapshot().phase).toBe('replaced');
   expect(fixture.presentationDispose).toHaveBeenCalledOnce();
   expect(fixture.audioDispose).toHaveBeenCalledOnce();
   expect(fixture.render).toHaveBeenCalledOnce();
@@ -180,7 +180,7 @@ test('keeps the replacement shell alive, ignores late bootstrap success, and dis
   await Promise.resolve();
   expect(fixture.storeInitialize).not.toHaveBeenCalled();
   expect(fixture.trackEvent).not.toHaveBeenCalled();
-  expect(context.globalActor.getSnapshot().matches('replaced')).toBe(true);
+  expect(context.lifecycle.getSnapshot().phase).toBe('replaced');
 
   disposeApp?.();
   disposeApp?.();
@@ -200,7 +200,7 @@ test('wires visual preparation and prevents final disposal from applying late bo
     await prepareVisuals(vi.fn(), signal!);
   });
   const context = await start();
-  context.globalActor.send({ type: 'BOOTSTRAP.START' });
+  context.lifecycle.startBootstrap();
   await vi.waitFor(() => expect(fixture.prepareVisuals).toHaveBeenCalledOnce());
 
   disposeApp?.();
@@ -235,7 +235,7 @@ test('releases execution and app owners when router assembly fails', async () =>
   expect(fixture.render).not.toHaveBeenCalled();
 });
 
-test('cleans up actor, Canvas consumers, and visual ownership after React render fails', async () => {
+test('cleans up lifecycle, Canvas consumers, and visual ownership after React render fails', async () => {
   const failure = new Error('React rendering failed');
   fixture.render.mockImplementationOnce(() => {
     throw failure;
@@ -252,23 +252,23 @@ test('cleans up actor, Canvas consumers, and visual ownership after React render
   expect(fixture.sessionListeners.size).toBe(0);
 });
 
-test.each(['telemetry', 'replacement', 'connectivity', 'renderer', 'actor', 'react'] as const)(
+test.each(['telemetry', 'replacement', 'connectivity', 'renderer', 'lifecycle', 'react'] as const)(
   'continues final cleanup when %s teardown throws and diagnostics fail',
   async (owner) => {
     const context = await start();
-    const stopActor = context.globalActor.stop.bind(context.globalActor);
-    const actorStop = vi.spyOn(context.globalActor, 'stop');
+    const disposeLifecycle = context.lifecycle.dispose.bind(context.lifecycle);
+    const lifecycleDispose = vi.spyOn(context.lifecycle, 'dispose');
     const dispose = {
       telemetry: fixture.stopTelemetry,
       replacement: fixture.unsubscribeReplacement,
       connectivity: fixture.unsubscribeConnectivity,
       renderer: fixture.unsubscribeRenderer,
-      actor: actorStop,
+      lifecycle: lifecycleDispose,
       react: fixture.unmount,
     }[owner];
     const failure = new Error(`${owner} teardown failed`);
     dispose.mockImplementationOnce(() => {
-      if (owner === 'actor') stopActor();
+      if (owner === 'lifecycle') disposeLifecycle();
       disposeApp?.();
       throw failure;
     });
@@ -284,7 +284,7 @@ test.each(['telemetry', 'replacement', 'connectivity', 'renderer', 'actor', 'rea
     expect(fixture.unsubscribeReplacement).toHaveBeenCalledOnce();
     expect(fixture.unsubscribeConnectivity).toHaveBeenCalledOnce();
     expect(fixture.unsubscribeRenderer).toHaveBeenCalledOnce();
-    expect(actorStop).toHaveBeenCalledOnce();
+    expect(lifecycleDispose).toHaveBeenCalledOnce();
     expect(fixture.unmount).toHaveBeenCalledOnce();
     expect(fixture.disposeVisuals).toHaveBeenCalledOnce();
     expect(fixture.reportUnexpected).toHaveBeenCalledExactlyOnceWith(failure);
@@ -302,9 +302,9 @@ test.each(['telemetry', 'replacement', 'connectivity', 'renderer', 'actor', 'rea
       fixture.audioDispose.mock.invocationCallOrder[0]!,
     );
     expect(fixture.audioDispose.mock.invocationCallOrder[0]).toBeLessThan(
-      actorStop.mock.invocationCallOrder[0]!,
+      lifecycleDispose.mock.invocationCallOrder[0]!,
     );
-    expect(actorStop.mock.invocationCallOrder[0]).toBeLessThan(
+    expect(lifecycleDispose.mock.invocationCallOrder[0]).toBeLessThan(
       fixture.unmount.mock.invocationCallOrder[0]!,
     );
     expect(fixture.unmount.mock.invocationCallOrder[0]).toBeLessThan(
@@ -377,7 +377,7 @@ test('shows the replacement shell even when execution cleanup fails', async () =
   replaceSession();
 
   expect(context.activity.aborted).toBe(true);
-  expect(context.globalActor.getSnapshot().matches('replaced')).toBe(true);
+  expect(context.lifecycle.getSnapshot().phase).toBe('replaced');
   expect(fixture.audioDispose).toHaveBeenCalledOnce();
   expect(fixture.unmount).not.toHaveBeenCalled();
   expect(fixture.disposeVisuals).not.toHaveBeenCalled();

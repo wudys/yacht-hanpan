@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-/* eslint-disable testing-library/no-manual-cleanup -- memory-router actors can finish navigation after the runner's automatic cleanup. */
+/* eslint-disable testing-library/no-manual-cleanup -- memory-router tasks can finish navigation after the runner's automatic cleanup. */
 
 import { createGameClient } from '@repo/game-client-sdk';
 import { RouterProvider } from '@tanstack/react-router';
@@ -7,9 +7,8 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { StrictMode } from 'react';
 import type { WebGLRenderer } from 'three';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import { type ActorRefFrom, createActor } from 'xstate';
 
-import { appLifecycleMachine } from '@/app/app-lifecycle-machine';
+import { type AppLifecycle, createAppLifecycle } from '@/app/app-lifecycle';
 import { createAppRouter } from '@/app/app-router';
 import { CAPABILITY_FAILURE_CODE } from '@/bootstrap/static-capabilities';
 import { EntryScreen } from '@/features/entry/EntryScreen';
@@ -32,7 +31,7 @@ import { createGameSessionHolder } from '@/runtime/session/game-session-holder';
 import { createSessionCredentialStore } from '@/runtime/session/session-credential-store';
 import { createSessionRecovery } from '@/runtime/session/session-recovery';
 
-const activeActors = new Set<ActorRefFrom<typeof appLifecycleMachine>>();
+const activeLifecycles = new Set<AppLifecycle>();
 const canvasFixture = vi.hoisted(() => ({ rootCount: (): number => -1 }));
 
 // Keep the Canvas host and R3F root real; replace only the unavailable jsdom GPU device.
@@ -116,8 +115,8 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
-  for (const actor of activeActors) actor.stop();
-  activeActors.clear();
+  for (const lifecycle of activeLifecycles) lifecycle.dispose();
+  activeLifecycles.clear();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
@@ -180,17 +179,15 @@ function renderApp(
     setItem: () => undefined,
   },
 ) {
-  const globalActor = createActor(appLifecycleMachine, {
-    input: {
-      capabilities: audio.supported
-        ? { ok: true }
-        : { ok: false, code: CAPABILITY_FAILURE_CODE.WEB_AUDIO_UNAVAILABLE },
-      activateAudio: audio.activate,
-      loadResources,
-    },
+  const lifecycle = createAppLifecycle({
+    capabilities: audio.supported
+      ? { ok: true }
+      : { ok: false, code: CAPABILITY_FAILURE_CODE.WEB_AUDIO_UNAVAILABLE },
+    activateAudio: audio.activate,
+    loadResources,
   });
-  globalActor.start();
-  activeActors.add(globalActor);
+
+  activeLifecycles.add(lifecycle);
   const sessionCredentialStore = createSessionCredentialStore();
   const client = createGameClient({
     serverUrl: 'http://localhost:3002',
@@ -220,7 +217,7 @@ function renderApp(
     access,
     audio,
     feedback: { observeHoldReceipt: () => {} },
-    globalActor,
+    lifecycle,
     profile,
     preferences,
     renderer,
@@ -240,7 +237,7 @@ function renderApp(
       <RouterProvider router={router} />
     </StrictMode>,
   );
-  return { ...view, audio, globalActor, router, preferences, readiness, renderer };
+  return { ...view, audio, lifecycle, router, preferences, readiness, renderer };
 }
 
 test('does not wake the server during Entry, Loading or an idle Lobby', async () => {
@@ -259,7 +256,7 @@ test('does not wake the server during Entry, Loading or an idle Lobby', async ()
 test('presents completed readiness for a paint before navigating to Lobby', async () => {
   const frames = stubAnimationFrames();
   const loading = deferred();
-  const { globalActor, router } = renderApp(() => loading.promise);
+  const { lifecycle, router } = renderApp(() => loading.promise);
   fireEvent.click(await screen.findByRole('button', { name: '게임 시작' }), { detail: 1 });
   expect(await screen.findByText('게임 불러오는 중')).not.toBeNull();
 
@@ -267,7 +264,7 @@ test('presents completed readiness for a paint before navigating to Lobby', asyn
     loading.resolve();
     await loading.promise;
   });
-  await vi.waitFor(() => expect(globalActor.getSnapshot().matches('ready')).toBe(true));
+  await vi.waitFor(() => expect(lifecycle.getSnapshot().phase === 'ready').toBe(true));
   expect(screen.getByText('100%')).not.toBeNull();
   expect(router.state.location.pathname).toBe('/loading');
   expect(frames.pending()).toBe(1);
@@ -286,7 +283,7 @@ test('presents completed readiness for a paint before navigating to Lobby', asyn
 test('cancels a pending completed-loading navigation when the app unmounts', async () => {
   const frames = stubAnimationFrames();
   const loading = deferred();
-  const { globalActor, router, unmount } = renderApp(() => loading.promise);
+  const { lifecycle, router, unmount } = renderApp(() => loading.promise);
   fireEvent.click(await screen.findByRole('button', { name: '게임 시작' }), { detail: 1 });
   expect(await screen.findByText('게임 불러오는 중')).not.toBeNull();
 
@@ -294,7 +291,7 @@ test('cancels a pending completed-loading navigation when the app unmounts', asy
     loading.resolve();
     await loading.promise;
   });
-  await vi.waitFor(() => expect(globalActor.getSnapshot().matches('ready')).toBe(true));
+  await vi.waitFor(() => expect(lifecycle.getSnapshot().phase === 'ready').toBe(true));
   expect(frames.pending()).toBe(1);
   frames.flush();
   expect(frames.pending()).toBe(1);
@@ -485,10 +482,10 @@ test('keeps the root frame mounted across entry, loading and lobby routes', asyn
 
 test('lets Loading own offline feedback before retaining Lobby behind the global failure', async () => {
   const loading = deferred();
-  const { globalActor } = renderApp(() => loading.promise);
+  const { lifecycle } = renderApp(() => loading.promise);
   fireEvent.click(await screen.findByRole('button', { name: '게임 시작' }), { detail: 1 });
   expect(await screen.findByText('게임 불러오는 중')).not.toBeNull();
-  act(() => globalActor.send({ type: 'NETWORK.CHANGED', status: 'offline' }));
+  act(() => lifecycle.setNetworkStatus('offline'));
   const globalLayers = within(screen.getByTestId('global-layer-host'));
   expect(globalLayers.queryByRole('status')).toBeNull();
   expect(globalLayers.queryByRole('alertdialog')).toBeNull();
@@ -500,7 +497,7 @@ test('lets Loading own offline feedback before retaining Lobby behind the global
   expect(globalLayers.getByRole('alertdialog').getAttribute('data-global-failure')).toBe('offline');
   expect(interactionSurface.getAttribute('aria-hidden')).toBe('true');
 
-  act(() => globalActor.send({ type: 'NETWORK.CHANGED', status: 'online' }));
+  act(() => lifecycle.setNetworkStatus('online'));
   expect(globalLayers.queryByRole('alertdialog')).toBeNull();
   expect(screen.getByRole('heading', { name: '로비' })).toBe(lobbyHeading);
   expect(interactionSurface.getAttribute('aria-hidden')).toBeNull();

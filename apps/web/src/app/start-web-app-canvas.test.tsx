@@ -155,7 +155,7 @@ test('unmounts actual React and R3F Canvas consumers before disposing their shar
   const { context } = fixture;
   if (!context) throw new Error('App router context missing');
   await act(async () => {
-    context.globalActor.send({ type: 'BOOTSTRAP.START' });
+    context.lifecycle.startBootstrap();
   });
   await vi.waitFor(async () => {
     await act(async () => undefined);

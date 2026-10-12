@@ -10,9 +10,8 @@ import {
   useRouterState,
 } from '@tanstack/react-router';
 import { lazy, Suspense, useCallback, useContext, useSyncExternalStore } from 'react';
-import type { ActorRefFrom } from 'xstate';
 
-import { appLifecycleMachine } from '@/app/app-lifecycle-machine';
+import type { AppLifecycle } from '@/app/app-lifecycle';
 import { AppShell } from '@/app/AppShell';
 import { ProductSurfaceContext } from '@/app/product-surface-context';
 import { APP_SCREEN_PATH } from '@/app/screen-paths';
@@ -39,7 +38,7 @@ export interface AppRouterContext {
   readonly feedback: Pick<SessionAudioFeedback, 'observeHoldReceipt'>;
   readonly preferences: PreferencesStore;
   readonly profile: ProfileSelectionStore;
-  readonly globalActor: ActorRefFrom<typeof appLifecycleMachine>;
+  readonly lifecycle: AppLifecycle;
   readonly renderer: RendererReadiness;
   readonly clock: Pick<ServerClock, 'now'>;
   readonly sessions: GameSessionHolder;
@@ -97,7 +96,7 @@ declare module '@tanstack/react-router' {
 
 function RootLayout() {
   const {
-    globalActor,
+    lifecycle,
     preferences,
     audio,
     recovery,
@@ -110,7 +109,7 @@ function RootLayout() {
   return (
     <AppShell
       audio={audio}
-      globalActor={globalActor}
+      lifecycle={lifecycle}
       preferences={preferences}
       renderer={renderer}
       presentation={presentation}
@@ -125,15 +124,15 @@ function RootLayout() {
 }
 
 function EntryRoute() {
-  const { audio, globalActor, preferences } = entryRoute.useRouteContext();
+  const { audio, lifecycle, preferences } = entryRoute.useRouteContext();
   const locale = useRouteLocale(preferences);
-  return <EntryScreen audio={audio} globalActor={globalActor} locale={locale} />;
+  return <EntryScreen audio={audio} lifecycle={lifecycle} locale={locale} />;
 }
 
 function LoadingRoute() {
-  const { audio, globalActor, preferences } = loadingRoute.useRouteContext();
+  const { audio, lifecycle, preferences } = loadingRoute.useRouteContext();
   const locale = useRouteLocale(preferences);
-  return <LoadingScreen audio={audio} globalActor={globalActor} locale={locale} />;
+  return <LoadingScreen audio={audio} lifecycle={lifecycle} locale={locale} />;
 }
 
 function LobbyRoute() {

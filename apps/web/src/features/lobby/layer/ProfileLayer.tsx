@@ -1,7 +1,7 @@
-import type { CharacterId } from '@repo/game-assets/characters';
+import { requireGameAsset } from '@repo/game-assets';
+import { CHARACTER_CATALOG, type CharacterId } from '@repo/game-assets/characters';
 
 import { LobbyLayer } from '@/features/lobby/layer/LobbyLayer';
-import { characterChoices, LOBBY_ICONS } from '@/features/lobby/lobby-assets';
 import { CharacterChoiceGrid } from '@/features/lobby/ui/CharacterChoiceGrid';
 import { type Locale, translate } from '@/i18n';
 import { IconButton } from '@/ui/button';
@@ -32,14 +32,14 @@ export function ProfileLayer({
         headerAction={
           <IconButton
             label={translate(locale, 'common.close')}
-            icon={<img src={LOBBY_ICONS.close} alt='' />}
+            icon={<img src={requireGameAsset('ui.close').url} alt='' />}
             onClick={onClose}
           />
         }
       >
         <CharacterChoiceGrid
           label={translate(locale, 'profile.choose')}
-          choices={characterChoices(variant)}
+          choices={getCharacterChoices(variant)}
           selectedCharacterId={selectedCharacterId}
           variant={variant}
           styleLabels={[translate(locale, 'profile.style1'), translate(locale, 'profile.style2')]}
@@ -54,4 +54,12 @@ export function ProfileLayer({
       </ScrollablePanel>
     </LobbyLayer>
   );
+}
+
+function getCharacterChoices(variant: boolean) {
+  return CHARACTER_CATALOG.map(({ id, imageAssetIds }) => ({
+    characterId: id,
+    imageUrl: requireGameAsset(variant ? imageAssetIds.variant : imageAssetIds.original).url,
+    alt: id,
+  }));
 }

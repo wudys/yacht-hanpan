@@ -2,9 +2,8 @@
 
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, expect, test, vi } from 'vitest';
-import { createActor, waitFor as waitForActor } from 'xstate';
 
-import { appLifecycleMachine } from '@/app/app-lifecycle-machine';
+import { createAppLifecycle } from '@/app/app-lifecycle';
 import { GlobalLayerHost } from '@/app/GlobalLayerHost';
 import { APP_SCREEN_PATH } from '@/app/screen-paths';
 import { createSessionCredentialStore } from '@/runtime/session/session-credential-store';
@@ -22,11 +21,11 @@ afterEach(() => {
 test('locks and retains a non-game route while offline, then restores it online', () => {
   const reload = vi.fn();
   vi.stubGlobal('location', { reload });
-  const actor = createActor(appLifecycleMachine, { input: runtime }).start();
+  const lifecycle = createAppLifecycle(runtime);
   const view = render(
     <GlobalLayerHost
       sessionCredentialStore={createSessionCredentialStore()}
-      globalActor={actor}
+      lifecycle={lifecycle}
       locale='en'
       routePath={APP_SCREEN_PATH.ENTRY}
     >
@@ -35,7 +34,7 @@ test('locks and retains a non-game route while offline, then restores it online'
   );
   const route = screen.getByRole('button', { name: 'Preserved route' });
 
-  act(() => actor.send({ type: 'NETWORK.CHANGED', status: 'offline' }));
+  act(() => lifecycle.setNetworkStatus('offline'));
 
   const interactionSurface = screen.getByTestId('global-interaction-surface');
   const modal = screen.getByRole('alertdialog', { name: 'Connection lost' });
@@ -47,26 +46,24 @@ test('locks and retains a non-game route while offline, then restores it online'
   fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
   expect(reload).toHaveBeenCalledOnce();
 
-  act(() => actor.send({ type: 'NETWORK.CHANGED', status: 'online' }));
+  act(() => lifecycle.setNetworkStatus('online'));
   expect(screen.queryByRole('alertdialog')).toBeNull();
   expect(interactionSurface.getAttribute('inert')).toBeNull();
   expect(screen.getByRole('button', { name: 'Preserved route' })).toBe(route);
   view.unmount();
-  actor.stop();
+  lifecycle.dispose();
 });
 
 test('keeps unsupported, Loading, and Game failure owners above browser offline hints', () => {
-  const unsupported = createActor(appLifecycleMachine, {
-    input: {
-      ...runtime,
-      capabilities: { ok: false, code: 'WEBGL_UNAVAILABLE' } as const,
-    },
-  }).start();
-  unsupported.send({ type: 'NETWORK.CHANGED', status: 'offline' });
+  const unsupported = createAppLifecycle({
+    ...runtime,
+    capabilities: { ok: false, code: 'WEBGL_UNAVAILABLE' } as const,
+  });
+  unsupported.setNetworkStatus('offline');
   const view = render(
     <GlobalLayerHost
       sessionCredentialStore={createSessionCredentialStore()}
-      globalActor={unsupported}
+      lifecycle={unsupported}
       locale='en'
       routePath={APP_SCREEN_PATH.ENTRY}
     >
@@ -74,14 +71,14 @@ test('keeps unsupported, Loading, and Game failure owners above browser offline 
     </GlobalLayerHost>,
   );
   expect(screen.queryByRole('alertdialog')).toBeNull();
-  unsupported.stop();
+  unsupported.dispose();
 
-  const interaction = createActor(appLifecycleMachine, { input: runtime }).start();
-  interaction.send({ type: 'NETWORK.CHANGED', status: 'offline' });
+  const interaction = createAppLifecycle(runtime);
+  interaction.setNetworkStatus('offline');
   view.rerender(
     <GlobalLayerHost
       sessionCredentialStore={createSessionCredentialStore()}
-      globalActor={interaction}
+      lifecycle={interaction}
       locale='en'
       routePath={APP_SCREEN_PATH.LOADING}
     >
@@ -93,7 +90,7 @@ test('keeps unsupported, Loading, and Game failure owners above browser offline 
   view.rerender(
     <GlobalLayerHost
       sessionCredentialStore={createSessionCredentialStore()}
-      globalActor={interaction}
+      lifecycle={interaction}
       locale='en'
       routePath={APP_SCREEN_PATH.GAME}
     >
@@ -102,19 +99,19 @@ test('keeps unsupported, Loading, and Game failure owners above browser offline 
   );
   expect(screen.queryByRole('alertdialog')).toBeNull();
   view.unmount();
-  interaction.stop();
+  interaction.dispose();
 });
 
 test('keeps a post-ready runtime failure visible above route and network changes', async () => {
   const reload = vi.fn();
   vi.stubGlobal('location', { reload });
-  const actor = createActor(appLifecycleMachine, { input: runtime }).start();
-  actor.send({ type: 'BOOTSTRAP.START' });
-  await waitForActor(actor, (snapshot) => snapshot.matches('ready'));
+  const lifecycle = createAppLifecycle(runtime);
+  lifecycle.startBootstrap();
+  await vi.waitFor(() => expect(lifecycle.getSnapshot().phase).toBe('ready'));
   const view = render(
     <GlobalLayerHost
       sessionCredentialStore={createSessionCredentialStore()}
-      globalActor={actor}
+      lifecycle={lifecycle}
       locale='en'
       routePath={APP_SCREEN_PATH.GAME}
     >
@@ -122,44 +119,44 @@ test('keeps a post-ready runtime failure visible above route and network changes
     </GlobalLayerHost>,
   );
 
-  act(() => actor.send({ type: 'RUNTIME.CAPABILITY_FAILED' }));
+  act(() => lifecycle.reportRuntimeFailure());
   const modal = await screen.findByRole('alertdialog', { name: 'Game error' });
   expect(modal.getAttribute('data-global-failure')).toBe('runtimeFailure');
   expect(screen.getByText('Latest game snapshot')).not.toBeNull();
   expect(reload).not.toHaveBeenCalled();
 
-  act(() => actor.send({ type: 'NETWORK.CHANGED', status: 'offline' }));
-  act(() => actor.send({ type: 'NETWORK.CHANGED', status: 'online' }));
+  act(() => lifecycle.setNetworkStatus('offline'));
+  act(() => lifecycle.setNetworkStatus('online'));
   await waitFor(() => expect(screen.getByRole('alertdialog')).toBe(modal));
   view.unmount();
-  actor.stop();
+  lifecycle.dispose();
 });
 
 test('replacement ends the route and keeps one short reload action despite later network changes', () => {
   const reload = vi.fn();
   vi.stubGlobal('location', { reload });
-  const actor = createActor(appLifecycleMachine, { input: runtime }).start();
+  const lifecycle = createAppLifecycle(runtime);
   const sessionCredentialStore = createSessionCredentialStore();
   const view = render(
     <GlobalLayerHost
       sessionCredentialStore={sessionCredentialStore}
-      globalActor={actor}
+      lifecycle={lifecycle}
       locale='ko'
       routePath={APP_SCREEN_PATH.GAME}
     >
       <button type='button'>게임 조작</button>
     </GlobalLayerHost>,
   );
-  act(() => actor.send({ type: 'SESSION.REPLACED' }));
+  act(() => lifecycle.replaceSession());
   expect(screen.queryByText('게임 조작')).toBeNull();
   expect(screen.getByRole('alertdialog').textContent).toContain(
     '다른 곳에서 이 게임에 접속했어요.',
   );
   fireEvent.keyDown(document, { key: 'Escape' });
-  act(() => actor.send({ type: 'NETWORK.CHANGED', status: 'online' }));
+  act(() => lifecycle.setNetworkStatus('online'));
   expect(screen.getByRole('alertdialog')).not.toBeNull();
   fireEvent.click(screen.getByRole('button', { name: '시작 화면으로' }));
   expect(reload).toHaveBeenCalledOnce();
-  expect(actor.getSnapshot().status).toBe('done');
+  expect(lifecycle.getSnapshot().phase).toBe('replaced');
   view.unmount();
 });

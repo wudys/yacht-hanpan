@@ -1,8 +1,7 @@
 import { requireGameAsset } from '@repo/game-assets';
 import { type CSSProperties, memo, type ReactNode, useEffect, useSyncExternalStore } from 'react';
-import type { ActorRefFrom } from 'xstate';
 
-import type { appLifecycleMachine } from '@/app/app-lifecycle-machine';
+import type { AppLifecycle } from '@/app/app-lifecycle';
 import { GlobalLayerHost } from '@/app/GlobalLayerHost';
 import { ProductSurfaceBoundary } from '@/app/ProductSurfaceBoundary';
 import { translate } from '@/i18n';
@@ -23,7 +22,7 @@ const webShellStyle = {
 
 export function AppShell({
   audio,
-  globalActor,
+  lifecycle,
   preferences,
   renderer,
   presentation,
@@ -34,7 +33,7 @@ export function AppShell({
   children,
 }: Readonly<{
   audio: BrowserAudioRuntime;
-  globalActor: ActorRefFrom<typeof appLifecycleMachine>;
+  lifecycle: AppLifecycle;
   preferences: PreferencesStore;
   renderer: RendererReadiness;
   presentation: DicePresentationRenderPort;
@@ -68,7 +67,7 @@ export function AppShell({
         {(frameAvailability) => (
           <GlobalLayerHost
             sessionCredentialStore={sessionCredentialStore}
-            globalActor={globalActor}
+            lifecycle={lifecycle}
             locale={locale}
             routePath={routePath}
           >

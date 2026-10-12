@@ -81,7 +81,7 @@ export default function LobbyScreen({
     showDelayedProgress,
     remainingSeconds,
     rateLimited,
-    restoreView,
+    reentryState,
     recoveryPhase,
     confirmAuthorityFailure,
   } = useLobbyFlow({
@@ -91,11 +91,14 @@ export default function LobbyScreen({
     profile: productProfile,
     onIntent: () => audio.playCue(AUDIO_CUE.CLICK),
   });
-  const reentryBlocking = restoreView.status !== 'idle';
-  const waitingRecovery =
-    screenState === 'waiting' &&
-    !reentryBlocking &&
-    (recoveryPhase === 'reconnecting' || recoveryPhase === 'synchronizing');
+  const reentryBlocking = reentryState.status !== 'idle';
+  const waitingRecovery = getWaitingRecovery();
+
+  function getWaitingRecovery() {
+    if (screenState !== 'waiting' || reentryBlocking) return 'none';
+    if (recoveryPhase === 'reconnecting' || recoveryPhase === 'synchronizing') return recoveryPhase;
+    return 'none';
+  }
 
   useEffect(() => {
     copyAttemptRef.current += 1;
@@ -148,24 +151,28 @@ export default function LobbyScreen({
         )}
       />
     ) : undefined;
-  const reentryProgressLabel =
-    screenState === 'checkingExpiry' || restoreView.status === 'checking'
-      ? translate(locale, 'lobby.reentryChecking')
-      : restoreView.status === 'synchronizing' || restoreView.status === 'gameReady'
-        ? translate(locale, 'lobby.reentrySynchronizing')
-        : translate(locale, 'lobby.reentryConnecting');
+  const reentryProgressLabel = getReentryProgressLabel();
+
+  function getReentryProgressLabel() {
+    if (screenState === 'checkingExpiry' || reentryState.status === 'checking')
+      return translate(locale, 'lobby.reentryChecking');
+    if (reentryState.status === 'synchronizing' || reentryState.status === 'gameReady')
+      return translate(locale, 'lobby.reentrySynchronizing');
+    return translate(locale, 'lobby.reentryConnecting');
+  }
+
   const reentryProgress =
-    restoreView.status === 'checking' ||
-    restoreView.status === 'connecting' ||
-    restoreView.status === 'synchronizing' ||
-    restoreView.status === 'waiting' ||
-    restoreView.status === 'gameReady';
+    reentryState.status === 'checking' ||
+    reentryState.status === 'connecting' ||
+    reentryState.status === 'synchronizing' ||
+    reentryState.status === 'waiting' ||
+    reentryState.status === 'gameReady';
 
   return (
     <div
       className='web-lobby-scene'
       data-lobby-view={screenState}
-      data-reentry-state={restoreView.status}
+      data-reentry-state={reentryState.status}
       data-screen='lobby'
       data-testid='lobby-screen'
     >
@@ -200,7 +207,7 @@ export default function LobbyScreen({
           <ScrollablePanel className='web-lobby-surface' title={translate(locale, 'lobby.resume')}>
             <div
               className='web-lobby-reentry'
-              data-reentry-state={restoreView.status}
+              data-reentry-state={reentryState.status}
               role='status'
             >
               <ColorCycleDiceLoader />
@@ -210,7 +217,7 @@ export default function LobbyScreen({
         </LobbyLayer>
       ) : null}
 
-      {restoreView.status === 'permanentFailure' ? (
+      {reentryState.status === 'permanentFailure' ? (
         <LobbyNoticeLayer
           title={translate(locale, 'lobby.reentryFailedTitle')}
           actions={
@@ -224,15 +231,15 @@ export default function LobbyScreen({
           }
         >
           <p>
-            {restoreView.error.kind === 'server' &&
-            restoreView.error.error.code === PUBLIC_ERROR_CODE.ROOM_NOT_FOUND
+            {reentryState.error.kind === 'server' &&
+            reentryState.error.error.code === PUBLIC_ERROR_CODE.ROOM_NOT_FOUND
               ? translate(locale, 'error.gameNotFound')
-              : translate(locale, lobbyErrorKey(lobbyError(restoreView.error)))}
+              : translate(locale, lobbyErrorKey(lobbyError(reentryState.error)))}
           </p>
         </LobbyNoticeLayer>
       ) : null}
 
-      {restoreView.status === 'refreshRequired' ? (
+      {reentryState.status === 'refreshRequired' ? (
         <LobbyNoticeLayer
           title={translate(locale, 'lobby.reentryFailedTitle')}
           actions={
@@ -245,7 +252,7 @@ export default function LobbyScreen({
           <p>
             {translate(
               locale,
-              restoreView.reason === 'storage'
+              reentryState.reason === 'storage'
                 ? 'session.storageUnavailable'
                 : 'lobby.reentryRefresh',
             )}
@@ -297,13 +304,7 @@ export default function LobbyScreen({
           locale={locale}
           waitingRoom={waitingRoom}
           matching={screenState === 'matching'}
-          recovery={
-            waitingRecovery
-              ? recoveryPhase === 'synchronizing'
-                ? 'synchronizing'
-                : 'reconnecting'
-              : 'none'
-          }
+          recovery={waitingRecovery}
           remainingSeconds={remainingSeconds}
           copyStatus={copyStatus}
           onCancel={() => void cancelWaiting()}

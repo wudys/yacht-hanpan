@@ -1,16 +1,15 @@
+// @vitest-environment jsdom
+/* eslint-disable testing-library/no-manual-cleanup -- stop route subscriptions after each contract case. */
 import type { GameClient, GameSession, GameSessionSnapshot } from '@repo/game-client-sdk';
 import { parseJoinRoomResponse, parseResumeRoomResponse } from '@repo/game-protocol/http';
 import { parsePresenceSnapshot, parseRoomView } from '@repo/game-protocol/state';
 import { GAME_PROTOCOL_VERSION } from '@repo/game-protocol/version';
-import { expect, test, vi } from 'vitest';
-import { createActor, waitFor } from 'xstate';
+import { act, cleanup, renderHook } from '@testing-library/react';
+import { StrictMode } from 'react';
+import { afterEach, expect, test, vi } from 'vitest';
 
-import {
-  createLobbyMachine,
-  type LobbyEvent,
-  type LobbyServices,
-  selectLobbyScreenState,
-} from '@/features/lobby/lobby-machine';
+import { type LobbyEvent } from '@/features/lobby/lobby-state';
+import { type LobbyDependencies, useLobbyController } from '@/features/lobby/use-lobby-controller';
 import { createServerReadiness } from '@/runtime/network/server-readiness';
 import { createProfileSelectionStore } from '@/runtime/profile/profile-selection-store';
 import { createRoomAccess, type ReadinessFailure } from '@/runtime/room-access/room-access';
@@ -27,6 +26,8 @@ import {
 import { observeSessionTelemetry } from '@/runtime/telemetry/session-telemetry-observer';
 import { inactiveTelemetry, type Telemetry } from '@/runtime/telemetry/telemetry';
 import { authority, playingGame, room, waitingRoom } from '@/testing/game-fixtures';
+
+afterEach(cleanup);
 
 function setup(
   overrides: Partial<GameClient> = {},
@@ -117,7 +118,7 @@ function setup(
       subscribe: () => () => {},
       subscribeAttempt: () => () => {},
     },
-  } as unknown as Omit<LobbyServices, 'access'> & {
+  } as unknown as Omit<LobbyDependencies, 'access'> & {
     client: GameClient;
     sessions: ReturnType<typeof createGameSessionHolder>;
     sessionCredentialStore: SessionCredentialStore;
@@ -134,10 +135,21 @@ function setup(
     access: createRoomAccess({ ...baseServices, reentry: baseServices.reentry }),
   };
   const navigate = vi.fn();
-  const actor = createActor(createLobbyMachine(admissionServices, telemetry, navigate));
-  actor.start();
+  const { result, unmount } = renderHook(
+    () => useLobbyController(admissionServices, telemetry, navigate),
+    { wrapper: StrictMode },
+  );
+  const flow = {
+    send(event: LobbyEvent) {
+      act(() => {
+        result.current.send(event);
+      });
+    },
+    read: () => result.current.state,
+    unmount,
+  };
   return {
-    actor,
+    flow,
     activity,
     services: admissionServices,
     createSession,
@@ -179,15 +191,18 @@ test('keeps transport available for matched synchronization when initial connect
         completeCancellation = resolve;
       }),
   );
-  const { actor, session, navigate, publishGame, services } = setup({ cancelRoom });
+  const { flow, session, navigate, publishGame, services } = setup({ cancelRoom });
   vi.mocked(session.connect).mockReturnValue(connection);
   vi.mocked(session.synchronize).mockImplementation(async () => {
     publishGame();
     return { ok: true };
   });
-  actor.send({ type: 'CREATE_REQUESTED' });
-  await waitFor(actor, (state) => state.matches({ admitted: 'waiting' }));
-  actor.send({ type: 'CANCEL_REQUESTED' });
+  flow.send({ type: 'CREATE_REQUESTED' });
+  await vi.waitFor(() => {
+    const state = flow.read();
+    expect(state.phase === 'waiting').toBe(true);
+  });
+  flow.send({ type: 'CANCEL_REQUESTED' });
   await vi.waitFor(() => expect(cancelRoom).toHaveBeenCalledOnce());
   completeConnection({ ok: false, error: { kind: 'transport', code: 'NETWORK_UNAVAILABLE' } });
   await connection;
@@ -201,7 +216,7 @@ test('keeps transport available for matched synchronization when initial connect
   expect(session.synchronize).toHaveBeenCalledOnce();
   expect(services.sessions.getSnapshot().session).toBe(session);
   services.access.dispose();
-  actor.stop();
+  flow.unmount();
   services.sessions.dispose();
 });
 
@@ -225,30 +240,35 @@ test.each([
       ...(stage === 'cancel' ? { cancelRoom: () => Promise.reject(cause) } : {}),
       ...(stage === 'expiry' ? { resumeRoom: () => Promise.reject(cause) } : {}),
     } satisfies Partial<GameClient>;
-    const { actor, services, session } = setup(overrides, {
+    const { flow, services, session } = setup(overrides, {
       ...inactiveTelemetry,
       reportUnexpected,
       trackEvent,
     });
-    actor.subscribe({ error: () => {} });
     if (stage.endsWith('readiness')) services.readiness.wait = () => Promise.reject(cause);
     if (stage === 'connect') vi.mocked(session.connect).mockRejectedValueOnce(cause);
     if (stage.startsWith('join')) {
-      actor.send({ type: 'OPEN_JOIN_ROOM' });
-      actor.send({ type: 'JOIN_CODE_CHANGED', code: '001234' });
-      actor.send({ type: 'JOIN_REQUESTED' });
+      flow.send({ type: 'OPEN_JOIN_ROOM' });
+      flow.send({ type: 'JOIN_CODE_CHANGED', code: '001234' });
+      flow.send({ type: 'JOIN_REQUESTED' });
     } else {
-      actor.send({ type: 'CREATE_REQUESTED' });
+      flow.send({ type: 'CREATE_REQUESTED' });
     }
     if (stage === 'cancel' || stage === 'expiry') {
-      await waitFor(actor, (state) => state.matches({ admitted: 'waiting' }));
-      if (stage === 'cancel') actor.send({ type: 'CANCEL_REQUESTED' });
+      await vi.waitFor(() => {
+        const state = flow.read();
+        expect(state.phase === 'waiting').toBe(true);
+      });
+      if (stage === 'cancel') flow.send({ type: 'CANCEL_REQUESTED' });
       else {
-        actor.send({ type: 'WAIT_EXPIRED' });
-        actor.send({ type: 'DISMISS_NOTICE' });
+        flow.send({ type: 'WAIT_EXPIRED' });
+        flow.send({ type: 'DISMISS_NOTICE' });
       }
     }
-    await waitFor(actor, (state) => state.status === 'error' || state.matches('connectionFailed'));
+    await vi.waitFor(() => {
+      const state = flow.read();
+      expect(state.phase === 'connectionFailed').toBe(true);
+    });
     const operation = stage.startsWith('create')
       ? 'create'
       : stage.startsWith('join')
@@ -268,12 +288,12 @@ test.each([
         ? [{ name: 'room_request', operation, phase: 'failure', duration_ms: expect.any(Number) }]
         : [],
     );
-    expect(actor.getSnapshot().matches('connectionFailed')).toBe(true);
-    expect(actor.getSnapshot().context.error).toEqual({
+    expect(flow.read().phase === 'connectionFailed').toBe(true);
+    expect(flow.read().error).toEqual({
       kind: 'request',
       key: 'lobby.reentryRefresh',
     });
-    actor.stop();
+    flow.unmount();
     services.sessions.dispose();
   },
 );
@@ -282,7 +302,7 @@ test('keeps the cancellation HTTP result once when its follow-up sync rejects un
   const cause = new TypeError('synchronization invariant');
   const reportUnexpected = vi.fn();
   const trackEvent = vi.fn();
-  const { actor, session, services } = setup(
+  const { flow, session, services } = setup(
     {
       cancelRoom: async () => ({
         ok: false,
@@ -292,11 +312,17 @@ test('keeps the cancellation HTTP result once when its follow-up sync rejects un
     { ...inactiveTelemetry, reportUnexpected, trackEvent },
   );
   try {
-    actor.send({ type: 'CREATE_REQUESTED' });
-    await waitFor(actor, (state) => state.matches({ admitted: 'waiting' }));
+    flow.send({ type: 'CREATE_REQUESTED' });
+    await vi.waitFor(() => {
+      const state = flow.read();
+      expect(state.phase === 'waiting').toBe(true);
+    });
     vi.mocked(session.synchronize).mockRejectedValueOnce(cause);
-    actor.send({ type: 'CANCEL_REQUESTED' });
-    await waitFor(actor, (state) => state.matches('connectionFailed'));
+    flow.send({ type: 'CANCEL_REQUESTED' });
+    await vi.waitFor(() => {
+      const state = flow.read();
+      expect(state.phase === 'connectionFailed').toBe(true);
+    });
     expect(
       trackEvent.mock.calls.map(([event]) => event).filter((event) => event.operation === 'cancel'),
     ).toEqual([
@@ -315,7 +341,7 @@ test('keeps the cancellation HTTP result once when its follow-up sync rejects un
       stage: 'promise',
     });
   } finally {
-    actor.stop();
+    flow.unmount();
     services.sessions.dispose();
   }
 });
@@ -333,7 +359,7 @@ test.each([
       rejectOperation = reject;
     });
   const reportUnexpected = vi.fn();
-  const { actor, services, publishGame, navigate, activity, session, createSession } = setup(
+  const { flow, services, publishGame, navigate, activity, session, createSession } = setup(
     {
       ...(operation === 'cancel' ? { cancelRoom: pending } : {}),
       ...(operation === 'expiry' ? { resumeRoom: pending } : {}),
@@ -341,15 +367,18 @@ test.each([
     { ...inactiveTelemetry, reportUnexpected },
   );
   if (operation === 'connect') vi.mocked(session.connect).mockImplementationOnce(pending);
-  actor.send({ type: 'CREATE_REQUESTED' });
-  await waitFor(actor, (state) => state.matches({ admitted: 'waiting' }));
-  if (operation === 'cancel') actor.send({ type: 'CANCEL_REQUESTED' });
+  flow.send({ type: 'CREATE_REQUESTED' });
+  await vi.waitFor(() => {
+    const state = flow.read();
+    expect(state.phase === 'waiting').toBe(true);
+  });
+  if (operation === 'cancel') flow.send({ type: 'CANCEL_REQUESTED' });
   if (operation === 'expiry') {
-    actor.send({ type: 'WAIT_EXPIRED' });
-    actor.send({ type: 'DISMISS_NOTICE' });
+    flow.send({ type: 'WAIT_EXPIRED' });
+    flow.send({ type: 'DISMISS_NOTICE' });
   }
   if (ending === 'match handoff') publishGame();
-  else if (ending === 'activity abort') activity.abort();
+  else if (ending === 'activity abort') act(() => activity.abort());
   else {
     createSession.mockReturnValueOnce({ ...session });
     services.sessions.installAuthority({
@@ -358,11 +387,23 @@ test.each([
     });
   }
   rejectOperation(new TypeError('late operation'));
-  await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  await act(async () => {
+    await Promise.resolve();
+  });
   expect(navigate).toHaveBeenCalledTimes(ending === 'match handoff' ? 1 : 0);
   expect(reportUnexpected).not.toHaveBeenCalled();
-  expect(actor.getSnapshot().status).toBe(ending === 'session replacement' ? 'active' : 'done');
-  actor.stop();
+  expect(flow.read().phase).toBe(
+    ending === 'match handoff'
+      ? 'handoff'
+      : ending === 'activity abort'
+        ? 'replaced'
+        : operation === 'cancel'
+          ? 'cancelling'
+          : operation === 'expiry'
+            ? 'checkingExpiry'
+            : 'waiting',
+  );
+  flow.unmount();
   services.sessions.dispose();
 });
 
@@ -388,26 +429,29 @@ test.each(['create', 'join', 'newCreate'] as const)(
         error: { kind: 'transport', code: 'NETWORK_UNAVAILABLE' },
       }),
     );
-    const { actor, client, services } = setup({ createRoom }, inactiveTelemetry, second);
+    const { flow, client, services } = setup({ createRoom }, inactiveTelemetry, second);
     try {
-      actor.send({ type: 'OPEN_PROFILE' });
-      actor.send({ type: 'CLOSE_PROFILE' });
-      actor.send({ type: 'OPEN_SETTINGS' });
-      actor.send({ type: 'CLOSE_SETTINGS' });
+      flow.send({ type: 'OPEN_PROFILE' });
+      flow.send({ type: 'CLOSE_PROFILE' });
+      flow.send({ type: 'OPEN_SETTINGS' });
+      flow.send({ type: 'CLOSE_SETTINGS' });
       expect(client.resumeRoom).not.toHaveBeenCalled();
       if (intent === 'newCreate') {
-        actor.send({ type: 'CREATE_REQUESTED' });
-        await waitFor(actor, (state) => state.matches('createFailed'));
-        actor.send({ type: 'DISMISS_NOTICE' });
-        expect(actor.getSnapshot().matches('home')).toBe(true);
+        flow.send({ type: 'CREATE_REQUESTED' });
+        await vi.waitFor(() => {
+          const state = flow.read();
+          expect(state.phase === 'createFailed').toBe(true);
+        });
+        flow.send({ type: 'DISMISS_NOTICE' });
+        expect(flow.read().phase === 'home').toBe(true);
         createRoom.mockClear();
       }
       first.recordRoom(authority);
       if (intent === 'join') {
-        actor.send({ type: 'OPEN_JOIN_ROOM' });
-        actor.send({ type: 'JOIN_CODE_CHANGED', code: '001234' });
-        actor.send({ type: 'JOIN_REQUESTED' });
-      } else actor.send({ type: 'CREATE_REQUESTED' });
+        flow.send({ type: 'OPEN_JOIN_ROOM' });
+        flow.send({ type: 'JOIN_CODE_CHANGED', code: '001234' });
+        flow.send({ type: 'JOIN_REQUESTED' });
+      } else flow.send({ type: 'CREATE_REQUESTED' });
       await vi.waitFor(() => expect(client.resumeRoom).toHaveBeenCalledOnce());
       expect(client.resumeRoom).toHaveBeenCalledWith(
         { roomId: authority.roomId, seatToken: authority.seatToken },
@@ -416,7 +460,7 @@ test.each(['create', 'join', 'newCreate'] as const)(
       expect(createRoom).not.toHaveBeenCalled();
       expect(client.joinRoom).not.toHaveBeenCalled();
     } finally {
-      actor.stop();
+      flow.unmount();
       services.reentry.dispose();
     }
   },
@@ -425,12 +469,12 @@ test.each(['create', 'join', 'newCreate'] as const)(
 test('blocks admission if the previously readable recovery storage becomes unavailable', async () => {
   const storage = { getItem: vi.fn(() => null), setItem() {}, removeItem() {} };
   const sessionCredentialStore = createSessionCredentialStore({ storage });
-  const { actor, client, services } = setup({}, inactiveTelemetry, sessionCredentialStore);
+  const { flow, client, services } = setup({}, inactiveTelemetry, sessionCredentialStore);
   try {
     storage.getItem.mockImplementation(() => {
       throw new Error('denied');
     });
-    actor.send({ type: 'CREATE_REQUESTED' });
+    flow.send({ type: 'CREATE_REQUESTED' });
     await Promise.resolve();
     expect(services.reentry.getSnapshot()).toEqual({
       status: 'refreshRequired',
@@ -440,7 +484,7 @@ test('blocks admission if the previously readable recovery storage becomes unava
     expect(client.createRoom).not.toHaveBeenCalled();
     expect(client.resumeRoom).not.toHaveBeenCalled();
   } finally {
-    actor.stop();
+    flow.unmount();
     services.reentry.dispose();
   }
 });
@@ -465,7 +509,7 @@ test('allows fresh admission after confirming a permanently unavailable recovery
       error: { kind: 'server', error: { code: 'RESUME_NOT_AVAILABLE', params: {} } },
     }),
   );
-  const { actor, client, services } = setup(
+  const { flow, client, services } = setup(
     { resumeRoom },
     inactiveTelemetry,
     sessionCredentialStore,
@@ -473,28 +517,34 @@ test('allows fresh admission after confirming a permanently unavailable recovery
   try {
     await vi.waitFor(() => expect(services.reentry.getSnapshot().status).toBe('permanentFailure'));
     services.reentry.confirmPermanentFailure();
-    actor.send({ type: 'CREATE_REQUESTED' });
-    await waitFor(actor, (state) => state.matches({ admitted: 'waiting' }));
+    flow.send({ type: 'CREATE_REQUESTED' });
+    await vi.waitFor(() => {
+      const state = flow.read();
+      expect(state.phase === 'waiting').toBe(true);
+    });
     expect(resumeRoom).toHaveBeenCalledOnce();
     expect(client.createRoom).toHaveBeenCalledOnce();
   } finally {
-    actor.stop();
+    flow.unmount();
     services.reentry.dispose();
   }
 });
 
 test('owns creation through waiting without storing room authority in form context', async () => {
-  const { actor, session } = setup();
-  actor.send({ type: 'CREATE_REQUESTED' });
-  expect(selectLobbyScreenState(actor.getSnapshot())).toBe('creating');
-  await waitFor(actor, (state) => state.matches({ admitted: 'waiting' }));
-  expect(actor.getSnapshot().context.waitingRoom).toEqual({
+  const { flow, session } = setup();
+  flow.send({ type: 'CREATE_REQUESTED' });
+  expect(flow.read().phase).toBe('creating');
+  await vi.waitFor(() => {
+    const state = flow.read();
+    expect(state.phase === 'waiting').toBe(true);
+  });
+  expect(flow.read().waitingRoom).toEqual({
     roomCode: '001234',
     expiresAt: 10_000,
   });
-  expect(actor.getSnapshot().context).not.toHaveProperty('authority');
+  expect(flow.read()).not.toHaveProperty('authority');
   expect(session.connect).toHaveBeenCalledOnce();
-  actor.stop();
+  flow.unmount();
 });
 
 test('connects a newly joined session before handing off its authoritative game once', async () => {
@@ -519,26 +569,32 @@ test('connects a newly joined session before handing off its authoritative game 
     },
   });
   if (!response.ok) throw new Error('Expected a successful join fixture');
-  const { actor, session, publishGame, navigate } = setup({
+  const { flow, session, publishGame, navigate } = setup({
     joinRoom: vi.fn<GameClient['joinRoom']>(() => Promise.resolve(response)),
   });
-  actor.send({ type: 'OPEN_JOIN_ROOM' });
-  actor.send({ type: 'JOIN_CODE_CHANGED', code: '001234' });
-  actor.send({ type: 'JOIN_REQUESTED' });
-  await waitFor(actor, (state) => state.matches({ admitted: 'matching' }));
+  flow.send({ type: 'OPEN_JOIN_ROOM' });
+  flow.send({ type: 'JOIN_CODE_CHANGED', code: '001234' });
+  flow.send({ type: 'JOIN_REQUESTED' });
+  await vi.waitFor(() => {
+    const state = flow.read();
+    expect(state.phase === 'matching').toBe(true);
+  });
   expect(session.connect).toHaveBeenCalledOnce();
   expect(navigate).not.toHaveBeenCalled();
   publishGame();
-  await waitFor(actor, (state) => state.status === 'done');
+  await vi.waitFor(() => {
+    const state = flow.read();
+    expect(state.phase === 'handoff').toBe(true);
+  });
   publishGame();
   expect(navigate).toHaveBeenCalledOnce();
-  actor.stop();
+  flow.unmount();
 });
 
 test.each(['waiting entry', 'session capture'] as const)(
   'adopts resumed waiting without another sync when reentry is consumed at %s',
   async (consumeAt) => {
-    const { actor, services, session, publish, publishGame, navigate } = setup();
+    const { flow, services, session, publish, publishGame, navigate } = setup();
     services.sessions.installAuthority(authority);
     if (consumeAt === 'session capture') {
       const current = services.sessions.getSnapshot();
@@ -549,28 +605,37 @@ test.each(['waiting entry', 'session capture'] as const)(
       });
     }
     publish({ status: 'waiting', roomCode: '001234', expiresAt: 10_000 });
-    await waitFor(actor, (state) => state.matches({ admitted: 'waiting' }));
-    expect(actor.getSnapshot().context.waitingRoom?.roomCode).toBe('001234');
+    await vi.waitFor(() => {
+      const state = flow.read();
+      expect(state.phase === 'waiting').toBe(true);
+    });
+    expect(flow.read().waitingRoom?.roomCode).toBe('001234');
     expect(services.reentry.getSnapshot().status).toBe('idle');
     expect(session.connect).not.toHaveBeenCalled();
     expect(session.synchronize).not.toHaveBeenCalled();
     publishGame();
-    await waitFor(actor, (state) => state.status === 'done');
+    await vi.waitFor(() => {
+      const state = flow.read();
+      expect(state.phase === 'handoff').toBe(true);
+    });
     publish({ status: 'gameReady' });
     expect(navigate).toHaveBeenCalledOnce();
-    actor.stop();
+    flow.unmount();
   },
 );
 
 test('normalizes a join code and preserves it after an invoked retryable failure', async () => {
   const trackEvent = vi.fn();
-  const { actor } = setup({}, { ...inactiveTelemetry, trackEvent });
-  actor.send({ type: 'OPEN_JOIN_ROOM' });
-  actor.send({ type: 'JOIN_CODE_CHANGED', code: '0a0123456' });
-  actor.send({ type: 'JOIN_REQUESTED' });
-  expect(selectLobbyScreenState(actor.getSnapshot())).toBe('joining');
-  await waitFor(actor, (state) => state.matches('joinRoom'));
-  expect(actor.getSnapshot().context).toMatchObject({
+  const { flow } = setup({}, { ...inactiveTelemetry, trackEvent });
+  flow.send({ type: 'OPEN_JOIN_ROOM' });
+  flow.send({ type: 'JOIN_CODE_CHANGED', code: '0a0123456' });
+  flow.send({ type: 'JOIN_REQUESTED' });
+  expect(flow.read().phase).toBe('joining');
+  await vi.waitFor(() => {
+    const state = flow.read();
+    expect(state.phase === 'joinRoom').toBe(true);
+  });
+  expect(flow.read()).toMatchObject({
     joinCode: '001234',
     error: { kind: 'request', key: 'error.roomNotFound' },
   });
@@ -585,20 +650,23 @@ test('normalizes a join code and preserves it after an invoked retryable failure
       failure_code: 'ROOM_NOT_FOUND',
     },
   ]);
-  actor.stop();
+  flow.unmount();
 });
 
 test('keeps admission success separate from a failed initial connection', async () => {
   const trackEvent = vi.fn();
-  const { actor, session } = setup({}, { ...inactiveTelemetry, trackEvent });
+  const { flow, session } = setup({}, { ...inactiveTelemetry, trackEvent });
   vi.mocked(session.connect).mockResolvedValue({
     ok: false,
     error: { kind: 'transport', code: 'NETWORK_UNAVAILABLE' },
   });
   try {
-    actor.send({ type: 'CREATE_REQUESTED' });
-    await waitFor(actor, (state) => state.matches('connectionFailed'));
-    expect(actor.getSnapshot().context.error).toEqual({
+    flow.send({ type: 'CREATE_REQUESTED' });
+    await vi.waitFor(() => {
+      const state = flow.read();
+      expect(state.phase === 'connectionFailed').toBe(true);
+    });
+    expect(flow.read().error).toEqual({
       kind: 'request',
       key: 'lobby.reentryRefresh',
     });
@@ -617,26 +685,32 @@ test('keeps admission success separate from a failed initial connection', async 
       },
     ]);
   } finally {
-    actor.stop();
+    flow.unmount();
   }
 });
 
 test('closes waiting immediately while cancellation runs and offers retry only after failure', async () => {
-  const { actor } = setup();
-  actor.send({ type: 'CREATE_REQUESTED' });
-  await waitFor(actor, (state) => state.matches({ admitted: 'waiting' }));
-  actor.send({ type: 'CANCEL_REQUESTED' });
-  expect(selectLobbyScreenState(actor.getSnapshot())).toBe('cancelling');
-  await waitFor(actor, (state) => state.matches({ admitted: 'cancelFailed' }));
-  actor.send({ type: 'OPEN_PROFILE' });
-  expect(selectLobbyScreenState(actor.getSnapshot())).toBe('cancelFailed');
-  actor.send({ type: 'RETRY_CANCEL' });
-  expect(selectLobbyScreenState(actor.getSnapshot())).toBe('cancelling');
-  actor.stop();
+  const { flow } = setup();
+  flow.send({ type: 'CREATE_REQUESTED' });
+  await vi.waitFor(() => {
+    const state = flow.read();
+    expect(state.phase === 'waiting').toBe(true);
+  });
+  flow.send({ type: 'CANCEL_REQUESTED' });
+  expect(flow.read().phase).toBe('cancelling');
+  await vi.waitFor(() => {
+    const state = flow.read();
+    expect(state.phase === 'cancelFailed').toBe(true);
+  });
+  flow.send({ type: 'OPEN_PROFILE' });
+  expect(flow.read().phase).toBe('cancelFailed');
+  flow.send({ type: 'CANCEL_REQUESTED' });
+  expect(flow.read().phase).toBe('cancelling');
+  flow.unmount();
 });
 
 test('retains the rate-limit delay for join resubmission', async () => {
-  const { actor } = setup({
+  const { flow } = setup({
     joinRoom: vi.fn<GameClient['joinRoom']>(() =>
       Promise.resolve({
         ok: false,
@@ -644,33 +718,36 @@ test('retains the rate-limit delay for join resubmission', async () => {
       }),
     ),
   });
-  actor.send({ type: 'OPEN_JOIN_ROOM' });
-  actor.send({ type: 'JOIN_CODE_CHANGED', code: '000001' });
-  actor.send({ type: 'JOIN_REQUESTED' });
-  await waitFor(actor, (state) => state.matches('joinRoom'));
-  expect(actor.getSnapshot().context.error).toEqual({
+  flow.send({ type: 'OPEN_JOIN_ROOM' });
+  flow.send({ type: 'JOIN_CODE_CHANGED', code: '000001' });
+  flow.send({ type: 'JOIN_REQUESTED' });
+  await vi.waitFor(() => {
+    const state = flow.read();
+    expect(state.phase === 'joinRoom').toBe(true);
+  });
+  expect(flow.read().error).toEqual({
     kind: 'rate-limited',
     retryAfterMs: 2_200,
   });
-  actor.stop();
+  flow.unmount();
 });
 
 test('only accepts six ASCII digits for join submission', () => {
-  const { actor } = setup();
-  actor.send({ type: 'OPEN_JOIN_ROOM' });
-  actor.send({ type: 'JOIN_CODE_CHANGED', code: '１２３４５６' });
-  actor.send({ type: 'JOIN_REQUESTED' });
-  expect(actor.getSnapshot().matches('joinRoom')).toBe(true);
-  actor.send({ type: 'JOIN_CODE_CHANGED', code: '000001' });
-  actor.send({ type: 'JOIN_REQUESTED' });
-  expect(selectLobbyScreenState(actor.getSnapshot())).toBe('joining');
-  actor.stop();
+  const { flow } = setup();
+  flow.send({ type: 'OPEN_JOIN_ROOM' });
+  flow.send({ type: 'JOIN_CODE_CHANGED', code: '１２３４５６' });
+  flow.send({ type: 'JOIN_REQUESTED' });
+  expect(flow.read().phase === 'joinRoom').toBe(true);
+  flow.send({ type: 'JOIN_CODE_CHANGED', code: '000001' });
+  flow.send({ type: 'JOIN_REQUESTED' });
+  expect(flow.read().phase).toBe('joining');
+  flow.unmount();
 });
 
 test('lets every root observer see resumed success before the single route handoff', async () => {
-  const { actor, services, publish, publishAttempt, publishGame, navigate } = setup();
+  const { flow, services, publish, publishAttempt, publishGame, navigate } = setup();
   const trackEvent = vi.fn();
-  // Subscribe after the machine to exercise the adverse subscriber order.
+  // Subscribe after the controller to exercise the adverse subscriber order.
   const stop = observeSessionTelemetry({
     ...services,
     reentry: services.reentry,
@@ -684,7 +761,10 @@ test('lets every root observer see resumed success before the single route hando
   expect(navigate).not.toHaveBeenCalled();
   publishAttempt({ phase: 'finished', outcome: 'success', durationMs: 12 });
   publish({ status: 'gameReady' });
-  await waitFor(actor, (state) => state.status === 'done');
+  await vi.waitFor(() => {
+    const state = flow.read();
+    expect(state.phase === 'handoff').toBe(true);
+  });
   expect(navigate).toHaveBeenCalledOnce();
   expect(trackEvent.mock.calls.map(([event]) => event)).toEqual([
     { name: 'recovery_started', operation: 'reentry' },
@@ -702,25 +782,34 @@ test('lets every root observer see resumed success before the single route hando
 
 test('stopping cancellation aborts its HTTP call', async () => {
   const cancelRoom = vi.fn<GameClient['cancelRoom']>(() => new Promise(() => {}));
-  const { actor } = setup({ cancelRoom });
-  actor.send({ type: 'CREATE_REQUESTED' });
-  await waitFor(actor, (state) => state.matches({ admitted: 'waiting' }));
-  actor.send({ type: 'CANCEL_REQUESTED' });
+  const { flow } = setup({ cancelRoom });
+  flow.send({ type: 'CREATE_REQUESTED' });
+  await vi.waitFor(() => {
+    const state = flow.read();
+    expect(state.phase === 'waiting').toBe(true);
+  });
+  flow.send({ type: 'CANCEL_REQUESTED' });
   const signal = cancelRoom.mock.calls[0]?.[1]?.signal;
   expect(signal?.aborted).toBe(false);
-  actor.stop();
+  flow.unmount();
   expect(signal?.aborted).toBe(true);
 });
 
 test('a same-tick authoritative game wins over the local expiry timer', async () => {
   const trackEvent = vi.fn();
-  const { actor, publishGame, navigate } = setup({}, { ...inactiveTelemetry, trackEvent });
-  actor.send({ type: 'CREATE_REQUESTED' });
-  await waitFor(actor, (state) => state.matches({ admitted: 'waiting' }));
+  const { flow, publishGame, navigate } = setup({}, { ...inactiveTelemetry, trackEvent });
+  flow.send({ type: 'CREATE_REQUESTED' });
+  await vi.waitFor(() => {
+    const state = flow.read();
+    expect(state.phase === 'waiting').toBe(true);
+  });
   publishGame();
-  actor.send({ type: 'WAIT_EXPIRED' });
-  expect(selectLobbyScreenState(actor.getSnapshot())).not.toBe('expired');
-  await waitFor(actor, (state) => state.status === 'done');
+  flow.send({ type: 'WAIT_EXPIRED' });
+  expect(flow.read().phase).not.toBe('expired');
+  await vi.waitFor(() => {
+    const state = flow.read();
+    expect(state.phase === 'handoff').toBe(true);
+  });
   expect(navigate).toHaveBeenCalledOnce();
   expect(
     trackEvent.mock.calls
@@ -757,27 +846,36 @@ test('counts the whole waiting period after the server rejects local expiry', as
     if (!result.ok) throw new Error('Expected a waiting resume fixture');
     return result;
   });
-  const { actor, services, publishGame } = setup(
+  const { flow, services, publishGame } = setup(
     { resumeRoom },
     { ...inactiveTelemetry, trackEvent },
   );
   try {
-    actor.send({ type: 'CREATE_REQUESTED' });
-    await waitFor(actor, (state) => state.matches({ admitted: 'waiting' }));
+    flow.send({ type: 'CREATE_REQUESTED' });
+    await vi.waitFor(() => {
+      const state = flow.read();
+      expect(state.phase === 'waiting').toBe(true);
+    });
     now = 11_000;
-    actor.send({ type: 'WAIT_EXPIRED' });
-    actor.send({ type: 'DISMISS_NOTICE' });
-    await waitFor(actor, (state) => state.matches({ admitted: 'waiting' }));
+    flow.send({ type: 'WAIT_EXPIRED' });
+    flow.send({ type: 'DISMISS_NOTICE' });
+    await vi.waitFor(() => {
+      const state = flow.read();
+      expect(state.phase === 'waiting').toBe(true);
+    });
     now = 21_000;
     publishGame();
-    await waitFor(actor, (state) => state.status === 'done');
+    await vi.waitFor(() => {
+      const state = flow.read();
+      expect(state.phase === 'handoff').toBe(true);
+    });
     expect(
       trackEvent.mock.calls
         .map(([event]) => event)
         .filter((event) => event.name === 'waiting_result'),
     ).toEqual([{ name: 'waiting_result', outcome: 'matched', duration_ms: 20_000 }]);
   } finally {
-    actor.stop();
+    flow.unmount();
     services.sessions.dispose();
     clock.mockRestore();
   }
@@ -789,7 +887,7 @@ test.each([
   ['created', 'notice'],
   ['resumed', 'notice'],
 ] as const)('dismisses a %s room %s without clearing its replacement', async (origin, notice) => {
-  const { actor, services, publish, createSession, session } = setup({
+  const { flow, services, publish, createSession, session } = setup({
     cancelRoom: vi.fn<GameClient['cancelRoom']>(() =>
       Promise.resolve({
         ok: false,
@@ -797,37 +895,49 @@ test.each([
       }),
     ),
   });
-  if (origin === 'created') actor.send({ type: 'CREATE_REQUESTED' });
+  if (origin === 'created') flow.send({ type: 'CREATE_REQUESTED' });
   else {
     services.sessions.installAuthority(authority);
     publish({ status: 'waiting', roomCode: '001234', expiresAt: 10_000 });
   }
-  await waitFor(actor, (state) => state.matches({ admitted: 'waiting' }));
+  await vi.waitFor(() => {
+    const state = flow.read();
+    expect(state.phase === 'waiting').toBe(true);
+  });
   if (origin === 'resumed') expect(session.connect).not.toHaveBeenCalled();
-  actor.send({ type: notice === 'expired' ? 'WAIT_EXPIRED' : 'CANCEL_REQUESTED' });
-  await waitFor(actor, (state) => selectLobbyScreenState(state) === notice);
+  flow.send({ type: notice === 'expired' ? 'WAIT_EXPIRED' : 'CANCEL_REQUESTED' });
+  await vi.waitFor(() => {
+    const state = flow.read();
+    expect(state.phase === notice).toBe(true);
+  });
   const replacement = { ...session };
   createSession.mockReturnValueOnce(replacement);
   services.sessions.installAuthority({
     ...authority,
     roomId: 'replacement-room' as typeof authority.roomId,
   });
-  actor.send({ type: 'DISMISS_NOTICE' });
+  flow.send({ type: 'DISMISS_NOTICE' });
   expect(services.sessions.getSnapshot().session).toBe(replacement);
   expect(services.sessionCredentialStore.removeRoom).not.toHaveBeenCalled();
-  actor.stop();
+  flow.unmount();
   services.sessions.dispose();
 });
 
 test('confirmation cannot clear a game published after local expiry but before source handoff', async () => {
-  const { actor, services, publishGame, navigate } = setup();
-  actor.send({ type: 'CREATE_REQUESTED' });
-  await waitFor(actor, (state) => state.matches({ admitted: 'waiting' }));
-  actor.send({ type: 'WAIT_EXPIRED' });
+  const { flow, services, publishGame, navigate } = setup();
+  flow.send({ type: 'CREATE_REQUESTED' });
+  await vi.waitFor(() => {
+    const state = flow.read();
+    expect(state.phase === 'waiting').toBe(true);
+  });
+  flow.send({ type: 'WAIT_EXPIRED' });
   publishGame();
-  actor.send({ type: 'DISMISS_NOTICE' });
+  flow.send({ type: 'DISMISS_NOTICE' });
   expect(services.sessions.getSnapshot().sessionSnapshot?.game).toBe(playingGame);
-  await waitFor(actor, (state) => state.status === 'done');
+  await vi.waitFor(() => {
+    const state = flow.read();
+    expect(state.phase === 'handoff').toBe(true);
+  });
   expect(navigate).toHaveBeenCalledOnce();
 });
 
@@ -839,21 +949,27 @@ test('expiry confirmation waits for the server and preserves a late matched cred
         finish = resolve;
       }),
   );
-  const { actor, services, publishGame, navigate } = setup({ resumeRoom });
-  actor.send({ type: 'CREATE_REQUESTED' });
-  await waitFor(actor, (state) => state.matches({ admitted: 'waiting' }));
-  actor.send({ type: 'WAIT_EXPIRED' });
-  actor.send({ type: 'DISMISS_NOTICE' });
+  const { flow, services, publishGame, navigate } = setup({ resumeRoom });
+  flow.send({ type: 'CREATE_REQUESTED' });
+  await vi.waitFor(() => {
+    const state = flow.read();
+    expect(state.phase === 'waiting').toBe(true);
+  });
+  flow.send({ type: 'WAIT_EXPIRED' });
+  flow.send({ type: 'DISMISS_NOTICE' });
   expect(resumeRoom).toHaveBeenCalledOnce();
   expect(resumeRoom).toHaveBeenCalledWith(
     { roomId: authority.roomId, seatToken: authority.seatToken },
     { signal: expect.any(AbortSignal) },
   );
   expect(services.sessionCredentialStore.removeRoom).not.toHaveBeenCalled();
-  actor.send({ type: 'CREATE_REQUESTED' });
+  flow.send({ type: 'CREATE_REQUESTED' });
   expect(services.client.createRoom).toHaveBeenCalledOnce();
   publishGame();
-  await waitFor(actor, (state) => state.status === 'done');
+  await vi.waitFor(() => {
+    const state = flow.read();
+    expect(state.phase === 'handoff').toBe(true);
+  });
   finish({ ok: false, error: { kind: 'server', error: { code: 'ROOM_NOT_FOUND', params: {} } } });
   await Promise.resolve();
   expect(services.sessionCredentialStore.removeRoom).not.toHaveBeenCalled();
@@ -870,18 +986,22 @@ test.each(['NETWORK_UNAVAILABLE', 'ROOM_NOT_FOUND'] as const)(
           ? { kind: 'transport', code }
           : { kind: 'server', error: { code, params: {} } },
     }));
-    const { actor, services } = setup({ resumeRoom });
-    actor.send({ type: 'CREATE_REQUESTED' });
-    await waitFor(actor, (state) => state.matches({ admitted: 'waiting' }));
-    actor.send({ type: 'WAIT_EXPIRED' });
-    actor.send({ type: 'DISMISS_NOTICE' });
-    await waitFor(actor, (state) =>
-      state.matches(code === 'ROOM_NOT_FOUND' ? 'home' : 'connectionFailed'),
-    );
+    const { flow, services } = setup({ resumeRoom });
+    flow.send({ type: 'CREATE_REQUESTED' });
+    await vi.waitFor(() => {
+      const state = flow.read();
+      expect(state.phase === 'waiting').toBe(true);
+    });
+    flow.send({ type: 'WAIT_EXPIRED' });
+    flow.send({ type: 'DISMISS_NOTICE' });
+    await vi.waitFor(() => {
+      const state = flow.read();
+      expect(state.phase === (code === 'ROOM_NOT_FOUND' ? 'home' : 'connectionFailed')).toBe(true);
+    });
     expect(services.sessionCredentialStore.removeRoom).toHaveBeenCalledTimes(
       code === 'ROOM_NOT_FOUND' ? 1 : 0,
     );
-    actor.stop();
+    flow.unmount();
   },
 );
 
@@ -893,25 +1013,28 @@ test('losing tab ownership aborts admission and ignores a late successful respon
         finish = resolve;
       }),
   );
-  const { actor, services, activity } = setup({ createRoom });
-  actor.send({ type: 'CREATE_REQUESTED' });
-  await waitFor(actor, (state) => state.matches('creating'));
+  const { flow, services, activity } = setup({ createRoom });
+  flow.send({ type: 'CREATE_REQUESTED' });
+  await vi.waitFor(() => {
+    const state = flow.read();
+    expect(state.phase === 'creating').toBe(true);
+  });
   const signal = createRoom.mock.calls[0]?.[1]?.signal;
-  activity.abort();
+  act(() => activity.abort());
   expect(signal?.aborted).toBe(true);
   finish({ ok: true, data: { authority, view: { room: {} } }, meta: {} } as Awaited<
     ReturnType<GameClient['createRoom']>
   >);
   await Promise.resolve();
-  actor.send({ type: 'CREATE_REQUESTED' });
+  flow.send({ type: 'CREATE_REQUESTED' });
   expect(createRoom).toHaveBeenCalledOnce();
   expect(services.sessionCredentialStore.recordRoom).not.toHaveBeenCalled();
-  expect(actor.getSnapshot().matches('replaced')).toBe(true);
+  expect(flow.read().phase === 'replaced').toBe(true);
 });
 
 test('reports malformed waiting-room expiry responses and preserves the refresh-only failure', async () => {
   const reportUnexpected = vi.fn();
-  const { actor } = setup(
+  const { flow } = setup(
     {
       resumeRoom: async () => ({
         ok: false,
@@ -921,11 +1044,17 @@ test('reports malformed waiting-room expiry responses and preserves the refresh-
     { ...inactiveTelemetry, reportUnexpected },
   );
   try {
-    actor.send({ type: 'CREATE_REQUESTED' });
-    await waitFor(actor, (state) => state.matches({ admitted: 'waiting' }));
-    actor.send({ type: 'WAIT_EXPIRED' });
-    actor.send({ type: 'DISMISS_NOTICE' });
-    await waitFor(actor, (state) => state.matches('connectionFailed'));
+    flow.send({ type: 'CREATE_REQUESTED' });
+    await vi.waitFor(() => {
+      const state = flow.read();
+      expect(state.phase === 'waiting').toBe(true);
+    });
+    flow.send({ type: 'WAIT_EXPIRED' });
+    flow.send({ type: 'DISMISS_NOTICE' });
+    await vi.waitFor(() => {
+      const state = flow.read();
+      expect(state.phase === 'connectionFailed').toBe(true);
+    });
     expect(reportUnexpected.mock.calls).toEqual([
       [
         expect.objectContaining({ message: 'INVALID_RESPONSE' }),
@@ -937,7 +1066,7 @@ test('reports malformed waiting-room expiry responses and preserves the refresh-
       ],
     ]);
   } finally {
-    actor.stop();
+    flow.unmount();
   }
 });
 
@@ -957,21 +1086,24 @@ test.each<{
 ])(
   'routes $operation readiness $reason to $view without a mutation',
   async ({ operation, reason, view }) => {
-    const { actor, services, client } = setup();
+    const { flow, services, client } = setup();
     services.readiness.wait = () => Promise.resolve({ ok: false, reason });
     try {
       if (operation === 'join') {
-        actor.send({ type: 'OPEN_JOIN_ROOM' });
-        actor.send({ type: 'JOIN_CODE_CHANGED', code: '001234' });
-        actor.send({ type: 'JOIN_REQUESTED' });
-      } else actor.send({ type: 'CREATE_REQUESTED' });
-      await waitFor(actor, (state) => state.context.error !== null);
-      expect(selectLobbyScreenState(actor.getSnapshot())).toBe(view);
-      if (operation === 'join') expect(actor.getSnapshot().context.joinCode).toBe('001234');
+        flow.send({ type: 'OPEN_JOIN_ROOM' });
+        flow.send({ type: 'JOIN_CODE_CHANGED', code: '001234' });
+        flow.send({ type: 'JOIN_REQUESTED' });
+      } else flow.send({ type: 'CREATE_REQUESTED' });
+      await vi.waitFor(() => {
+        const state = flow.read();
+        expect(state.error !== null).toBe(true);
+      });
+      expect(flow.read().phase).toBe(view);
+      if (operation === 'join') expect(flow.read().joinCode).toBe('001234');
       expect(client.createRoom).not.toHaveBeenCalled();
       expect(client.joinRoom).not.toHaveBeenCalled();
     } finally {
-      actor.stop();
+      flow.unmount();
     }
   },
 );
@@ -991,7 +1123,7 @@ test.each<{ operation: 'create' | 'join'; events: LobbyEvent[] }>([
   async ({ operation, events }) => {
     const reportUnexpected = vi.fn();
     const trackEvent = vi.fn();
-    const { actor, services, client } = setup(
+    const { flow, services, client } = setup(
       {},
       { ...inactiveTelemetry, reportUnexpected, trackEvent },
     );
@@ -999,8 +1131,11 @@ test.each<{ operation: 'create' | 'join'; events: LobbyEvent[] }>([
       createServerReadiness('https://game.example', async () => new Response('not json')).wait,
     );
     try {
-      for (const event of events) actor.send(event);
-      await waitFor(actor, (state) => state.matches('connectionFailed'));
+      for (const event of events) flow.send(event);
+      await vi.waitFor(() => {
+        const state = flow.read();
+        expect(state.phase === 'connectionFailed').toBe(true);
+      });
       expect(client.createRoom).not.toHaveBeenCalled();
       expect(client.joinRoom).not.toHaveBeenCalled();
       expect(trackEvent.mock.calls.map(([event]) => event)).toEqual([
@@ -1021,24 +1156,27 @@ test.each<{ operation: 'create' | 'join'; events: LobbyEvent[] }>([
         ],
       ]);
     } finally {
-      actor.stop();
+      flow.unmount();
     }
   },
 );
 
 test('uses connection recovery copy when the initial SDK full sync was cancelled', async () => {
-  const { actor, session, services } = setup();
+  const { flow, session, services } = setup();
   vi.mocked(session.connect).mockResolvedValueOnce({
     ok: false,
     error: { kind: 'protocol', code: 'SESSION_DISPOSED' },
   });
-  actor.send({ type: 'CREATE_REQUESTED' });
-  await waitFor(actor, (state) => state.matches('connectionFailed'));
-  expect(actor.getSnapshot().context.error).toEqual({
+  flow.send({ type: 'CREATE_REQUESTED' });
+  await vi.waitFor(() => {
+    const state = flow.read();
+    expect(state.phase === 'connectionFailed').toBe(true);
+  });
+  expect(flow.read().error).toEqual({
     kind: 'request',
     key: 'lobby.reentryRefresh',
   });
   expect(session.disconnect).toHaveBeenCalledOnce();
-  actor.stop();
+  flow.unmount();
   services.sessions.dispose();
 });

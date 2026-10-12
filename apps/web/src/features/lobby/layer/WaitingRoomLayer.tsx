@@ -1,5 +1,6 @@
+import { requireGameAsset } from '@repo/game-assets';
+
 import { LobbyLayer } from '@/features/lobby/layer/LobbyLayer';
-import { LOBBY_ICONS } from '@/features/lobby/lobby-assets';
 import { type Locale, translate } from '@/i18n';
 import type { WaitingRoomSummary } from '@/runtime/room-access/room-access';
 import { IconButton } from '@/ui/button';
@@ -36,7 +37,7 @@ export function WaitingRoomLayer({
         headerAction={
           <IconButton
             label={translate(locale, 'lobby.cancelWait')}
-            icon={<img src={LOBBY_ICONS.close} alt='' />}
+            icon={<img src={requireGameAsset('ui.close').url} alt='' />}
             interactionLocked={matching}
             onClick={onCancel}
           />

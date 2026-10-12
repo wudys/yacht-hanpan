@@ -7,9 +7,11 @@ import {
 
 export type { CueRecipeId } from '@/runtime/audio/cue-recipes';
 
+const CUE_SAMPLE_RATE_HZ = 44_100;
+
 // Explicit offline contexts avoid Tone.Offline's global context swap and unused 3D Listener.
 export async function renderCueBuffers(
-  native: AudioContext,
+  audioContext: AudioContext,
 ): Promise<Map<CueRecipeId, AudioBuffer>> {
   await import('tone/build/esm/core/context/Destination');
   const [{ OfflineContext }, { Gain }, { Filter }, { FMSynth }, { Synth }] = await Promise.all([
@@ -22,7 +24,7 @@ export async function renderCueBuffers(
   const buffers = new Map<CueRecipeId, AudioBuffer>();
   for (const key of Object.keys(cueRecipes) as CueRecipeId[]) {
     const recipe: CueRecipe = cueRecipes[key];
-    const context = new OfflineContext(1, recipe.duration, 44100);
+    const context = new OfflineContext(1, recipe.duration, CUE_SAMPLE_RATE_HZ);
     const nodes: { dispose(): unknown }[] = [];
     const own = <T extends { dispose(): unknown }>(node: T): T => {
       nodes.push(node);
@@ -63,17 +65,17 @@ export async function renderCueBuffers(
         }
       } else if (recipe.profile === 'fm-levelled') {
         for (const event of recipe.events) {
-          const o = event.options;
+          const voiceOptions = event.options;
           playVoice(
             own(
               new FMSynth({
                 context,
-                volume: 20 * Math.log10(o.amp ?? 0.5),
+                volume: 20 * Math.log10(voiceOptions.amp ?? 0.5),
                 harmonicity: 2,
-                modulationIndex: o.modulationIndex,
+                modulationIndex: voiceOptions.modulationIndex,
                 oscillator: { type: 'sine' },
                 modulation: { type: 'sine' },
-                envelope: levelledEnvelope(o),
+                envelope: levelledEnvelope(voiceOptions),
                 modulationEnvelope: {
                   attack: 0.001,
                   decay: 0.018,
@@ -88,14 +90,14 @@ export async function renderCueBuffers(
         }
       } else {
         for (const event of recipe.events) {
-          const o = event.options;
+          const voiceOptions = event.options;
           playVoice(
             own(
               new Synth({
                 context,
-                volume: 20 * Math.log10(o.amp ?? 0.5),
-                oscillator: { type: o.waveform ?? 'sine' },
-                envelope: levelledEnvelope(o),
+                volume: 20 * Math.log10(voiceOptions.amp ?? 0.5),
+                oscillator: { type: voiceOptions.waveform ?? 'sine' },
+                envelope: levelledEnvelope(voiceOptions),
               }),
             ),
             event,
@@ -104,7 +106,7 @@ export async function renderCueBuffers(
         }
       }
       const rendered = (await context.render()).get()!;
-      buffers.set(key, masterBuffer(native, rendered.getChannelData(0), recipe));
+      buffers.set(key, masterBuffer(audioContext, rendered.getChannelData(0), recipe));
     } finally {
       nodes.reverse().forEach((node) => node.dispose());
       context.dispose();
@@ -123,17 +125,17 @@ function levelledEnvelope(options: LevelledOptions) {
 }
 
 function masterBuffer(context: AudioContext, raw: Float32Array, recipe: CueRecipe): AudioBuffer {
-  const sr = 44100,
-    width = Math.round(sr * 0.08);
+  const sampleRateHz = CUE_SAMPLE_RATE_HZ,
+    rmsWindowSamples = Math.round(sampleRateHz * 0.08);
   let peak = 0,
-    energy = 0,
-    maxEnergy = 0;
+    windowEnergy = 0,
+    maxWindowEnergy = 0;
   for (let i = 0; i < raw.length; i++) {
     const sample = raw[i]!;
     peak = Math.max(peak, Math.abs(sample));
-    energy += sample * sample;
-    if (i >= width) energy -= raw[i - width]! ** 2;
-    maxEnergy = Math.max(maxEnergy, energy);
+    windowEnergy += sample * sample;
+    if (i >= rmsWindowSamples) windowEnergy -= raw[i - rmsWindowSamples]! ** 2;
+    maxWindowEnergy = Math.max(maxWindowEnergy, windowEnergy);
   }
   if (peak === 0) throw new Error('Selected cue rendered silence');
   const isFmLevelled = recipe.profile === 'fm-levelled',
@@ -141,7 +143,8 @@ function masterBuffer(context: AudioContext, raw: Float32Array, recipe: CueRecip
   const scale =
     isFmLevelled || isOscillatorLevelled
       ? Math.min(
-          (isFmLevelled ? recipe.targetRms : recipe.baselineRms80) / Math.sqrt(maxEnergy / width),
+          (isFmLevelled ? recipe.targetRms : recipe.baselineRms80) /
+            Math.sqrt(maxWindowEnergy / rmsWindowSamples),
           (isFmLevelled ? 0.72 : 0.76) / peak,
         )
       : 1;
@@ -154,16 +157,20 @@ function masterBuffer(context: AudioContext, raw: Float32Array, recipe: CueRecip
   const length = Math.min(
     raw.length,
     Math.max(
-      Math.round(sr * (recipe.profile === 'oscillator-levelled' ? recipe.minSeconds : 0)),
-      last + Math.round(sr * (isOscillatorLevelled ? 0.035 : 0.025)),
+      Math.round(sampleRateHz * (recipe.profile === 'oscillator-levelled' ? recipe.minSeconds : 0)),
+      last + Math.round(sampleRateHz * (isOscillatorLevelled ? 0.035 : 0.025)),
     ),
   );
-  const buffer = context.createBuffer(1, length, sr),
+  const buffer = context.createBuffer(1, length, sampleRateHz),
     output = buffer.getChannelData(0);
   for (let i = 0; i < length; i++) {
     const fade =
       isFmLevelled || isOscillatorLevelled
-        ? Math.min(1, i / (sr * 0.0007), (length - 1 - i) / (sr * (isFmLevelled ? 0.008 : 0.012)))
+        ? Math.min(
+            1,
+            i / (sampleRateHz * 0.0007),
+            (length - 1 - i) / (sampleRateHz * (isFmLevelled ? 0.008 : 0.012)),
+          )
         : 1;
     const shaped = raw[i]! * scale * fade;
     output[i] = isFmLevelled

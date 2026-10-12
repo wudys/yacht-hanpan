@@ -167,28 +167,11 @@ export function releaseRestingGroundEdges(
     // Elevated stacks are rejected by settlement policy rather than pushed sideways.
     if (blockers.length > 0 && elevated) return;
     if (blockers.length > 0) {
-      const centerX =
-        blockers.reduce((sum, other) => sum + other.body.translation().x, 0) / blockers.length;
-      const centerZ =
-        blockers.reduce((sum, other) => sum + other.body.translation().z, 0) / blockers.length;
-      let dx = position.x - centerX;
-      let dz = position.z - centerZ;
-      // A lower support or side neighbour can pin a tilted die against a wall.
-      // Escape tangentially rather than rotating or pushing back into the wedge.
-      for (const wall of touchingWalls) {
-        const outward = Math.min(0, dx * wall.inwardX + dz * wall.inwardZ);
-        dx -= outward * wall.inwardX;
-        dz -= outward * wall.inwardZ;
-      }
-      if (Math.hypot(dx, dz) < 0.001) {
-        dx = touchingWalls.reduce((sum, wall) => sum + wall.inwardX, 0);
-        dz = touchingWalls.reduce((sum, wall) => sum + wall.inwardZ, 0);
-      }
-      const length = Math.hypot(dx, dz);
+      const direction = sideEscapeDirection(position, blockers, touchingWalls);
       // A low wall-and-die wedge receives only the missing speed along its contact direction.
       // Elevated blockers already returned; each remaining blocker is a direct
       // neighbour contact and touchingWalls is non-empty. No pose changed since observation.
-      applySettlingImpulse(die, clockMs, 'side', dx / length, dz / length, 3.6, assistState);
+      applySettlingImpulse(die, clockMs, 'side', direction.x, direction.z, 3.6, assistState);
     } else {
       const torqueAxis = faceSettleTorqueAxis(
         state.targetFaceNormal ?? nearestFaceNormal(rotation),
@@ -231,6 +214,32 @@ export function releaseRestingGroundEdges(
     state.lastReleasedAtMs = clockMs;
     states.set(die.id, state);
   });
+}
+
+function sideEscapeDirection(
+  position: Vector,
+  blockers: readonly PhysicsDie[],
+  touchingWalls: readonly TrayWall[],
+): { x: number; z: number } {
+  const centerX =
+    blockers.reduce((sum, other) => sum + other.body.translation().x, 0) / blockers.length;
+  const centerZ =
+    blockers.reduce((sum, other) => sum + other.body.translation().z, 0) / blockers.length;
+  let dx = position.x - centerX;
+  let dz = position.z - centerZ;
+  // A lower support or side neighbour can pin a tilted die against a wall.
+  // Escape tangentially rather than rotating or pushing back into the wedge.
+  for (const wall of touchingWalls) {
+    const outward = Math.min(0, dx * wall.inwardX + dz * wall.inwardZ);
+    dx -= outward * wall.inwardX;
+    dz -= outward * wall.inwardZ;
+  }
+  if (Math.hypot(dx, dz) < 0.001) {
+    dx = touchingWalls.reduce((sum, wall) => sum + wall.inwardX, 0);
+    dz = touchingWalls.reduce((sum, wall) => sum + wall.inwardZ, 0);
+  }
+  const length = Math.hypot(dx, dz);
+  return { x: dx / length, z: dz / length };
 }
 
 export function releaseRestingWallLeans(

@@ -242,20 +242,24 @@ export function simulateRollPhysics(
       if (!samplesEveryPourStep && step % ROLLOUT_HANDOFF_EVERY_STEPS !== 0 && step !== steps)
         continue;
 
+      const cupExitReady = cupEmptied && t > cupMotion.exitAtMs - CUP_EXIT_HOLD_MS + 420;
+      if (!cupExitReady) continue;
+
+      const rolloutElapsedMs = t - cupMotion.releaseAtMs;
+      const flatHandoffReady =
+        cupRemoved && rolloutElapsedMs > (diceCount >= 5 ? 1400 : 1100) && observation.flat;
       const minRolloutMs = diceCount >= 5 ? 1800 : 1400;
+      const stableHandoffReady =
+        rolloutElapsedMs > minRolloutMs && rolloutStableSamples >= ROLLOUT_STABLE_SAMPLES;
       const maxVisualRolloutMs = 2400;
-      if (
-        cupEmptied &&
-        t > cupMotion.exitAtMs - CUP_EXIT_HOLD_MS + 420 &&
-        ((cupRemoved &&
-          t - cupMotion.releaseAtMs > (diceCount >= 5 ? 1400 : 1100) &&
-          observation.flat) ||
-          (t - cupMotion.releaseAtMs > minRolloutMs &&
-            rolloutStableSamples >= ROLLOUT_STABLE_SAMPLES) ||
-          (t - cupMotion.releaseAtMs > maxVisualRolloutMs &&
-            hasReadableHandoffPose(dice, DIE_SIZE * 0.3, 0.88) &&
-            !hasElevatedNearbyPair(dice)))
-      ) {
+      // Query the relaxed pose only when neither normal handoff condition is ready.
+      const fallbackHandoffReady =
+        !flatHandoffReady &&
+        !stableHandoffReady &&
+        rolloutElapsedMs > maxVisualRolloutMs &&
+        hasReadableHandoffPose(dice, DIE_SIZE * 0.3, 0.88) &&
+        !hasElevatedNearbyPair(dice);
+      if (flatHandoffReady || stableHandoffReady || fallbackHandoffReady) {
         simulationMs = t;
         break;
       }

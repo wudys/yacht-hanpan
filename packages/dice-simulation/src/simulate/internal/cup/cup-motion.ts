@@ -134,17 +134,7 @@ export function cupTransformAt(cup: CupMotionState, timeMs: number): CupTransfor
   const elapsed = timeMs - cup.pourAtMs;
   const withdraw = smoothstep((timeMs - cup.releaseAtMs) / CUP_EXIT_HOLD_MS);
   const exit = smoothstep((timeMs - cup.releaseAtMs) / (cup.exitAtMs - cup.releaseAtMs));
-  // Burst opens to 120° then gently finishes the final tip. Both joins
-  // have zero angular velocity; oblique uses one smooth tilt.
-  const angle =
-    cup.style === 'burst'
-      ? elapsed < 260
-        ? ((120 * Math.PI) / 180) * smoothstep(elapsed / 260)
-        : ((120 +
-            ((Math.abs(cup.tilt) * 180) / Math.PI - 120) * smoothstep((elapsed - 260) / 140)) *
-            Math.PI) /
-          180
-      : Math.abs(cup.tilt) * smoothstep(elapsed / cup.pourDurationMs);
+  const angle = pourAngleAt(cup, elapsed);
   const tilt =
     Math.sign(cup.tilt) * angle + ((Math.sign(cup.tilt) * Math.PI) / 2 - cup.tilt) * withdraw;
   const yaw = cup.pourYaw * smoothstep(elapsed / cup.pourDurationMs);
@@ -160,6 +150,20 @@ export function cupTransformAt(cup: CupMotionState, timeMs: number): CupTransfor
     exit * 0.12 +
     (timeMs > cup.releaseAtMs ? cupLowerSupport(tilt) - cupLowerSupport(cup.tilt) : 0);
   return { x, y, z, tilt, yaw };
+}
+
+function pourAngleAt(cup: CupMotionState, elapsed: number): number {
+  if (cup.style !== 'burst') {
+    return Math.abs(cup.tilt) * smoothstep(elapsed / cup.pourDurationMs);
+  }
+  // Burst opens to 120° then gently finishes the final tip. Both joins
+  // have zero angular velocity; oblique uses one smooth tilt.
+  if (elapsed < 260) return ((120 * Math.PI) / 180) * smoothstep(elapsed / 260);
+  return (
+    ((120 + ((Math.abs(cup.tilt) * 180) / Math.PI - 120) * smoothstep((elapsed - 260) / 140)) *
+      Math.PI) /
+    180
+  );
 }
 
 function smoothstep(value: number): number {

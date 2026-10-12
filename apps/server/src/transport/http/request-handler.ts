@@ -21,6 +21,7 @@ import {
   parseResumeRoomResponse,
   parseRoomHttpEnvelope,
   ROOM_HTTP_ROUTE_KIND,
+  type RoomHttpPathMatch,
   SERVER_READINESS_PATH,
   type ServerReadinessPayload,
 } from '@repo/game-protocol/http';
@@ -233,6 +234,17 @@ async function routeRequest(
     return { status, publicCode: error.code };
   }
 
+  return dispatchRoomRequest(roomRoute, body, request, response, requestId, dependencies);
+}
+
+async function dispatchRoomRequest(
+  roomRoute: RoomHttpPathMatch,
+  body: unknown,
+  request: IncomingMessage,
+  response: ServerResponse,
+  requestId: string,
+  dependencies: HttpRequestHandlerDependencies,
+): Promise<{ readonly status: number; readonly publicCode?: string }> {
   if (roomRoute.kind === ROOM_HTTP_ROUTE_KIND.CREATE) {
     let parsed;
     try {

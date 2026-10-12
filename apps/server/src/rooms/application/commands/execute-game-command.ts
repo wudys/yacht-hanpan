@@ -268,29 +268,30 @@ async function executeSerialized(
       fingerprint,
       result: logical,
     };
-    const committed = changed
-      ? dependencies.commits.commitGame({
-          current: playingRecordBeforeCommand,
-          state,
-          actionLedger: compacted,
-          completedAction,
-        })
-      : dependencies.commits.commitLedger({
-          current: recordBeforeCommand,
-          actionLedger: compacted,
-          completedAction,
-        });
-    return committed.ok
-      ? {
-          result: logicalToApplication(
-            committed.actionResult,
-            'view' in committed ? committed.view : projectRoomView(committed.record),
-          ),
-          committedStateVersion: committed.committedStateVersion,
-        }
-      : committed.reason === 'ledgerCapacity'
-        ? refuseActionCapacityAfterDeadlines()
-        : failureForCommit(committed.reason);
+    let committed;
+    if (changed) {
+      committed = dependencies.commits.commitGame({
+        current: playingRecordBeforeCommand,
+        state,
+        actionLedger: compacted,
+        completedAction,
+      });
+    } else {
+      committed = dependencies.commits.commitLedger({
+        current: recordBeforeCommand,
+        actionLedger: compacted,
+        completedAction,
+      });
+    }
+    if (!committed.ok) {
+      if (committed.reason === 'ledgerCapacity') return refuseActionCapacityAfterDeadlines();
+      return failureForCommit(committed.reason);
+    }
+    const view = 'view' in committed ? committed.view : projectRoomView(committed.record);
+    return {
+      result: logicalToApplication(committed.actionResult, view),
+      committedStateVersion: committed.committedStateVersion,
+    };
   }
 
   function refuseActionCapacityAfterDeadlines(): ExecuteGameCommandResult {
@@ -306,16 +307,21 @@ async function executeSerialized(
     result: CommandApplicationResult,
     actionLedger: readonly ActionLedgerEntry[] = compacted,
   ): ExecuteGameCommandResult {
-    const committed = changed
-      ? dependencies.commits.commitGame({
-          current: playingRecordBeforeCommand,
-          state,
-          actionLedger,
-        })
-      : dependencies.commits.commitLedger({ current: playingRecordBeforeCommand, actionLedger });
-    return committed.ok
-      ? { result, committedStateVersion: committed.committedStateVersion }
-      : failureForCommit(committed.reason);
+    let committed;
+    if (changed) {
+      committed = dependencies.commits.commitGame({
+        current: playingRecordBeforeCommand,
+        state,
+        actionLedger,
+      });
+    } else {
+      committed = dependencies.commits.commitLedger({
+        current: playingRecordBeforeCommand,
+        actionLedger,
+      });
+    }
+    if (!committed.ok) return failureForCommit(committed.reason);
+    return { result, committedStateVersion: committed.committedStateVersion };
   }
 }
 
@@ -370,18 +376,17 @@ function logicalToApplication(
   logical: LogicalActionResult,
   view: RoomView,
 ): CommandApplicationResult {
-  return logical.ok
-    ? {
-        ok: true,
-        data: {
-          receipt: {
-            stateVersion: logical.stateVersion,
-            ...(logical.roll ? { roll: logical.roll } : {}),
-          },
-          view,
-        },
-      }
-    : { ok: false, error: logical.error };
+  if (!logical.ok) return { ok: false, error: logical.error };
+  return {
+    ok: true,
+    data: {
+      receipt: {
+        stateVersion: logical.stateVersion,
+        ...(logical.roll ? { roll: logical.roll } : {}),
+      },
+      view,
+    },
+  };
 }
 
 function failureForCommit(reason: CommitFailure['reason']): ExecuteGameCommandResult {

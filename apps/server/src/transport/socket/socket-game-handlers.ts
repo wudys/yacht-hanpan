@@ -1,4 +1,4 @@
-import { createPublicError, PUBLIC_ERROR_CODE } from '@repo/game-protocol/errors';
+import { createPublicError, PUBLIC_ERROR_CODE, type PublicError } from '@repo/game-protocol/errors';
 import {
   type CommandAck,
   parseCommandAck,
@@ -38,15 +38,13 @@ export async function handleSync(
   const requestId = dependencies.identity.createRequestId();
   let ack: SyncAck;
   try {
-    const result =
-      admitted && dependencies.isAcceptingRequests()
-        ? await dependencies.rooms.syncRoom(socket.data)
-        : {
-            ok: false as const,
-            error: admitted
-              ? createPublicError(PUBLIC_ERROR_CODE.INTERNAL_ERROR, {})
-              : createPublicError(PUBLIC_ERROR_CODE.RATE_LIMITED, { retryAfterMs: 1_000 }),
-          };
+    const rejection = requestAdmissionError(admitted, dependencies);
+    let result;
+    if (rejection !== null) {
+      result = { ok: false as const, error: rejection };
+    } else {
+      result = await dependencies.rooms.syncRoom(socket.data);
+    }
     ack = parseSyncAck({
       ...result,
       meta: {
@@ -101,23 +99,20 @@ export async function handleCommand(
   let execution;
   let ack: CommandAck;
   try {
-    execution =
-      admitted && dependencies.isAcceptingRequests()
-        ? await dependencies.rooms.executeGameCommand({
-            roomId: socket.data.roomId,
-            seatIndex: socket.data.seatIndex,
-            command,
-            receivedAt,
-          })
-        : {
-            result: {
-              ok: false as const,
-              error: admitted
-                ? createPublicError(PUBLIC_ERROR_CODE.INTERNAL_ERROR, {})
-                : createPublicError(PUBLIC_ERROR_CODE.RATE_LIMITED, { retryAfterMs: 1_000 }),
-            },
-            committedStateVersion: null,
-          };
+    const rejection = requestAdmissionError(admitted, dependencies);
+    if (rejection !== null) {
+      execution = {
+        result: { ok: false as const, error: rejection },
+        committedStateVersion: null,
+      };
+    } else {
+      execution = await dependencies.rooms.executeGameCommand({
+        roomId: socket.data.roomId,
+        seatIndex: socket.data.seatIndex,
+        command,
+        receivedAt,
+      });
+    }
     ack = parseCommandAck({
       ...execution.result,
       meta: { requestId, gameProtocolVersion: GAME_PROTOCOL_VERSION, actionId: command.actionId },
@@ -156,6 +151,19 @@ export async function handleCommand(
     receiptStateVersion: execution.result.ok ? execution.result.data.receipt.stateVersion : null,
     viewStateVersion: execution.result.ok ? execution.result.data.view.game?.stateVersion : null,
   });
+}
+
+function requestAdmissionError(
+  admitted: boolean,
+  dependencies: Pick<SocketGameHandlerDependencies, 'isAcceptingRequests'>,
+): PublicError | null {
+  if (!admitted) {
+    return createPublicError(PUBLIC_ERROR_CODE.RATE_LIMITED, { retryAfterMs: 1_000 });
+  }
+  if (!dependencies.isAcceptingRequests()) {
+    return createPublicError(PUBLIC_ERROR_CODE.INTERNAL_ERROR, {});
+  }
+  return null;
 }
 
 function acknowledgeSafely<Response>(

@@ -34,19 +34,16 @@ export async function readJsonBody(
     }
     return { ok: true, value };
   } catch (error) {
-    const status =
-      error instanceof BodyReadTimeoutError
-        ? 408
-        : error instanceof UnsupportedMediaTypeError
-          ? 415
-          : error instanceof BodyTooLargeError
-            ? 413
-            : 400;
-    return {
-      ok: false,
-      status,
-      closeConnection: error instanceof BodyTooLargeError || error instanceof BodyReadTimeoutError,
-    };
+    if (error instanceof BodyReadTimeoutError) {
+      return { ok: false, status: 408, closeConnection: true };
+    }
+    if (error instanceof UnsupportedMediaTypeError) {
+      return { ok: false, status: 415, closeConnection: false };
+    }
+    if (error instanceof BodyTooLargeError) {
+      return { ok: false, status: 413, closeConnection: true };
+    }
+    return { ok: false, status: 400, closeConnection: false };
   }
 }
 

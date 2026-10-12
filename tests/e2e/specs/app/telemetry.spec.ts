@@ -136,7 +136,7 @@ for (const boundary of ['module', 'react'] as const) {
       }),
     );
     await page.route(
-      boundary === 'module' ? '**/src/app/start-web-app.tsx*' : '**/src/app/AppShell.tsx*',
+      boundary === 'module' ? '**/src/app/start-web-app.tsx*' : '**/src/app/shell/AppShell.tsx*',
       (route) =>
         route.fulfill({
           contentType: 'application/javascript',

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { beforeEach, expect, test, vi } from 'vitest';
 
-import { createProductExecution } from '@/app/product-execution';
+import { createProductExecution } from '@/app/lifecycle/product-execution';
 import type { DicePresentationOptions } from '@/runtime/dice/dice-presentation-controller';
 import { createPreferencesStore } from '@/runtime/preferences/preferences-store';
 import { inactiveTelemetry, type Telemetry } from '@/runtime/telemetry/telemetry';

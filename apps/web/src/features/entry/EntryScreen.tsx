@@ -1,8 +1,8 @@
 import { useNavigate } from '@tanstack/react-router';
 import { useEffect, useSyncExternalStore } from 'react';
 
-import type { AppLifecycle } from '@/app/app-lifecycle';
-import { APP_SCREEN_PATH } from '@/app/screen-paths';
+import type { AppLifecycle } from '@/app/lifecycle/app-lifecycle';
+import { APP_SCREEN_PATH } from '@/app/routing/screen-paths';
 import { CapabilityFailureView } from '@/features/entry/ui/CapabilityFailureView';
 import { EntryView } from '@/features/entry/ui/EntryView';
 import { PrivacyDialog } from '@/features/privacy/PrivacyDialog';

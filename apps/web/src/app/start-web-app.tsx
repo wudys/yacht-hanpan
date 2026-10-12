@@ -4,9 +4,10 @@ import { RouterProvider } from '@tanstack/react-router';
 import { StrictMode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 
-import { type AppLifecycle, createAppLifecycle } from '@/app/app-lifecycle';
-import { createAppRouter } from '@/app/app-router';
-import { createProductExecution } from '@/app/product-execution';
+import { type AppLifecycle, createAppLifecycle } from '@/app/lifecycle/app-lifecycle';
+import { createCleanupRunner } from '@/app/lifecycle/cleanup';
+import { createProductExecution } from '@/app/lifecycle/product-execution';
+import { createAppRouter } from '@/app/routing/app-router';
 import { prepareProductResources } from '@/bootstrap/prepare-product-resources';
 import {
   createProductVisualPreparation,
@@ -16,7 +17,6 @@ import { detectStaticGameplayCapabilities } from '@/bootstrap/static-capabilitie
 import { parseWebConfig } from '@/bootstrap/web-config';
 import { subscribeBrowserConnectivity } from '@/runtime/network/browser-connectivity';
 import { createPreferencesStore } from '@/runtime/preferences/preferences-store';
-import type { ErrorContext } from '@/runtime/telemetry/error-policy';
 import { createReactErrorHandler } from '@/runtime/telemetry/react-errors';
 import { observeSessionTelemetry } from '@/runtime/telemetry/session-telemetry-observer';
 import type { Telemetry } from '@/runtime/telemetry/telemetry';
@@ -58,21 +58,7 @@ export function startWebApp(telemetry: Telemetry): () => void {
   let unsubscribeConnectivity: (() => void) | undefined;
   let unsubscribeRenderer: (() => void) | undefined;
 
-  function cleanup(callback: () => void | Promise<void>, context?: ErrorContext) {
-    const report = (error: unknown) => {
-      try {
-        if (context) telemetry.reportUnexpected(error, context);
-        else telemetry.reportUnexpected(error);
-      } catch {
-        // A failed diagnostic must not interrupt the remaining cleanup.
-      }
-    };
-    try {
-      void Promise.resolve(callback()).catch(report);
-    } catch (error) {
-      report(error);
-    }
-  }
+  const cleanup = createCleanupRunner(telemetry);
 
   function disposeApp() {
     if (disposed) return;

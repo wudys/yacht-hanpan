@@ -4,7 +4,7 @@
 @import '@/ui/status/status.css';
 @import '@/features/entry/ui/capability-failure.css';
 @import '@/features/loading/ui/loading-view.css';
-@import '@/app/control-resets.css';
+@import '@/app/styles/control-resets.css';
 @import '@/ui/button/button.css';
 @import '@/ui/brand/brand.css';
 @import '@/ui/profile/avatar.css';
@@ -19,14 +19,14 @@
 @import '@/features/settings/ui/settings.css';
 @import '@/features/entry/ui/entry-view.css';
 @import '@/ui/status/loader.css';
-@import '@/app/interactions.css';
+@import '@/app/styles/interactions.css';
 @import '@/features/game/ui/score/bonus-info.css';
 @import '@/features/game/ui/achievement.css';
 @import '@/document.css';
 @import '@/runtime/dice/canvas.css';
 @import '@/features/game/game-screen.css';
 @import '@/features/loading/loading-screen.css';
-@import '@/app/global-layers.css';
-@import '@/app/shell.css';
+@import '@/app/shell/global-layers.css';
+@import '@/app/shell/shell.css';
 @import '@/features/entry/entry-screen.css';
-@import '@/app/scene-transitions.css';
+@import '@/app/styles/scene-transitions.css';

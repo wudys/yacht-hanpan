@@ -1,7 +1,7 @@
 import { type ReactNode, useSyncExternalStore } from 'react';
 
-import type { AppLifecycle, AppLifecycleSnapshot } from '@/app/app-lifecycle';
-import { APP_SCREEN_PATH } from '@/app/screen-paths';
+import type { AppLifecycle, AppLifecycleSnapshot } from '@/app/lifecycle/app-lifecycle';
+import { APP_SCREEN_PATH } from '@/app/routing/screen-paths';
 import { type Locale, translate } from '@/i18n';
 import type { SessionCredentialStore } from '@/runtime/session/session-credential-store';
 import { Button, ScrollablePanel } from '@/ui';

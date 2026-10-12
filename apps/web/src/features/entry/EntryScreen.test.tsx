@@ -4,9 +4,9 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, expect, test, vi } from 'vitest';
 
-import { type AppLifecycle, createAppLifecycle } from '@/app/app-lifecycle';
-import { GlobalLayerHost } from '@/app/GlobalLayerHost';
-import { APP_SCREEN_PATH } from '@/app/screen-paths';
+import { type AppLifecycle, createAppLifecycle } from '@/app/lifecycle/app-lifecycle';
+import { APP_SCREEN_PATH } from '@/app/routing/screen-paths';
+import { GlobalLayerHost } from '@/app/shell/GlobalLayerHost';
 import {
   CAPABILITY_FAILURE_CODE,
   type StaticCapabilityResult,

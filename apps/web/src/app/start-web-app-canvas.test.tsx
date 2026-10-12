@@ -4,8 +4,8 @@ import { useEffect } from 'react';
 import type { WebGLRenderer } from 'three';
 import { afterEach, expect, test, vi } from 'vitest';
 
-import type { AppRouterContext } from '@/app/app-router';
-import type { ProductExecution } from '@/app/product-execution';
+import type { ProductExecution } from '@/app/lifecycle/product-execution';
+import type { AppRouterContext } from '@/app/routing/app-router';
 import type { ProceduralDiceResources } from '@/runtime/dice/resources';
 import { inactiveTelemetry } from '@/runtime/telemetry/telemetry';
 
@@ -75,7 +75,7 @@ vi.mock('@/bootstrap/product-visual-resources', () => ({
     },
   }),
 }));
-vi.mock('@/app/product-execution', () => ({
+vi.mock('@/app/lifecycle/product-execution', () => ({
   createProductExecution: () => {
     const activity = new AbortController();
     let stopped = false;
@@ -116,7 +116,7 @@ vi.mock('@/app/product-execution', () => ({
     } as unknown as ProductExecution;
   },
 }));
-vi.mock('@/app/app-router', () => ({
+vi.mock('@/app/routing/app-router', () => ({
   createAppRouter: (context: AppRouterContext) => {
     fixture.context = context;
     return context;

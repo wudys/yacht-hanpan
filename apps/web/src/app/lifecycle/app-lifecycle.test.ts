@@ -1,6 +1,6 @@
 import { expect, test, vi } from 'vitest';
 
-import { type AppLifecycleDependencies, createAppLifecycle } from '@/app/app-lifecycle';
+import { type AppLifecycleDependencies, createAppLifecycle } from '@/app/lifecycle/app-lifecycle';
 import { CAPABILITY_FAILURE_CODE } from '@/bootstrap/static-capabilities';
 
 const supportedCapabilities = { ok: true } as const;

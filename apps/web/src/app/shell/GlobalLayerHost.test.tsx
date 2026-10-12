@@ -3,9 +3,9 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, expect, test, vi } from 'vitest';
 
-import { createAppLifecycle } from '@/app/app-lifecycle';
-import { GlobalLayerHost } from '@/app/GlobalLayerHost';
-import { APP_SCREEN_PATH } from '@/app/screen-paths';
+import { createAppLifecycle } from '@/app/lifecycle/app-lifecycle';
+import { APP_SCREEN_PATH } from '@/app/routing/screen-paths';
+import { GlobalLayerHost } from '@/app/shell/GlobalLayerHost';
 import { createSessionCredentialStore } from '@/runtime/session/session-credential-store';
 
 const runtime = {

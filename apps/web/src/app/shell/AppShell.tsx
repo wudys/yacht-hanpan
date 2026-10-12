@@ -1,9 +1,9 @@
 import { requireGameAsset } from '@repo/game-assets';
 import { type CSSProperties, memo, type ReactNode, useEffect, useSyncExternalStore } from 'react';
 
-import type { AppLifecycle } from '@/app/app-lifecycle';
-import { GlobalLayerHost } from '@/app/GlobalLayerHost';
-import { ProductSurfaceBoundary } from '@/app/ProductSurfaceBoundary';
+import type { AppLifecycle } from '@/app/lifecycle/app-lifecycle';
+import { GlobalLayerHost } from '@/app/shell/GlobalLayerHost';
+import { ProductSurfaceBoundary } from '@/app/shell/ProductSurfaceBoundary';
 import { translate } from '@/i18n';
 import type { BrowserAudioRuntime } from '@/runtime/audio/browser-audio-runtime';
 import type { RendererReadiness } from '@/runtime/dice/canvas/renderer-readiness';

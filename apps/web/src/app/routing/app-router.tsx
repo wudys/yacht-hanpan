@@ -11,10 +11,10 @@ import {
 } from '@tanstack/react-router';
 import { lazy, Suspense, useCallback, useContext, useSyncExternalStore } from 'react';
 
-import type { AppLifecycle } from '@/app/app-lifecycle';
-import { AppShell } from '@/app/AppShell';
-import { ProductSurfaceContext } from '@/app/product-surface-context';
-import { APP_SCREEN_PATH } from '@/app/screen-paths';
+import type { AppLifecycle } from '@/app/lifecycle/app-lifecycle';
+import { APP_SCREEN_PATH } from '@/app/routing/screen-paths';
+import { AppShell } from '@/app/shell/AppShell';
+import { ProductSurfaceContext } from '@/app/shell/product-surface-context';
 import { EntryScreen } from '@/features/entry/EntryScreen';
 import { LoadingScreen } from '@/features/loading/LoadingScreen';
 import type { BrowserAudioRuntime } from '@/runtime/audio/browser-audio-runtime';

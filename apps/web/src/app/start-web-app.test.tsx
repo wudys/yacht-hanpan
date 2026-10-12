@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 
-import type { AppRouterContext } from '@/app/app-router';
+import type { AppRouterContext } from '@/app/routing/app-router';
 import type { prepareProductResources } from '@/bootstrap/prepare-product-resources';
 import type { ProductVisualPreparation } from '@/bootstrap/product-visual-preparation';
 import { inactiveTelemetry } from '@/runtime/telemetry/telemetry';
@@ -58,7 +58,7 @@ vi.mock('@/bootstrap/product-visual-preparation', async () => {
     },
   };
 });
-vi.mock('@/app/app-router', () => ({ createAppRouter: fixture.router }));
+vi.mock('@/app/routing/app-router', () => ({ createAppRouter: fixture.router }));
 vi.mock('@/runtime/audio/browser-audio-runtime', () => ({
   createBrowserAudioRuntime: () => ({
     supported: true,

@@ -1,8 +1,8 @@
 import { useNavigate } from '@tanstack/react-router';
 import { useEffect, useSyncExternalStore } from 'react';
 
-import type { AppLifecycle } from '@/app/app-lifecycle';
-import { APP_SCREEN_PATH } from '@/app/screen-paths';
+import type { AppLifecycle } from '@/app/lifecycle/app-lifecycle';
+import { APP_SCREEN_PATH } from '@/app/routing/screen-paths';
 import { LoadingView } from '@/features/loading/ui/LoadingView';
 import { type Locale, translate } from '@/i18n';
 import type { BrowserAudioRuntime } from '@/runtime/audio/browser-audio-runtime';

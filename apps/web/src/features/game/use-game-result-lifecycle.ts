@@ -2,7 +2,7 @@ import type { GameSession } from '@repo/game-client-sdk';
 import { useNavigate } from '@tanstack/react-router';
 import { useEffect, useRef } from 'react';
 
-import { APP_SCREEN_PATH } from '@/app/screen-paths';
+import { APP_SCREEN_PATH } from '@/app/routing/screen-paths';
 import type {
   GameSessionHolder,
   GameSessionHolderSnapshot,

@@ -8,8 +8,8 @@ import { StrictMode } from 'react';
 import type { WebGLRenderer } from 'three';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 
-import { type AppLifecycle, createAppLifecycle } from '@/app/app-lifecycle';
-import { createAppRouter } from '@/app/app-router';
+import { type AppLifecycle, createAppLifecycle } from '@/app/lifecycle/app-lifecycle';
+import { createAppRouter } from '@/app/routing/app-router';
 import { CAPABILITY_FAILURE_CODE } from '@/bootstrap/static-capabilities';
 import { EntryScreen } from '@/features/entry/EntryScreen';
 import GameScreen from '@/features/game/GameScreen';

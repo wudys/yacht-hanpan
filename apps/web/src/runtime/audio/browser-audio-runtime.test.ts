@@ -1,6 +1,6 @@
 import { afterEach, expect, test, vi } from 'vitest';
 
-import { createAppLifecycle } from '@/app/app-lifecycle';
+import { createAppLifecycle } from '@/app/lifecycle/app-lifecycle';
 import { prepareProductResources } from '@/bootstrap/prepare-product-resources';
 import { createBrowserAudioRuntime } from '@/runtime/audio/browser-audio-runtime';
 import { renderCueBuffers } from '@/runtime/audio/render-cue-buffers';

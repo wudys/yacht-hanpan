@@ -2,7 +2,7 @@ import type { ServerClock } from '@repo/game-client-sdk';
 import { useNavigate } from '@tanstack/react-router';
 import { useEffect, useState, useSyncExternalStore } from 'react';
 
-import { APP_SCREEN_PATH } from '@/app/screen-paths';
+import { APP_SCREEN_PATH } from '@/app/routing/screen-paths';
 import type { LobbyEvent } from '@/features/lobby/lobby-state';
 import { type LobbyDependencies, useLobbyController } from '@/features/lobby/use-lobby-controller';
 import { useTelemetry } from '@/runtime/telemetry/TelemetryContext';

@@ -1,13 +1,12 @@
 import { requireGameAsset } from '@repo/game-assets';
 
 import { LobbyLayer } from '@/features/lobby/layer/LobbyLayer';
+import type { CopyStatus } from '@/features/lobby/use-room-code-clipboard';
 import { type Locale, translate } from '@/i18n';
 import type { WaitingRoomSummary } from '@/runtime/room-access/room-access';
 import { IconButton } from '@/ui/button';
 import { ScrollablePanel } from '@/ui/panel';
 import { BouncingDiceLoader } from '@/ui/status';
-
-export type CopyStatus = 'idle' | 'copied' | 'failed';
 
 export function WaitingRoomLayer({
   locale,

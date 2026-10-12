@@ -102,3 +102,5 @@ function getReentryState(state: ReturnType<LobbyDependencies['access']['getSnaps
     return { status: 'refreshRequired' as const, reason: state.reason };
   return { status: 'idle' as const };
 }
+
+export type LobbyFlow = ReturnType<typeof useLobbyFlow>;

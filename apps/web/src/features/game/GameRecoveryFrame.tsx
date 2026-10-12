@@ -28,39 +28,47 @@ export function GameRecoveryFrame({
   const { surface, recoveryBlocked } = presentation;
   const progress = surface.kind === 'progress' ? surface : null;
   const terminal = surface.kind === 'terminal' ? surface : null;
-  const terminalCode =
-    terminal?.error?.kind === 'server' ? terminal.error.error.code : terminal?.error?.code;
-  const recoveryStopped =
-    terminal?.status === 'refreshRequired' && terminalCode !== CLIENT_ERROR_CODE.PROTOCOL_MISMATCH;
-  const notice = terminal
-    ? {
-        kind: 'terminal' as const,
-        status: terminal.status,
-        message:
-          recoveryStopped || terminal.error === null
-            ? translate(locale, 'lobby.reentryRefresh')
-            : recoveryErrorMessage(locale, terminal.error),
-        label: translate(
-          locale,
-          terminal.status === 'permanentFailure' ? 'common.confirm' : 'common.refresh',
-        ),
-        onIntent: terminal.status === 'permanentFailure' ? onPermanentFailure : onRefresh,
+  const notice = getNotice();
+
+  function getNotice() {
+    switch (surface.kind) {
+      case 'terminal': {
+        const errorCode =
+          surface.error?.kind === 'server' ? surface.error.error.code : surface.error?.code;
+        const recoveryStopped =
+          surface.status === 'refreshRequired' && errorCode !== CLIENT_ERROR_CODE.PROTOCOL_MISMATCH;
+        return {
+          kind: 'terminal' as const,
+          status: surface.status,
+          message:
+            recoveryStopped || surface.error === null
+              ? translate(locale, 'lobby.reentryRefresh')
+              : recoveryErrorMessage(locale, surface.error),
+          label: translate(
+            locale,
+            surface.status === 'permanentFailure' ? 'common.confirm' : 'common.refresh',
+          ),
+          onIntent: surface.status === 'permanentFailure' ? onPermanentFailure : onRefresh,
+        };
       }
-    : surface.kind === 'rate-limited'
-      ? {
+      case 'rate-limited':
+        return {
           kind: 'rate-limited' as const,
           message: translate(locale, 'error.rateLimited'),
           label: translate(locale, 'common.confirm'),
           onIntent: onDismissRateLimit,
-        }
-      : surface.kind === 'retryable'
-        ? {
-            kind: 'retryable' as const,
-            message: recoveryErrorMessage(locale, surface.error),
-            label: translate(locale, 'common.retry'),
-            onIntent: onRetryCommand,
-          }
-        : null;
+        };
+      case 'retryable':
+        return {
+          kind: 'retryable' as const,
+          message: recoveryErrorMessage(locale, surface.error),
+          label: translate(locale, 'common.retry'),
+          onIntent: onRetryCommand,
+        };
+      default:
+        return null;
+    }
+  }
 
   return (
     <div

@@ -7,8 +7,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, expect, test } from 'vitest';
 
 import { GameBoard, type GameBoardProps } from '@/features/game/ui/board/GameBoard';
-import { GameStatusMessage } from '@/features/game/ui/board/GameStatusMessage';
-import { GameTimer } from '@/features/game/ui/board/GameTimer';
+import { GameStatusMessage, GameTimer } from '@/features/game/ui/board/GameBoardStatus';
 import type { CategoryLabels } from '@/features/game/ui/score';
 
 afterEach(() => cleanup());

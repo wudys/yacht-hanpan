@@ -1,6 +1,12 @@
 import { requireGameAsset, resolveCharacterImageAssetId } from '@repo/game-assets';
 import type { GameSnapshot, PublicRoom } from '@repo/game-protocol/state';
-import { CATEGORY_IDS, MAX_ROLLS_PER_TURN, type SeatIndex } from '@repo/yacht-rules';
+import {
+  CATEGORY_IDS,
+  findSpecialCombinations,
+  MAX_ROLLS_PER_TURN,
+  type SeatIndex,
+  SPECIAL_COMBINATION,
+} from '@repo/yacht-rules';
 
 import type { TurnFeedbackSnapshot } from '@/features/game/feedback/use-turn-feedback';
 import type {
@@ -10,9 +16,10 @@ import type {
   GameViewModel,
   PlayerScoreSummaryView,
 } from '@/features/game/ui';
-import { type Locale, translate } from '@/i18n';
+import { type Locale, type MessageKeyWithoutParams, translate } from '@/i18n';
+import type { DicePresentationSnapshot } from '@/runtime/dice/dice-presentation-controller';
 
-export function createGameFeedbackPresentation({
+function createGameFeedbackPresentation({
   turn,
   viewerSeatIndex,
   record,
@@ -80,41 +87,98 @@ export function createGameScorePresentation(
   };
 }
 
-export function createGameBoardPresentation(
-  model: Pick<GameViewModel, 'turn' | 'scoreGroupPreviews'>,
-  locale: Locale,
-) {
+export type GameScorePresentation = ReturnType<typeof createGameScorePresentation>;
+
+/** Projects compact-board content without changing authority, input eligibility or feedback time. */
+export function createGameBoardPresentation({
+  model,
+  scores,
+  viewerSeatIndex,
+  record,
+  turnCue,
+  locale,
+}: Readonly<{
+  model: GameViewModel;
+  scores: GameScorePresentation;
+  viewerSeatIndex: SeatIndex;
+  record: TurnFeedbackSnapshot['record'];
+  turnCue: TurnFeedbackSnapshot['turnCue'];
+  locale: Locale;
+}>) {
   const { turn, scoreGroupPreviews } = model;
+  const feedback = createGameFeedbackPresentation({ turn, viewerSeatIndex, record });
+  const summary = scores[feedback.scoreDisplay.owner];
+  const bonusEarned = summary.upperBonus > 0;
   const readOnly = turn !== null && (!turn.isViewerTurn || turn.rollCount === MAX_ROLLS_PER_TURN);
-  const rollLabel = !turn?.isViewerTurn
-    ? 'game.opponentTurn'
-    : turn.rollCount === 0
-      ? 'game.roll'
-      : readOnly
-        ? 'game.rollComplete'
-        : 'game.reroll';
   const highest = (value: number | null): string | null =>
     value === null ? null : `${translate(locale, 'game.highest')} ${value}`;
   return {
-    rollAction: { label: translate(locale, rollLabel), readOnly },
-    labels: {
-      turn: `${translate(locale, 'game.turn')} ${turn?.ordinal ?? '—'}/${turn?.total ?? '—'}`,
-      settings: translate(locale, 'game.settings'),
-      diceStage: translate(locale, 'game.diceStage'),
-      heldDice: translate(locale, 'game.diceControls'),
-      rollsRemaining: translate(locale, 'game.rollsRemaining', {
-        count: MAX_ROLLS_PER_TURN - (turn?.rollCount ?? 0),
-      }),
-      bonusInfo: translate(locale, 'game.bonusInfo'),
-      scoreboard: translate(locale, 'game.view.scoreboard'),
-      upper: translate(locale, 'game.upper'),
-      lower: translate(locale, 'game.lower'),
-      highestUpper: highest(scoreGroupPreviews.upper),
-      highestLower: highest(scoreGroupPreviews.lower),
-      firstRollGuide: translate(locale, 'game.firstRollGuide'),
-      emptyScore: translate(locale, 'game.emptyScore'),
-    } satisfies Omit<GameBoardProps['labels'], 'total' | 'bonus' | 'bonusStatus'>,
+    bonusSubtotal: summary.upperSubtotal,
+    board: {
+      model,
+      ...feedback,
+      rollAction: { label: translate(locale, rollActionLabel(turn)), readOnly },
+      summaryPlayer: {
+        imageUrl: summary.imageUrl,
+        imageAlt: summary.imageAlt,
+        label: summary.label,
+      },
+      bonusEarned,
+      categories: scores.categories,
+      turnCue:
+        turnCue === null
+          ? null
+          : { identity: turnCue.turnId, timing: { startedAt: turnCue.startedAt } },
+      turnCueLabel: translate(locale, 'game.turnStartCue'),
+      labels: {
+        turn: `${translate(locale, 'game.turn')} ${turn?.ordinal ?? '—'}/${turn?.total ?? '—'}`,
+        settings: translate(locale, 'game.settings'),
+        diceStage: translate(locale, 'game.diceStage'),
+        heldDice: translate(locale, 'game.diceControls'),
+        rollsRemaining: translate(locale, 'game.rollsRemaining', {
+          count: MAX_ROLLS_PER_TURN - (turn?.rollCount ?? 0),
+        }),
+        total: `${translate(locale, 'game.total')} ${summary.total}`,
+        bonus: translate(locale, 'game.bonus'),
+        bonusStatus: translate(locale, bonusEarned ? 'game.bonusEarned' : 'game.bonusNotEarned'),
+        bonusInfo: translate(locale, 'game.bonusInfo'),
+        scoreboard: translate(locale, 'game.view.scoreboard'),
+        upper: translate(locale, 'game.upper'),
+        lower: translate(locale, 'game.lower'),
+        highestUpper: highest(scoreGroupPreviews.upper),
+        highestLower: highest(scoreGroupPreviews.lower),
+        firstRollGuide: translate(locale, 'game.firstRollGuide'),
+        emptyScore: translate(locale, 'game.emptyScore'),
+      } satisfies GameBoardProps['labels'],
+    },
   };
+}
+
+function rollActionLabel(turn: GameViewModel['turn']): MessageKeyWithoutParams {
+  if (!turn?.isViewerTurn) return 'game.opponentTurn';
+  if (turn.rollCount === 0) return 'game.roll';
+  if (turn.rollCount === MAX_ROLLS_PER_TURN) return 'game.rollComplete';
+  return 'game.reroll';
+}
+
+export function isUnrecordedYachtAvailable(
+  game: GameSnapshot | null,
+  phase: DicePresentationSnapshot['phase'],
+  rollPending: boolean,
+): boolean {
+  if (rollPending || game?.match.status !== 'playing') return false;
+  if (phase !== 'achievement' && phase !== 'settled') return false;
+  const { currentTurn, players } = game.match;
+  if (currentTurn.dice === null || players[currentTurn.seatIndex].scorecard.yacht !== undefined)
+    return false;
+  const { dice } = currentTurn;
+  return findSpecialCombinations([
+    dice[0].value,
+    dice[1].value,
+    dice[2].value,
+    dice[3].value,
+    dice[4].value,
+  ]).includes(SPECIAL_COMBINATION.YACHT);
 }
 
 export function createResultPresentation(
@@ -128,17 +192,9 @@ export function createResultPresentation(
       : result.winnerSeatIndex === viewerSeatIndex
         ? 'viewer-win'
         : 'opponent-win';
-  const reason: GameResultViewProps['reason'] =
-    result.reason === 'scoresCompleted'
-      ? { kind: 'normal' }
-      : result.reason === 'explicitForfeit'
-        ? { kind: 'forfeit', text: translate(locale, 'game.resultForfeit') }
-        : result.reason === 'timeoutLimit'
-          ? { kind: 'timeout', text: translate(locale, 'game.resultTimeout') }
-          : { kind: 'connection-ended', text: translate(locale, 'game.resultConnectionEnded') };
   return {
     outcome,
-    reason,
+    reason: resultReason(result.reason, locale),
     labels: {
       title: translate(locale, 'game.view.result'),
       categoryHeader: translate(locale, 'game.category'),
@@ -150,4 +206,20 @@ export function createResultPresentation(
       backToLobby: translate(locale, 'game.backToLobby'),
     },
   };
+}
+
+function resultReason(
+  reason: Extract<GameSnapshot['match'], { status: 'finished' }>['result']['reason'],
+  locale: Locale,
+): GameResultViewProps['reason'] {
+  switch (reason) {
+    case 'scoresCompleted':
+      return { kind: 'normal' };
+    case 'explicitForfeit':
+      return { kind: 'forfeit', text: translate(locale, 'game.resultForfeit') };
+    case 'timeoutLimit':
+      return { kind: 'timeout', text: translate(locale, 'game.resultTimeout') };
+    case 'connectionEnded':
+      return { kind: 'connection-ended', text: translate(locale, 'game.resultConnectionEnded') };
+  }
 }

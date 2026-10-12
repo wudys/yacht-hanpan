@@ -1,10 +1,5 @@
 import type { ServerClock } from '@repo/game-client-sdk';
-import {
-  type CategoryId,
-  type DieSlot,
-  findSpecialCombinations,
-  SPECIAL_COMBINATION,
-} from '@repo/yacht-rules';
+import type { CategoryId, DieSlot } from '@repo/yacht-rules';
 import {
   memo,
   type ReactNode,
@@ -21,11 +16,16 @@ import { useScoreGroupSelection } from '@/features/game/feedback/use-score-group
 import { useTurnFeedback } from '@/features/game/feedback/use-turn-feedback';
 import {
   createGameBoardPresentation,
-  createGameFeedbackPresentation,
   createGameScorePresentation,
   createResultPresentation,
+  isUnrecordedYachtAvailable,
 } from '@/features/game/game-presentation';
 import { GameRecoveryFrame } from '@/features/game/GameRecoveryFrame';
+import {
+  GameBonusPopover,
+  GameOverlayLayers,
+  GameScoreboardContent,
+} from '@/features/game/GameScreenLayers';
 import { isTurnReady, useDeadlineReadiness } from '@/features/game/hud/game-deadline-hooks';
 import { GameDeadlineDisplay } from '@/features/game/hud/GameDeadlineDisplay';
 import { GameStatusNotice, GameStatusNoticeProvider } from '@/features/game/hud/GameStatusNotice';
@@ -38,17 +38,9 @@ import {
 } from '@/features/game/interaction/game-interaction';
 import { useGameCommands } from '@/features/game/interaction/use-game-commands';
 import { SettledDiceControls } from '@/features/game/SettledDiceControls';
-import {
-  BonusInfoPopover,
-  deriveGameViewModel,
-  GameBoard,
-  GameResultView,
-} from '@/features/game/ui';
-import { AchievementSequence } from '@/features/game/ui/AchievementSequence';
-import { GameRollSpinner } from '@/features/game/ui/board/GameRollSpinner';
-import { GameScoreboardView } from '@/features/game/ui/score/GameScoreboardView';
+import { deriveGameViewModel, GameBoard, GameResultView } from '@/features/game/ui';
+import { GameRollSpinner } from '@/features/game/ui/board/GameBoardStatus';
 import { useGameResultLifecycle } from '@/features/game/use-game-result-lifecycle';
-import { SettingsPanel } from '@/features/settings/SettingsPanel';
 import { type Locale, translate } from '@/i18n';
 import type { BrowserAudioRuntime } from '@/runtime/audio/browser-audio-runtime';
 import { AUDIO_CUE } from '@/runtime/audio/cue-runtime';
@@ -60,8 +52,6 @@ import type { GameSessionHolder } from '@/runtime/session/game-session-holder';
 import type { SessionCredentialStore } from '@/runtime/session/session-credential-store';
 import type { SessionRecovery } from '@/runtime/session/session-recovery';
 import { useScreenTelemetry } from '@/runtime/telemetry/TelemetryContext';
-import { Button } from '@/ui/button';
-import { ScrollablePanel } from '@/ui/panel';
 
 type GameScreenProps = Readonly<{
   audio: BrowserAudioRuntime;
@@ -242,25 +232,6 @@ export default function GameScreen({
     void audio.setScene(resultVisible ? 'result' : 'game');
   }, [audio, resultVisible]);
 
-  const feedbackPresentation = useMemo(
-    () =>
-      createGameFeedbackPresentation({
-        turn: model?.turn ?? null,
-        viewerSeatIndex: viewerSeatIndex ?? null,
-        record,
-      }),
-    [model?.turn, viewerSeatIndex, record],
-  );
-  const summaryIsViewer = feedbackPresentation.scoreDisplay.owner === 'viewer';
-  const summaryScore = summaryIsViewer ? scorePresentation?.viewer : scorePresentation?.opponent;
-  const summaryPlayer = useMemo(
-    () => ({
-      imageUrl: summaryScore?.imageUrl,
-      imageAlt: translate(locale, summaryIsViewer ? 'game.you' : 'game.opponent'),
-      label: translate(locale, summaryIsViewer ? 'game.you' : 'game.opponent'),
-    }),
-    [locale, summaryIsViewer, summaryScore?.imageUrl],
-  );
   const inputScopes = useMemo(
     () =>
       deriveGameInputScopes({
@@ -278,27 +249,21 @@ export default function GameScreen({
     [model, inputScopes],
   );
   const boardModel = interaction?.boardModel;
-  const boardPresentation = useMemo(
-    () => (boardModel === undefined ? null : createGameBoardPresentation(boardModel, locale)),
-    [boardModel, locale],
-  );
+  const { turnCue } = turnFeedback;
+  const boardPresentation = useMemo(() => {
+    if (boardModel === undefined || scorePresentation === null || viewerSeatIndex === undefined)
+      return null;
+    return createGameBoardPresentation({
+      model: boardModel,
+      scores: scorePresentation,
+      viewerSeatIndex,
+      record,
+      turnCue,
+      locale,
+    });
+  }, [boardModel, scorePresentation, viewerSeatIndex, record, turnCue, locale]);
   const turn = model?.turn;
-  const currentTurn = game?.match.status === 'playing' ? game.match.currentTurn : null;
-  const currentDice = currentTurn?.dice;
-  const yachtAvailable =
-    !rollPending &&
-    currentTurn !== null &&
-    currentDice !== null &&
-    currentDice !== undefined &&
-    (phase === 'achievement' || phase === 'settled') &&
-    game?.match.players[currentTurn.seatIndex].scorecard.yacht === undefined &&
-    findSpecialCombinations([
-      currentDice[0].value,
-      currentDice[1].value,
-      currentDice[2].value,
-      currentDice[3].value,
-      currentDice[4].value,
-    ]).includes(SPECIAL_COMBINATION.YACHT);
+  const yachtAvailable = isUnrecordedYachtAvailable(game, phase, rollPending);
   const acceptedPresentation = holderSnapshot.sessionSnapshot?.presentation;
   const yachtRollId =
     yachtAvailable && acceptedPresentation?.kind === 'roll'
@@ -402,7 +367,6 @@ export default function GameScreen({
     presence.seats.length !== 2 ||
     model === null ||
     scorePresentation === null ||
-    summaryScore === undefined ||
     interaction === null ||
     boardModel === undefined ||
     boardPresentation === null
@@ -416,7 +380,8 @@ export default function GameScreen({
   }
 
   const { authority } = holderSnapshot;
-  const { viewer, opponent, categories, scoreLabels } = scorePresentation;
+  const { viewer, opponent, categories } = scorePresentation;
+  const { board, bonusSubtotal } = boardPresentation;
 
   if (game.match.status === 'finished' && resultVisible) {
     const resultPresentation = createResultPresentation(
@@ -447,15 +412,11 @@ export default function GameScreen({
         data-game-view='board'
         data-game-layer='scoreboard'
       >
-        <GameScoreboardView
+        <GameScoreboardContent
           rows={model.scoreRows}
-          categories={categories}
-          viewer={viewer}
-          opponent={opponent}
-          labels={scoreLabels}
-          title={translate(locale, 'game.view.scoreboard')}
-          turnLabel={boardPresentation.labels.turn}
-          closeLabel={translate(locale, 'common.close')}
+          scores={scorePresentation}
+          turnLabel={board.labels.turn}
+          locale={locale}
           onClose={closeLayer}
         />
       </div>,
@@ -473,6 +434,7 @@ export default function GameScreen({
       <h1 style={VISUALLY_HIDDEN_STYLE}>{translate(locale, 'game.title')}</h1>
       <div inert={inputScopes.boardInert} aria-hidden={inputScopes.boardInert}>
         <GameBoard
+          {...board}
           rolling={
             presentationSnapshot.phase === 'rolling' || presentationSnapshot.phase === 'revealing'
           }
@@ -491,35 +453,10 @@ export default function GameScreen({
           }
           bonusPopover={
             layer === 'bonus' ? (
-              <BonusInfoPopover
-                subtotal={summaryScore.upperSubtotal}
-                labels={{
-                  title: translate(locale, 'game.bonusInfo'),
-                  upperRange: translate(locale, 'game.bonusUpperRange'),
-                  subtotal: translate(locale, 'game.bonusSubtotal'),
-                  close: translate(locale, 'common.close'),
-                }}
-                onClose={closeLayer}
-              />
+              <GameBonusPopover subtotal={bonusSubtotal} locale={locale} onClose={closeLayer} />
             ) : null
           }
-          model={boardModel}
-          recordFeedback={feedbackPresentation.recordFeedback}
           yachtAvailable={yachtAvailable && !recordFeedbackActive}
-          turnCue={
-            turnFeedback.turnCue === null
-              ? null
-              : {
-                  identity: turnFeedback.turnCue.turnId,
-                  timing: { startedAt: turnFeedback.turnCue.startedAt },
-                }
-          }
-          turnCueLabel={translate(locale, 'game.turnStartCue')}
-          scoreDisplay={feedbackPresentation.scoreDisplay}
-          rollAction={boardPresentation.rollAction}
-          summaryPlayer={summaryPlayer}
-          bonusEarned={summaryScore.upperBonus > 0}
-          categories={categories}
           activeGroup={activeGroup}
           timerContent={
             <GameDeadlineDisplay
@@ -531,19 +468,10 @@ export default function GameScreen({
             />
           }
           presenceContent={<GameStatusNotice />}
-          labels={{
-            ...boardPresentation.labels,
-            total: `${translate(locale, 'game.total')} ${summaryScore.total}`,
-            bonus: translate(locale, 'game.bonus'),
-            bonusStatus: translate(
-              locale,
-              summaryScore.upperBonus > 0 ? 'game.bonusEarned' : 'game.bonusNotEarned',
-            ),
-          }}
           diceStage={
             <MemoSettledDiceControls
               dice={turn?.dice ?? []}
-              label={boardPresentation.labels.diceStage}
+              label={board.labels.diceStage}
               canHold={model.actions.canHold}
               interactionLocked={inputScopes.boardInteractionLocked}
               onSetDieHeld={setDieHeld}
@@ -569,64 +497,30 @@ export default function GameScreen({
           }}
         />
       </div>
-      {layer === 'bonus' ? (
-        <div className='web-game-bonus-overlay' data-game-bonus-layer='true'>
-          <button
-            className='web-game-bonus-dismiss'
-            type='button'
-            aria-label={translate(locale, 'common.close')}
-            data-game-bonus-dismiss='true'
-            onClick={closeLayer}
-          />
-        </div>
-      ) : null}
-      {layer === 'settings' ? (
-        <div className='web-settings-overlay'>
-          <SettingsPanel
-            audio={audio}
-            preferences={preferences}
-            onClose={closeLayer}
-            forfeit={{
-              disabled: inputScopes.commandBlocked,
-              onIntent: forfeit,
-            }}
-          />
-        </div>
-      ) : null}
-      {recordedCategoryNoticeOpen ? (
-        <div
-          className='web-game-category-notice'
-          role='alertdialog'
-          aria-modal='true'
-          aria-label={translate(locale, 'game.recordedCategoryTitle')}
-        >
-          <ScrollablePanel
-            variant='notice'
-            title={translate(locale, 'game.recordedCategoryTitle')}
-            footer={
-              <Button
-                label={translate(locale, 'common.confirm')}
-                onClick={() => {
-                  click();
-                  setRecordedCategoryNoticeTurnIdentity(null);
-                }}
-              />
-            }
-          >
-            <p>{translate(locale, 'game.recordedCategoryDescription')}</p>
-          </ScrollablePanel>
-        </div>
-      ) : null}
-      {surfaceExposed &&
-      presentationSnapshot.phase === 'achievement' &&
-      presentationSnapshot.rollId !== suppressedAchievementRollId ? (
-        <div className='web-game-achievement-overlay' data-game-achievement-layer='true'>
-          <AchievementSequence
-            kind={presentationSnapshot.achievement.kind}
-            title={translate(locale, `category.${presentationSnapshot.achievement.categoryId}`)}
-          />
-        </div>
-      ) : null}
+      <GameOverlayLayers
+        layer={layer}
+        locale={locale}
+        audio={audio}
+        preferences={preferences}
+        commandBlocked={inputScopes.commandBlocked}
+        recordedCategoryNoticeOpen={recordedCategoryNoticeOpen}
+        achievement={
+          surfaceExposed &&
+          presentationSnapshot.phase === 'achievement' &&
+          presentationSnapshot.rollId !== suppressedAchievementRollId
+            ? {
+                kind: presentationSnapshot.achievement.kind,
+                title: translate(locale, `category.${presentationSnapshot.achievement.categoryId}`),
+              }
+            : null
+        }
+        onClose={closeLayer}
+        onForfeit={forfeit}
+        onDismissRecordedCategory={() => {
+          click();
+          setRecordedCategoryNoticeTurnIdentity(null);
+        }}
+      />
     </div>,
   );
 }

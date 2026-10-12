@@ -13,7 +13,7 @@ import {
   parseSocketAuth,
 } from '@repo/game-protocol/socket';
 import { createCompatibilityContract } from '@repo/game-protocol/version';
-import { expect, spyOn, test } from 'bun:test';
+import { expect, jest, spyOn, test } from 'bun:test';
 
 import type { RollCommandExecution, RollCommandExecutor } from '@/roll/roll-command-executor';
 import { CreateRoomRateLimiter } from '@/rooms/application/admission/create-room-rate-limiter';
@@ -337,19 +337,37 @@ test('expires a waiting recovery request without changing room state', async () 
   const gate = Promise.withResolvers<void>();
   const blocker = state.queue.runInternal(ROOM_ID, () => gate.promise);
   const previous = state.repository.getById(ROOM_ID);
+  let now = 0;
+  const monotonic = spyOn(performance, 'now').mockImplementation(() => now);
+  jest.useFakeTimers();
   try {
-    expect(
-      await state.service.resumeRoom(parseResumeRoomRequest({ roomId: ROOM_ID, seatToken: TOKEN })),
-    ).toMatchObject({
+    const recovery = state.service.resumeRoom(
+      parseResumeRoomRequest({ roomId: ROOM_ID, seatToken: TOKEN }),
+    );
+    now = 9;
+    jest.advanceTimersByTime(9);
+    expect(state.queue.pendingRequestCount).toBe(1);
+    now = 10;
+    jest.advanceTimersByTime(1);
+    expect(await recovery).toMatchObject({
       ok: false,
       error: { code: PUBLIC_ERROR_CODE.RATE_LIMITED },
     });
     expect(state.repository.getById(ROOM_ID)).toBe(previous);
     expect(state.queue.pendingRequestCount).toBe(0);
+    gate.resolve();
+    await blocker;
+    state.setNow(1_100);
+    now = 100;
+    jest.advanceTimersByTime(90);
+    expect(state.repository.getById(ROOM_ID)).toBe(previous);
+    expect(state.queue.activeRoomCount).toBe(0);
   } finally {
     gate.resolve();
     await blocker;
     state.service.close();
+    monotonic.mockRestore();
+    jest.useRealTimers();
   }
 });
 

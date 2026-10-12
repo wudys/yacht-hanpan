@@ -1,5 +1,5 @@
 import { GAME_COMMAND_TYPE } from '@repo/game-protocol/socket';
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, jest, spyOn, test } from 'bun:test';
 
 import { toRoomCommandTime } from '@/rooms/application/commands/command-time';
 import { InMemoryRoomTaskQueue } from '@/rooms/application/scheduling/room-task-queue';
@@ -95,21 +95,40 @@ describe('in-memory room task queue', () => {
   });
 
   test('expires a held forfeit without executing or retaining its wakeup', async () => {
-    const { queue, scheduled } = quantumFixture({ requestWaitTimeoutMs: 10 });
+    const { queue, scheduled, advance } = quantumFixture({ requestWaitTimeoutMs: 10 });
+    let now = 0;
+    const monotonic = spyOn(performance, 'now').mockImplementation(() => now);
+    jest.useFakeTimers();
     let ran = false;
-    const result = await queue.runRequest(
-      roomId('a'),
-      () => {
-        ran = true;
-      },
-      toRoomCommandTime(GAME_COMMAND_TYPE.FORFEIT_MATCH, 1_000),
-    );
-    expect(result).toEqual({ ok: false, reason: 'waitExpired' });
-    expect(ran).toBeFalse();
-    expect(queue.pendingRequestCount).toBe(0);
-    expect(queue.activeRoomCount).toBe(0);
-    expect(scheduled.size).toBe(0);
-    expect(await queue.runRequest(roomId('a'), () => 42)).toEqual({ ok: true, value: 42 });
+    try {
+      const pending = queue.runRequest(
+        roomId('a'),
+        () => {
+          ran = true;
+        },
+        toRoomCommandTime(GAME_COMMAND_TYPE.FORFEIT_MATCH, 1_000),
+      );
+      now = 9;
+      jest.advanceTimersByTime(9);
+      expect(queue.pendingRequestCount).toBe(1);
+      expect(ran).toBeFalse();
+      now = 10;
+      jest.advanceTimersByTime(1);
+      expect(await pending).toEqual({ ok: false, reason: 'waitExpired' });
+      expect(ran).toBeFalse();
+      expect(queue.pendingRequestCount).toBe(0);
+      expect(queue.activeRoomCount).toBe(0);
+      expect(scheduled.size).toBe(0);
+      await advance(1_100);
+      now = 100;
+      jest.advanceTimersByTime(90);
+      expect(ran).toBeFalse();
+      expect(await queue.runRequest(roomId('a'), () => 42)).toEqual({ ok: true, value: 42 });
+    } finally {
+      queue.close();
+      monotonic.mockRestore();
+      jest.useRealTimers();
+    }
   });
 
   test.each(['clearRoom', 'close'] as const)(
@@ -258,19 +277,38 @@ describe('in-memory room task queue', () => {
     const queue = new InMemoryRoomTaskQueue({ maxRequestsPerRoom: 2, requestWaitTimeoutMs: 10 });
     const gate = Promise.withResolvers<void>();
     const id = roomId('room-a');
+    let now = 0;
+    const monotonic = spyOn(performance, 'now').mockImplementation(() => now);
+    jest.useFakeTimers();
     let expiredRan = false;
     const first = queue.runRequest(id, () => gate.promise);
-    const expired = queue.runRequest(id, () => {
-      expiredRan = true;
-    });
-    expect(await expired).toEqual({ ok: false, reason: 'waitExpired' });
-    expect(queue.pendingRequestCount).toBe(1);
-    const next = queue.runRequest(id, () => 42);
-    gate.resolve();
-    expect(await first).toEqual({ ok: true, value: undefined });
-    expect(await next).toEqual({ ok: true, value: 42 });
-    expect(expiredRan).toBe(false);
-    expect(queue.activeRoomCount).toBe(0);
+    try {
+      const expired = queue.runRequest(id, () => {
+        expiredRan = true;
+      });
+      now = 9;
+      jest.advanceTimersByTime(9);
+      expect(queue.pendingRequestCount).toBe(2);
+      now = 10;
+      jest.advanceTimersByTime(1);
+      expect(await expired).toEqual({ ok: false, reason: 'waitExpired' });
+      expect(queue.pendingRequestCount).toBe(1);
+      const next = queue.runRequest(id, () => 42);
+      gate.resolve();
+      expect(await first).toEqual({ ok: true, value: undefined });
+      expect(await next).toEqual({ ok: true, value: 42 });
+      now = 100;
+      jest.advanceTimersByTime(90);
+      expect(expiredRan).toBe(false);
+      expect(queue.pendingRequestCount).toBe(0);
+      expect(queue.activeRoomCount).toBe(0);
+    } finally {
+      gate.resolve();
+      queue.close();
+      await first;
+      monotonic.mockRestore();
+      jest.useRealTimers();
+    }
   });
 
   test('releases a failed request before admitting its replacement', async () => {

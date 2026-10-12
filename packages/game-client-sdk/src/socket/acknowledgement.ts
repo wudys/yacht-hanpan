@@ -8,6 +8,7 @@ export function waitForAcknowledgement(
   signal?: AbortSignal,
 ): Promise<AcknowledgementResult> {
   return new Promise((resolve) => {
+    const deadline = performance.now() + timeoutMs;
     let settled = false;
     let finish: (result: AcknowledgementResult) => void = () => {};
     const timeout = setTimeout(() => {
@@ -22,7 +23,9 @@ export function waitForAcknowledgement(
       resolve(result);
     };
     const acknowledge = (value: unknown): void => {
-      finish({ ok: true, value });
+      finish(
+        performance.now() >= deadline ? { ok: false, reason: 'timeout' } : { ok: true, value },
+      );
     };
     signal?.addEventListener('abort', onAbort, { once: true });
     if (signal?.aborted) {

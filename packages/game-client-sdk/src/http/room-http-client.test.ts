@@ -1,7 +1,7 @@
 import { PUBLIC_ERROR_CODE } from '@repo/game-protocol/errors';
 import { parseCancelRoomRequest, parseResumeRoomRequest } from '@repo/game-protocol/http';
 import { createCompatibilityContract, GAME_PROTOCOL_VERSION } from '@repo/game-protocol/version';
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, jest, spyOn, test } from 'bun:test';
 
 import { CLIENT_ERROR_CODE } from '../errors';
 import { createServerClock } from '../server-clock';
@@ -742,5 +742,63 @@ test.each(['create', 'join'] as const)(
     responseAuthority = authority;
     expect(await request()).toMatchObject({ ok: true, data: { authority } });
     expect(clock.now()).toBe(1_000);
+  },
+);
+
+test.each([2_999, 3_000, 3_001])(
+  'accepts an HTTP body at elapsed %d ms only before its deadline, even before the timer runs',
+  async (elapsed) => {
+    jest.useFakeTimers();
+    let monotonic = 0;
+    const now = spyOn(performance, 'now').mockImplementation(() => monotonic);
+    const clock = createServerClock(() => monotonic);
+    let requests = 0;
+    const client = createRoomHttpClient({
+      contract: createCompatibilityContract('test-release'),
+      baseUrl: 'https://game.example.test',
+      clock,
+      timeoutMs: 3_000,
+      fetch: async () => {
+        requests += 1;
+        return new Response(
+          new ReadableStream({
+            pull(stream) {
+              // Complete the body after advancing the clock, while its watchdog has not run.
+              monotonic += elapsed;
+              stream.enqueue(
+                new TextEncoder().encode(
+                  JSON.stringify({
+                    ok: true,
+                    data: { cancelled: true },
+                    meta: META,
+                  }),
+                ),
+              );
+              stream.close();
+            },
+          }),
+        );
+      },
+    });
+    try {
+      const result = await client.cancelRoom(
+        parseCancelRoomRequest({ roomId: ROOM_ID, seatToken: SEAT_TOKEN }),
+      );
+      expect(result).toMatchObject(
+        elapsed < 3_000
+          ? { ok: true }
+          : {
+              ok: false,
+              error: { kind: 'transport', code: CLIENT_ERROR_CODE.NETWORK_UNAVAILABLE },
+            },
+      );
+      expect(requests).toBe(elapsed < 3_000 ? 1 : 2);
+      expect(clock.now()).toBe(elapsed < 3_000 ? 1_000 + elapsed / 2 : null);
+      jest.advanceTimersByTime(6_000);
+      expect(jest.getTimerCount()).toBe(0);
+    } finally {
+      now.mockRestore();
+      jest.useRealTimers();
+    }
   },
 );

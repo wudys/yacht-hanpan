@@ -137,6 +137,7 @@ export function createRoomHttpClient(options: CreateRoomHttpClientOptions): Room
     const onExternalAbort = (): void => controller.abort(callOptions?.signal?.reason);
     callOptions?.signal?.addEventListener('abort', onExternalAbort, { once: true });
     if (callOptions?.signal?.aborted) onExternalAbort();
+    const deadline = performance.now() + timeoutMs;
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
     const clockSample = options.clock?.beginSample();
 
@@ -154,6 +155,7 @@ export function createRoomHttpClient(options: CreateRoomHttpClientOptions): Room
         if (controller.signal.aborted || !(cause instanceof SyntaxError)) throw cause;
         return { ok: false, error: createProtocolError(CLIENT_ERROR_CODE.INVALID_RESPONSE) };
       }
+      if (performance.now() >= deadline) controller.abort();
       controller.signal.throwIfAborted();
 
       let parsed: Response;

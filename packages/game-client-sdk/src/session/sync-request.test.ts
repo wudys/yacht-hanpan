@@ -5,7 +5,7 @@ import {
   parsePublicRoom,
 } from '@repo/game-protocol/state';
 import { GAME_PROTOCOL_VERSION } from '@repo/game-protocol/version';
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, jest, spyOn, test } from 'bun:test';
 
 import { requestSync } from './sync-request';
 
@@ -118,3 +118,45 @@ describe('sync request', () => {
     ).toMatchObject({ ok: false, error: { kind: 'transport', code: 'ACK_TIMEOUT' } });
   });
 });
+
+test.each([2_999, 3_000, 3_001])(
+  'accepts a sync ACK at elapsed %d ms only before its deadline, even before the timer runs',
+  async (elapsed) => {
+    jest.useFakeTimers();
+    let monotonic = 0;
+    const now = spyOn(performance, 'now').mockImplementation(() => monotonic);
+    const controller = new AbortController();
+    let acknowledge!: (value: unknown) => void;
+    try {
+      const pending = requestSync({
+        timeoutMs: 3_000,
+        signal: controller.signal,
+        emit: (reply) => {
+          acknowledge = reply;
+        },
+      });
+      // Advance the domain clock without firing the overdue timeout callback.
+      monotonic = elapsed;
+      acknowledge({
+        ok: true,
+        data: snapshot(),
+        meta: {
+          requestId: REQUEST_ID,
+          serverTime: 1000,
+          gameProtocolVersion: GAME_PROTOCOL_VERSION,
+        },
+      });
+      expect(await pending).toMatchObject(
+        elapsed < 3_000
+          ? { ok: true }
+          : { ok: false, error: { kind: 'transport', code: 'ACK_TIMEOUT' } },
+      );
+      jest.advanceTimersByTime(6_000);
+      expect(jest.getTimerCount()).toBe(0);
+    } finally {
+      controller.abort();
+      now.mockRestore();
+      jest.useRealTimers();
+    }
+  },
+);
